@@ -1,5 +1,7 @@
 # XJTU Launcher
 
+> 当前为 `dev` 开发分支。开发入口：[文档索引](docs/README.md) · [开发指南](docs/DEVELOPMENT.md) · [约定手册](docs/CONVENTIONS.md)。
+
 面向西安交通大学学生的桌面校园工作台，把校园账号、课表、常用网站和插件集中在一个应用中。
 
 使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS 和 Windows**。当前版本为 **0.1.0 开发版**，已在 macOS 构建运行，Windows 尚待实机验收。
