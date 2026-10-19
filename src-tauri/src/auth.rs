@@ -168,10 +168,31 @@ fn has_error(text: &str) -> bool {
                 || e.value().attr("title").is_some_and(|s| !s.is_empty())
         })
 }
+fn parse_public_key(pem: &str) -> Result<RsaPublicKey, String> {
+    // The campus endpoint returns an unwrapped Base64 line. Decode the supported
+    // PEM envelopes explicitly; keep RSA DER validation strict.
+    let invalid = || "无法解析校园登录公钥，请重新开始后重试".to_string();
+    if pem.len() > 32 * 1024 {
+        return Err(invalid());
+    }
+    let pem = pem.trim();
+    for label in ["PUBLIC KEY", "RSA PUBLIC KEY"] {
+        let begin = format!("-----BEGIN {label}-----");
+        let end = format!("-----END {label}-----");
+        if let Some(body) = pem.strip_prefix(&begin).and_then(|s| s.strip_suffix(&end)) {
+            let base64: String = body.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+            let der = STANDARD.decode(base64).map_err(|_| invalid())?;
+            return if label == "PUBLIC KEY" {
+                RsaPublicKey::from_public_key_der(&der).map_err(|_| invalid())
+            } else {
+                RsaPublicKey::from_pkcs1_der(&der).map_err(|_| invalid())
+            };
+        }
+    }
+    Err(invalid())
+}
 fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
-    let public = RsaPublicKey::from_public_key_pem(pem)
-        .or_else(|_| RsaPublicKey::from_pkcs1_pem(pem))
-        .map_err(|_| "校园登录公钥格式发生变化")?;
+    let public = parse_public_key(pem)?;
     let bytes = public
         .encrypt(&mut rand::rngs::OsRng, Pkcs1v15Encrypt, password.as_bytes())
         .map_err(|_| "无法加密校园登录密码")?;
@@ -850,6 +871,75 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn campus_public_key_accepts_unwrapped_base64_and_crlf() {
+        use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey};
+        let private = RsaPrivateKey::new(&mut rand::rngs::OsRng, 1024).unwrap();
+        let public = RsaPublicKey::from(&private);
+        let pem = public
+            .to_public_key_pem(rsa::pkcs8::LineEnding::LF)
+            .unwrap();
+        let body: String = pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect();
+        for text in [
+            pem,
+            format!("-----BEGIN PUBLIC KEY-----\n{body}\n-----END PUBLIC KEY-----"),
+            format!("-----BEGIN PUBLIC KEY----- \r\n{body}\r\n-----END PUBLIC KEY----- \r\n"),
+        ] {
+            let encrypted = encrypt_password("local-test-password", &text).unwrap();
+            let bytes = STANDARD
+                .decode(encrypted.strip_prefix("__RSA__").unwrap())
+                .unwrap();
+            assert_eq!(
+                private.decrypt(Pkcs1v15Encrypt, &bytes).unwrap(),
+                b"local-test-password"
+            );
+        }
+    }
+    #[test]
+    fn campus_public_key_supports_pkcs1_and_rejects_invalid_envelopes() {
+        use rsa::{pkcs1::EncodeRsaPublicKey, RsaPrivateKey};
+        let private = RsaPrivateKey::new(&mut rand::rngs::OsRng, 1024).unwrap();
+        let public = RsaPublicKey::from(&private);
+        let pem = public.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF).unwrap();
+        assert_eq!(parse_public_key(&pem).unwrap(), public);
+        for invalid in [
+            "<html>login required</html>",
+            "-----BEGIN PUBLIC KEY-----\ninvalid!\n-----END PUBLIC KEY-----",
+            "-----BEGIN PUBLIC KEY-----\nMAA=\n-----END PUBLIC KEY-----",
+            "-----BEGIN PUBLIC KEY-----\nMAA=\n-----END RSA PUBLIC KEY-----",
+        ] {
+            assert!(parse_public_key(invalid).is_err());
+        }
+        assert!(parse_public_key(&pem.replace("RSA PUBLIC KEY", "PUBLIC KEY")).is_err());
+    }
+    #[test]
+    #[ignore = "Fetches a public key only; does not submit credentials"]
+    fn live_campus_public_key_probe() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let login = Login::begin("undergraduate".into()).await.unwrap();
+            let response = login
+                .transport
+                .get(
+                    &Url::parse(&format!("{CAS}/cas/jwt/publicKey")).unwrap(),
+                    login.request_mode(),
+                )
+                .await
+                .unwrap();
+            let pem = String::from_utf8(network::limited_bytes(response, 32 * 1024).await.unwrap())
+                .unwrap();
+            encrypt_password("local-probe-never-submitted", &pem).unwrap();
+            println!(
+                "School public key parsed and local encryption succeeded; no credentials submitted"
+            );
+        });
+    }
     #[test]
     fn ui_actions_decode_remember_password_and_saved_account_fields() {
         let action: Action = serde_json::from_value(
