@@ -3,6 +3,7 @@ mod campus_browser;
 mod config;
 mod plugins;
 mod providers;
+mod school;
 mod vault;
 
 mod accounts;
@@ -26,6 +27,8 @@ struct AppState {
     auth_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
     auth: auth::Manager,
+    school_lock: tokio::sync::Mutex<()>,
+    evaluations: school::evaluation::Manager,
 }
 
 fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -497,6 +500,153 @@ async fn open_external(
     .map_err(|_| "校园窗口初始化失败")?
 }
 
+#[tauri::command]
+fn school_catalog(window: WebviewWindow) -> Result<Vec<school::Feature>, String> {
+    main_only(&window)?;
+    Ok(school::catalog())
+}
+
+fn require_school_feature(app: &tauri::AppHandle, feature: &str) -> Result<(), String> {
+    if config::load(&config_path(app)?)?
+        .disabled_plugins
+        .contains(&format!("cn.xjtu.{feature}"))
+    {
+        return Err("请先启用此校园插件".into());
+    }
+    Ok(())
+}
+
+async fn school_account(
+    app: &tauri::AppHandle,
+    state: &AppState,
+) -> Result<(accounts::Account, u64), String> {
+    let _guard = state.auth_lock.lock().await;
+    let book = accounts::load(&accounts_path(app)?)?;
+    Ok((
+        book.active().ok_or("请先登录校园账号")?.clone(),
+        state.generation.load(Ordering::SeqCst),
+    ))
+}
+
+async fn save_school_session(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    account_id: &str,
+    generation: u64,
+    cookies: String,
+) -> Result<(), String> {
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新查询".into());
+    }
+    let path = accounts_path(app)?;
+    let mut book = accounts::load(&path)?;
+    if book.active_id.as_deref() != Some(account_id) {
+        return Err("账号已切换，请重新查询".into());
+    }
+    let account = book
+        .accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?;
+    account.cookies = cookies;
+    accounts::save(&path, &book)
+}
+
+#[tauri::command]
+async fn school_query(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    query: school::Query,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    require_school_feature(&app, query.feature())?;
+    query.validate()?;
+    let _service_guard = state.school_lock.lock().await;
+    if matches!(query, school::Query::Calendar) {
+        return school::query(None, query).await.map(|(data, _)| data);
+    }
+    let (account, generation) = school_account(&app, &state).await?;
+    let account_id = account.id.clone();
+    let (data, cookies) = school::query(Some(account), query).await?;
+    if let Some(cookies) = cookies {
+        save_school_session(&app, &state, &account_id, generation, cookies).await?;
+    }
+    Ok(data)
+}
+
+#[tauri::command]
+async fn school_prepare_evaluations(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    input: school::evaluation::Prepare,
+) -> Result<school::evaluation::Preview, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "evaluations")?;
+    let _service_guard = state.school_lock.lock().await;
+    let (account, generation) = school_account(&app, &state).await?;
+    let account_id = account.id.clone();
+    let (preview, cookies) = state
+        .evaluations
+        .prepare(account, generation, input)
+        .await?;
+    save_school_session(&app, &state, &account_id, generation, cookies).await?;
+    Ok(preview)
+}
+
+#[tauri::command]
+async fn school_submit_evaluations(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    preview_id: String,
+) -> Result<Vec<school::evaluation::Outcome>, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "evaluations")?;
+    let _service_guard = state.school_lock.lock().await;
+    // Serialize account changes with writes to the school. Cancellation remains independent.
+    let _account_guard = state.auth_lock.lock().await;
+    let path = accounts_path(&app)?;
+    let mut book = accounts::load(&path)?;
+    let account = book.active().ok_or("请先登录校园账号")?.clone();
+    let account_id = account.id.clone();
+    let generation = state.generation.load(Ordering::SeqCst);
+    let (results, cookies) = state
+        .evaluations
+        .submit(&preview_id, account, generation, |progress| {
+            let _ = window.emit("school-evaluation-progress", progress);
+        })
+        .await?;
+    // A local save failure must not turn already accepted submissions into retryable failures.
+    let saved = if let Some(cookies) = cookies {
+        if let Some(account) = book.accounts.iter_mut().find(|a| a.id == account_id) {
+            account.cookies = cookies;
+        }
+        accounts::save(&path, &book).is_ok()
+    } else {
+        false
+    };
+    if !saved {
+        let _ = window.emit(
+            "school-session-save-failed",
+            "评教结果已返回，但本地会话保存失败",
+        );
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+fn school_cancel_evaluations(
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    preview_id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    state.evaluations.cancel(&preview_id)
+}
+
 fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
@@ -641,6 +791,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            school_catalog,
+            school_query,
+            school_prepare_evaluations,
+            school_submit_evaluations,
+            school_cancel_evaluations,
             list_model_providers,
             save_model_provider,
             remove_model_provider,
