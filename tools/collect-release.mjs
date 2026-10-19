@@ -21,7 +21,8 @@ for (const extension of extensions) {
   if (files.length !== 1)
     throw new Error(`Expected one ${extension} installer, found ${files.length}`);
   const source = path.join(root, files[0]);
-  const name = path.basename(source);
+  // GitHub rewrites spaces in asset names; hash the final downloadable filename.
+  const name = path.basename(source).replace(/[^A-Za-z0-9._-]/g, '.');
   await copyFile(source, path.join(output, name));
   checksums.push(
     `${createHash('sha256')
