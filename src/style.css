@@ -1,0 +1,114 @@
+/* Design tokens shared by the shell, pages and UI components. */
+:root {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text: #1f2329;
+  --text-secondary: #5c636d;
+  --text-tertiary: #8c929b;
+
+  --surface: #ffffff;
+  --surface-subtle: #f7f8fa;
+  --surface-sunken: #f1f2f4;
+  --surface-hover: rgba(15, 23, 42, 0.045);
+  --surface-pressed: rgba(15, 23, 42, 0.08);
+  --border: #e4e6ea;
+  --border-strong: #d4d7dc;
+  --divider: #eceef1;
+
+  --accent: #1f6fe5;
+  --accent-hover: #1a63cf;
+  --accent-pressed: #1657b8;
+  --accent-soft: #eaf1fd;
+  --accent-text: #1a5ec6;
+  --danger: #c23a2f;
+  --danger-soft: #fdefed;
+  --success: #2c8653;
+  --success-soft: #ebf6ef;
+
+  --sidebar-bg: #f1f2f4;
+  --sidebar-border: #e1e3e7;
+  --nav-hover: rgba(15, 23, 42, 0.05);
+  --nav-active: #e1e8f3;
+  --nav-active-text: #1b56a8;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 4px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 6px 16px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --focus-ring: 0 0 0 3px rgba(31, 111, 229, 0.22);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+  --duration-slow: 300ms;
+
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.5;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+button:disabled {
+  opacity: 0.45;
+}
+button:focus-visible,
+a:focus-visible,
+[role='separator']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button svg {
+  flex-shrink: 0;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+.spinning {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}

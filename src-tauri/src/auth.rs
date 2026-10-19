@@ -1,0 +1,809 @@
+//! Native CAS driver. No remote login WebView and no password persistence.
+use crate::{
+    accounts::Account,
+    campus,
+    network::{self, AccessMode, Page, Transport},
+};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine,
+};
+use reqwest::StatusCode;
+use rsa::{pkcs1::DecodeRsaPublicKey, pkcs8::DecodePublicKey, Pkcs1v15Encrypt, RsaPublicKey};
+use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::{Duration, Instant},
+};
+use url::Url;
+use uuid::Uuid;
+use zeroize::Zeroizing;
+
+const CAS: &str = "https://login.xjtu.edu.cn";
+const VPN_LOGIN: &str = "https://webvpn.xjtu.edu.cn/login?cas_login=true";
+const YWTB: &str = "https://login.xjtu.edu.cn/cas/login?service=https%3A%2F%2Fywtb.xjtu.edu.cn%2F%3Fpath%3Dhttps%253A%252F%252Fywtb.xjtu.edu.cn%252Fmain.html%2523%252FIndex";
+const TTL: Duration = Duration::from_secs(15 * 60);
+
+#[derive(Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Phase {
+    Credentials,
+    Captcha,
+    Mfa,
+    Identity,
+    Success,
+}
+#[derive(Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Step {
+    Webvpn,
+    Campus,
+}
+#[derive(Clone, Serialize)]
+pub struct Choice {
+    pub label: String,
+    pub name: String,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct View {
+    pub flow_id: String,
+    pub access_mode: AccessMode,
+    pub step: Step,
+    pub phase: Phase,
+    pub phone: Option<String>,
+    pub choices: Vec<Choice>,
+    pub message: Option<String>,
+    pub can_continue: bool,
+}
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+pub enum Action {
+    Credentials {
+        username: String,
+        password: String,
+        #[serde(default)]
+        captcha: String,
+    },
+    Continue {
+        #[serde(default)]
+        captcha: String,
+    },
+    SendMfa,
+    VerifyMfa {
+        code: String,
+    },
+    ChooseIdentity {
+        label: String,
+    },
+}
+struct Mfa {
+    state: String,
+    flow: &'static str,
+    gid: Option<String>,
+    phone: Option<String>,
+    verified: bool,
+    sent: Option<Instant>,
+}
+struct Form {
+    execution: String,
+    sec_state: Option<String>,
+    event: String,
+    submit: String,
+    choices: Vec<Choice>,
+    mfa_enabled: bool,
+}
+fn input(html: &Html, name: &str) -> Option<String> {
+    html.select(&Selector::parse("input").unwrap())
+        .find(|e| e.value().attr("name") == Some(name))
+        .and_then(|e| e.value().attr("value"))
+        .map(str::to_string)
+}
+fn parse_form(text: &str) -> Option<Form> {
+    let html = Html::parse_document(text);
+    let execution = input(&html, "execution").filter(|s| !s.is_empty())?;
+    let mut choices = Vec::new();
+    for wrap in html.select(&Selector::parse(".account-wrap").unwrap()) {
+        let name = wrap
+            .select(&Selector::parse(".name").unwrap())
+            .next()
+            .map(|e| e.text().collect::<String>().trim().to_string());
+        let label = wrap
+            .select(&Selector::parse("el-radio[label]").unwrap())
+            .next()
+            .and_then(|e| e.value().attr("label"));
+        if let (Some(name), Some(label)) = (name, label) {
+            if !label.is_empty() {
+                choices.push(Choice {
+                    name,
+                    label: label.into(),
+                });
+            }
+        }
+    }
+    let mfa_enabled = regex::Regex::new(
+        r#"globalConfig\s*=\s*eval\('\('\s*\+\s*("(?:\\.|[^"\\])*")\s*\+\s*'\)'\s*\)"#,
+    )
+    .unwrap()
+    .captures(text)
+    .and_then(|c| serde_json::from_str::<String>(&c[1]).ok())
+    .and_then(|v| serde_json::from_str::<Value>(&v).ok())
+    .and_then(|v| v.get("mfaEnabled").cloned())
+    .is_none_or(|v| v != Value::Bool(false) && v != "false");
+    Some(Form {
+        execution,
+        sec_state: input(&html, "secState"),
+        event: input(&html, "_eventId").unwrap_or("submit".into()),
+        submit: input(&html, "submit").unwrap_or("Login1".into()),
+        choices,
+        mfa_enabled,
+    })
+}
+fn has_error(text: &str) -> bool {
+    Html::parse_document(text)
+        .select(&Selector::parse("el-alert").unwrap())
+        .any(|e| {
+            e.value().attr("type") == Some("error")
+                || e.value().attr("title").is_some_and(|s| !s.is_empty())
+        })
+}
+fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
+    let public = RsaPublicKey::from_public_key_pem(pem)
+        .or_else(|_| RsaPublicKey::from_pkcs1_pem(pem))
+        .map_err(|_| "校园登录公钥格式发生变化")?;
+    let bytes = public
+        .encrypt(&mut rand::rngs::OsRng, Pkcs1v15Encrypt, password.as_bytes())
+        .map_err(|_| "无法加密校园登录密码")?;
+    Ok(format!("__RSA__{}", STANDARD.encode(bytes)))
+}
+
+pub struct Login {
+    id: String,
+    pub created: Instant,
+    transport: Transport,
+    degree: String,
+    mode: AccessMode,
+    step: Step,
+    phase: Phase,
+    page: Option<Page>,
+    username: String,
+    encrypted: Zeroizing<String>,
+    visitor: String,
+    mfa: Option<Mfa>,
+    choices: Vec<Choice>,
+    chosen: Option<String>,
+    failures: u8,
+    message: Option<String>,
+    pub completed: Option<Account>,
+}
+impl Login {
+    pub async fn begin(degree: String) -> Result<Self, String> {
+        let mode = network::probe(&degree).await?;
+        let transport = Transport::new(None)?;
+        let step = if mode == AccessMode::Webvpn {
+            Step::Webvpn
+        } else {
+            Step::Campus
+        };
+        let target = if step == Step::Webvpn {
+            VPN_LOGIN.to_string()
+        } else {
+            format!(
+                "https://{}/sa/auth/cas/login/student-pc",
+                campus::domain(&degree)?
+            )
+        };
+        let page = transport
+            .page(
+                &Url::parse(&target).map_err(|_| "校园入口无效")?,
+                AccessMode::Direct,
+                &degree,
+            )
+            .await?;
+        let mut flow = Self {
+            id: Uuid::new_v4().to_string(),
+            created: Instant::now(),
+            transport,
+            degree,
+            mode,
+            step,
+            phase: Phase::Credentials,
+            page: None,
+            username: String::new(),
+            encrypted: Zeroizing::new(String::new()),
+            visitor: Uuid::new_v4().simple().to_string(),
+            mfa: None,
+            choices: vec![],
+            chosen: None,
+            failures: 0,
+            message: None,
+            completed: None,
+        };
+        flow.accept(page).await?;
+        Ok(flow)
+    }
+    fn request_mode(&self) -> AccessMode {
+        if self.step == Step::Webvpn {
+            AccessMode::Direct
+        } else {
+            self.mode
+        }
+    }
+    pub fn view(&self) -> View {
+        View {
+            flow_id: self.id.clone(),
+            access_mode: self.mode,
+            step: self.step,
+            phase: self.phase,
+            phone: self.mfa.as_ref().and_then(|m| m.phone.clone()),
+            choices: self.choices.clone(),
+            message: self.message.clone(),
+            can_continue: !self.encrypted.is_empty() && self.phase == Phase::Credentials,
+        }
+    }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    fn ensure_active(&self) -> Result<(), String> {
+        if self.created.elapsed() > TTL || self.phase == Phase::Success {
+            Err("登录流程已结束或过期，请重新开始".into())
+        } else {
+            Ok(())
+        }
+    }
+    async fn post_form(&self, url: &Url, data: &[(&str, String)]) -> Result<Page, String> {
+        if url.host_str() != Some("login.xjtu.edu.cn") || !url.path().starts_with("/cas/") {
+            return Err("校园登录提交地址不受支持".into());
+        }
+        let response = self
+            .transport
+            .client
+            .post(Transport::address(url, self.request_mode())?)
+            .form(data)
+            .send()
+            .await
+            .map_err(|_| "校园登录提交失败，请检查网络")?;
+        self.transport
+            .follow(response, self.request_mode(), &self.degree)
+            .await
+    }
+    async fn api(&self, path: &str, data: &Value) -> Result<Value, String> {
+        let url = Url::parse(&format!("{CAS}{path}")).map_err(|_| "校园认证接口地址无效")?;
+        let response = self
+            .transport
+            .client
+            .post(Transport::address(&url, self.request_mode())?)
+            .json(data)
+            .send()
+            .await
+            .map_err(|_| "无法连接校园验证服务")?;
+        network::json(response).await
+    }
+    async fn init_mfa(&mut self) -> Result<(), String> {
+        let mfa = self.mfa.as_ref().ok_or("当前无需两步验证")?;
+        let mut url = Url::parse(&format!("{CAS}/cas/{}/initByType/securephone", mfa.flow))
+            .map_err(|_| "验证地址无效")?;
+        url.query_pairs_mut().append_pair("state", &mfa.state);
+        let data = network::json(self.transport.get(&url, self.request_mode()).await?).await?;
+        let gid = data
+            .get("gid")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .ok_or("校园验证缺少请求标识")?
+            .to_string();
+        let phone = data
+            .get("securePhone")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let mfa = self.mfa.as_mut().unwrap();
+        mfa.gid = Some(gid);
+        mfa.phone = phone;
+        Ok(())
+    }
+    async fn password_page(&mut self, captcha: String) -> Result<Option<Page>, String> {
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let form = parse_form(&page.html).ok_or("校园登录页面格式发生变化，请重新开始")?;
+        if self.failures >= 3 && captcha.is_empty() {
+            self.phase = Phase::Captcha;
+            return Ok(None);
+        }
+        if form.mfa_enabled && self.mfa.is_none() {
+            let url = Url::parse(&format!("{CAS}/cas/mfa/detect")).unwrap();
+            let response = self
+                .transport
+                .client
+                .post(Transport::address(&url, self.request_mode())?)
+                .header(
+                    "Referer",
+                    Transport::address(&page.url, self.request_mode())?.as_str(),
+                )
+                .form(&[
+                    ("username", self.username.as_str()),
+                    ("password", self.encrypted.as_str()),
+                    ("fpVisitorId", self.visitor.as_str()),
+                    ("loginType", "passwordLogin"),
+                ])
+                .send()
+                .await
+                .map_err(|_| "无法检测校园两步验证")?;
+            let data = network::json(response).await?;
+            let state = data
+                .get("state")
+                .and_then(Value::as_str)
+                .ok_or("校园验证响应缺少 state")?
+                .to_string();
+            let need = data
+                .get("need")
+                .and_then(Value::as_bool)
+                .ok_or("校园验证响应缺少 need")?;
+            self.mfa = Some(Mfa {
+                state,
+                flow: "mfa",
+                gid: None,
+                phone: None,
+                verified: !need,
+                sent: None,
+            });
+            if need {
+                self.phase = Phase::Mfa;
+                self.init_mfa().await?;
+                return Ok(None);
+            }
+        }
+        if self.mfa.as_ref().is_some_and(|m| !m.verified) {
+            self.phase = Phase::Mfa;
+            return Ok(None);
+        }
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let mfa = self
+            .mfa
+            .as_ref()
+            .map(|m| m.state.clone())
+            .unwrap_or_default();
+        self.post_form(
+            &page.url,
+            &[
+                ("username", self.username.clone()),
+                ("password", self.encrypted.to_string()),
+                ("execution", form.execution),
+                ("_eventId", "submit".into()),
+                ("submit1", "Login1".into()),
+                ("fpVisitorId", self.visitor.clone()),
+                ("captcha", captcha),
+                ("currentMenu", "1".into()),
+                ("failN", self.failures.to_string()),
+                ("mfaState", mfa),
+                ("geolocation", String::new()),
+                ("trustAgent", "false".into()),
+            ],
+        )
+        .await
+        .map(Some)
+    }
+    async fn accept(&mut self, mut page: Page) -> Result<(), String> {
+        loop {
+            // A successful service callback is mandatory. An arbitrary page without an error is not login success.
+            if self.step == Step::Campus {
+                if let Some((request, ticket)) = campus::callback(&page.url, &self.degree) {
+                    let url = Url::parse(&format!(
+                        "https://{}/sa/auth/cas/exchange",
+                        campus::domain(&self.degree)?
+                    ))
+                    .unwrap();
+                    let response = self
+                        .transport
+                        .client
+                        .post(Transport::address(&url, self.mode)?)
+                        .json(&json!({"loginRequestId":request,"ticket":ticket}))
+                        .send()
+                        .await
+                        .map_err(|_| "校园业务换票失败")?;
+                    let data = network::json(response).await?;
+                    let token = data
+                        .get("tokenValue")
+                        .and_then(Value::as_str)
+                        .filter(|s| !s.is_empty())
+                        .ok_or("校园业务未返回会话")?
+                        .to_string();
+                    let (name, student_id) = self.profile().await.unwrap_or((None, None));
+                    self.completed = Some(Account {
+                        id: Uuid::new_v4().to_string(),
+                        username: self.username.clone(),
+                        degree: self.degree.clone(),
+                        name,
+                        student_id: student_id.or(self.chosen.clone()),
+                        avatar: None,
+                        mode: self.mode,
+                        token,
+                        cookies: self.transport.snapshot()?,
+                    });
+                    self.phase = Phase::Success;
+                    self.page = None;
+                    self.encrypted.clear();
+                    self.mfa = None;
+                    self.choices.clear();
+                    return Ok(());
+                }
+            } else if page.url.host_str() == Some("webvpn.xjtu.edu.cn")
+                && page.status.is_success()
+                && page.html.contains("西安交通大学WebVPN - 资源站点")
+            {
+                self.step = Step::Campus;
+                self.mfa = None;
+                self.failures = 0;
+                let target = Url::parse(&format!(
+                    "https://{}/sa/auth/cas/login/student-pc",
+                    campus::domain(&self.degree)?
+                ))
+                .unwrap();
+                page = self
+                    .transport
+                    .page(&target, self.mode, &self.degree)
+                    .await?;
+                continue;
+            }
+            if page.url.host_str() != Some("login.xjtu.edu.cn")
+                || !page.url.path().starts_with("/cas/")
+            {
+                return Err("未收到预期的校园认证页面，请重新开始".into());
+            }
+            let form = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请重新开始")?;
+            let failed = page.status == StatusCode::UNAUTHORIZED || has_error(&page.html);
+            self.page = Some(page);
+            if failed {
+                self.failures = self.failures.saturating_add(1);
+                self.mfa = None;
+                self.encrypted.clear();
+                self.phase = if self.failures >= 3 {
+                    Phase::Captcha
+                } else {
+                    Phase::Credentials
+                };
+                self.message = Some("登录未通过，请检查账号、密码或验证码后重试".into());
+                return Ok(());
+            }
+            if let Some(state) = form.sec_state {
+                self.mfa = Some(Mfa {
+                    state,
+                    flow: "sec",
+                    gid: None,
+                    phone: None,
+                    verified: false,
+                    sent: None,
+                });
+                self.phase = Phase::Mfa;
+                self.init_mfa().await?;
+            } else if !form.choices.is_empty() {
+                self.choices = form.choices;
+                self.phase = Phase::Identity;
+            } else {
+                self.phase = Phase::Credentials;
+            }
+            return Ok(());
+        }
+    }
+    async fn profile(&self) -> Result<(Option<String>, Option<String>), String> {
+        // YWTB supplies verified name / student number. Do not invent a name from the login identifier.
+        let page = self
+            .transport
+            .page(&Url::parse(YWTB).unwrap(), self.mode, &self.degree)
+            .await?;
+        if page.url.host_str() != Some("ywtb.xjtu.edu.cn") {
+            return Err("基础信息认证尚未完成".into());
+        }
+        let ticket = page
+            .url
+            .query_pairs()
+            .find(|(k, _)| k == "ticket")
+            .map(|(_, v)| v.into_owned())
+            .ok_or("基础信息回调缺少 ticket")?;
+        let payload = ticket.split('.').nth(1).ok_or("基础信息凭据格式不受支持")?;
+        let json: Value = serde_json::from_slice(
+            &URL_SAFE_NO_PAD
+                .decode(payload.trim_end_matches('='))
+                .map_err(|_| "基础信息凭据格式不受支持")?,
+        )
+        .map_err(|_| "基础信息凭据格式不受支持")?;
+        // The token is received over the authenticated TLS flow and used for the service, not trusted as authorization locally.
+        let token = json
+            .get("idToken")
+            .and_then(Value::as_str)
+            .ok_or("基础信息缺少服务凭据")?;
+        let url = Url::parse("https://authx-service.xjtu.edu.cn/personal/api/v1/personal/me/user")
+            .unwrap();
+        let response = self
+            .transport
+            .client
+            .get(Transport::address(&url, self.mode)?)
+            .header("x-device-info", "PC")
+            .header("x-terminal-info", "PC")
+            .header("x-id-token", token)
+            .send()
+            .await
+            .map_err(|_| "基础信息读取失败")?;
+        let data = network::json(response).await?;
+        let attributes = data.get("attributes").ok_or("基础信息字段不受支持")?;
+        let clean = |v: Option<&Value>| {
+            v.and_then(Value::as_str)
+                .filter(|s| !s.is_empty() && s.len() <= 256)
+                .map(str::to_string)
+        };
+        Ok((
+            clean(attributes.get("userName")).or_else(|| clean(data.get("username"))),
+            clean(attributes.get("userUid")),
+        ))
+    }
+    pub async fn captcha(&self) -> Result<String, String> {
+        self.ensure_active()?;
+        if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+            return Err("当前登录阶段无需图片验证码".into());
+        }
+        let response = self
+            .transport
+            .get(
+                &Url::parse(&format!("{CAS}/cas/captcha.jpg")).unwrap(),
+                self.request_mode(),
+            )
+            .await?;
+        if !response.status().is_success() {
+            return Err("图片验证码获取失败".into());
+        }
+        let bytes = network::limited_bytes(response, 256 * 1024).await?;
+        let kind = match image::guess_format(&bytes).map_err(|_| "验证码未返回图片")? {
+            image::ImageFormat::Png => "png",
+            image::ImageFormat::Jpeg => "jpeg",
+            _ => return Err("验证码图片格式不受支持".into()),
+        };
+        Ok(format!(
+            "data:image/{kind};base64,{}",
+            STANDARD.encode(bytes)
+        ))
+    }
+    pub async fn act(&mut self, action: Action) -> Result<(), String> {
+        self.ensure_active()?;
+        self.message = None;
+        let page = match action {
+            Action::Credentials {
+                username,
+                password,
+                captcha,
+            } => {
+                let password = Zeroizing::new(password);
+                if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+                    return Err("当前阶段不接受账号密码".into());
+                }
+                if username.trim().is_empty()
+                    || username.len() > 256
+                    || password.is_empty()
+                    || password.len() > 512
+                    || captcha.len() > 32
+                {
+                    return Err("请输入有效的校园账号、密码和验证码".into());
+                }
+                let response = self
+                    .transport
+                    .get(
+                        &Url::parse(&format!("{CAS}/cas/jwt/publicKey")).unwrap(),
+                        self.request_mode(),
+                    )
+                    .await?;
+                if !response.status().is_success() {
+                    return Err("校园登录公钥获取失败".into());
+                }
+                let pem = String::from_utf8(network::limited_bytes(response, 32 * 1024).await?)
+                    .map_err(|_| "校园登录公钥格式不受支持")?;
+                self.username = username.trim().to_string();
+                self.encrypted = Zeroizing::new(encrypt_password(&password, &pem)?);
+                self.mfa = None;
+                self.password_page(captcha).await?
+            }
+            Action::Continue { captcha } => {
+                if !matches!(self.phase, Phase::Credentials | Phase::Captcha)
+                    || self.encrypted.is_empty()
+                    || captcha.len() > 32
+                {
+                    return Err("请重新提交校园登录信息".into());
+                }
+                self.password_page(captcha).await?
+            }
+            Action::SendMfa => {
+                if self.phase != Phase::Mfa {
+                    return Err("当前无需两步验证".into());
+                }
+                if self.mfa.as_ref().is_some_and(|m| {
+                    m.sent
+                        .is_some_and(|s| s.elapsed() < Duration::from_secs(60))
+                }) {
+                    return Err("验证码已发送，请稍后重试".into());
+                }
+                if self.mfa.as_ref().is_some_and(|m| m.gid.is_none()) {
+                    self.init_mfa().await?;
+                }
+                let mfa = self.mfa.as_ref().ok_or("两步验证上下文已过期")?;
+                self.api(
+                    "/attest/api/guard/securephone/send",
+                    &json!({"gid":mfa.gid}),
+                )
+                .await?;
+                self.mfa.as_mut().unwrap().sent = Some(Instant::now());
+                self.message = Some("验证码已发送".into());
+                None
+            }
+            Action::VerifyMfa { code } => {
+                if self.phase != Phase::Mfa
+                    || code.is_empty()
+                    || code.len() > 16
+                    || !code.bytes().all(|b| b.is_ascii_digit())
+                {
+                    return Err("请输入有效的手机验证码".into());
+                }
+                let mfa = self.mfa.as_ref().ok_or("两步验证上下文已过期")?;
+                if mfa.sent.is_none() {
+                    return Err("请先发送手机验证码".into());
+                }
+                let data = self
+                    .api(
+                        "/attest/api/guard/securephone/valid",
+                        &json!({"gid":mfa.gid,"code":code}),
+                    )
+                    .await?;
+                if !matches!(data.get("status"),Some(v) if v==2 || v=="2") {
+                    return Err("手机验证码验证未通过".into());
+                }
+                self.mfa.as_mut().unwrap().verified = true;
+                if self.mfa.as_ref().unwrap().flow == "sec" {
+                    let page = self.page.as_ref().ok_or("缺少安全验证页面")?;
+                    let form = parse_form(&page.html).ok_or("安全验证表单缺失")?;
+                    Some(
+                        self.post_form(
+                            &page.url,
+                            &[
+                                ("secState", form.sec_state.ok_or("安全验证状态缺失")?),
+                                ("execution", form.execution),
+                                ("_eventId", form.event),
+                                ("submit", form.submit),
+                                ("geolocation", String::new()),
+                                ("fpVisitorId", self.visitor.clone()),
+                            ],
+                        )
+                        .await?,
+                    )
+                } else {
+                    self.password_page(String::new()).await?
+                }
+            }
+            Action::ChooseIdentity { label } => {
+                if self.phase != Phase::Identity || !self.choices.iter().any(|c| c.label == label) {
+                    return Err("请选择当前登录提供的校园身份".into());
+                }
+                let page = self.page.as_ref().ok_or("缺少身份选择页面")?;
+                let form = parse_form(&page.html).ok_or("身份选择表单缺失")?;
+                self.chosen = Some(label.clone());
+                Some(
+                    self.post_form(
+                        &page.url,
+                        &[
+                            ("execution", form.execution),
+                            ("_eventId", "submit".into()),
+                            ("geolocation", String::new()),
+                            ("fpVisitorId", self.visitor.clone()),
+                            ("trustAgent", "false".into()),
+                            ("username", label),
+                            ("useDefault", "false".into()),
+                        ],
+                    )
+                    .await?,
+                )
+            }
+        };
+        if let Some(page) = page {
+            self.accept(page).await?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct Handle {
+    pub login: Arc<tokio::sync::Mutex<Login>>,
+    pub cancelled: Arc<AtomicBool>,
+    pub created: Instant,
+}
+#[derive(Default)]
+pub struct Manager {
+    flows: Mutex<HashMap<String, Handle>>,
+}
+impl Manager {
+    pub fn insert(&self, login: Login) -> Result<View, String> {
+        let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
+        flows.retain(|_, h| h.created.elapsed() < TTL);
+        if flows.len() >= 4 {
+            return Err("待完成的登录过多，请先完成或取消现有登录".into());
+        }
+        let view = login.view();
+        let id = login.id().to_string();
+        flows.insert(
+            id,
+            Handle {
+                created: Instant::now(),
+                login: Arc::new(tokio::sync::Mutex::new(login)),
+                cancelled: Arc::new(AtomicBool::new(false)),
+            },
+        );
+        Ok(view)
+    }
+    pub fn get(&self, id: &str) -> Result<Handle, String> {
+        let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
+        if flows.get(id).is_some_and(|h| h.created.elapsed() >= TTL) {
+            if let Some(h) = flows.remove(id) {
+                h.cancelled.store(true, Ordering::SeqCst);
+            }
+        }
+        flows
+            .get(id)
+            .cloned()
+            .ok_or("登录流程不存在或已过期，请重新开始".into())
+    }
+    pub fn cancel(&self, id: &str) -> Result<(), String> {
+        if let Some(h) = self.flows.lock().map_err(|_| "认证服务繁忙")?.remove(id) {
+            h.cancelled.store(true, Ordering::SeqCst);
+        }
+        Ok(())
+    }
+    pub fn cancel_all(&self) {
+        if let Ok(mut flows) = self.flows.lock() {
+            for (_, h) in flows.drain() {
+                h.cancelled.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn html_fields_choices_and_safety_forms_are_parsed_without_executing_scripts() {
+        let form=parse_form(r#"<form><input value='e1s1' name='execution'><input name='secState' value='s&amp;x'><input name='_eventId' value='submit'></form><div class='account-wrap'><div class='name'>研究生</div><el-radio label='20260000'></el-radio></div>"#).unwrap();
+        assert_eq!(form.execution, "e1s1");
+        assert_eq!(form.sec_state.as_deref(), Some("s&x"));
+        assert_eq!(form.choices[0].label, "20260000");
+        assert!(form.mfa_enabled);
+        assert!(parse_form("<title>Unexpected gateway</title>").is_none());
+    }
+    #[test]
+    fn password_encryption_matches_rsa_pkcs1_protocol_and_never_returns_plaintext() {
+        use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey};
+        let private = RsaPrivateKey::new(&mut rand::rngs::OsRng, 2048).unwrap();
+        let pem = private
+            .to_public_key()
+            .to_public_key_pem(Default::default())
+            .unwrap();
+        let encrypted = encrypt_password("a-test-password", &pem).unwrap();
+        assert!(encrypted.starts_with("__RSA__"));
+        let bytes = STANDARD
+            .decode(encrypted.trim_start_matches("__RSA__"))
+            .unwrap();
+        assert_eq!(
+            private.decrypt(Pkcs1v15Encrypt, &bytes).unwrap(),
+            b"a-test-password"
+        );
+        assert!(encrypt_password("x", "not-a-key").is_err());
+    }
+    #[test]
+    fn unknown_mfa_config_defaults_to_detection_and_explicit_false_is_respected() {
+        let html = r#"<input name='execution' value='e1s1'><script>globalConfig = eval('(' + "{\"mfaEnabled\":false}" + ')');</script>"#;
+        assert!(!parse_form(html).unwrap().mfa_enabled);
+        assert!(
+            parse_form("<input name='execution' value='e1s1'>")
+                .unwrap()
+                .mfa_enabled
+        );
+    }
+}

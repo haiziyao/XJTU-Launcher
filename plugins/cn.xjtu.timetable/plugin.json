@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.timetable",
+  "name": "课程表",
+  "version": "0.1.0",
+  "description": "查看学期课表与今日课程",
+  "icon": "calendar",
+  "page": { "type": "timetable" },
+  "widget": true
+}

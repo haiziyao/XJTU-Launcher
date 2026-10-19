@@ -1,0 +1,288 @@
+<script setup lang="ts">
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { Plus, Pencil, Trash2, Check, Server, Eye, EyeOff, LoaderCircle } from 'lucide-vue-next';
+import { ask } from '@tauri-apps/plugin-dialog';
+import { bridge } from '../bridge';
+import type { ModelProtocol, ModelProvider, ModelProviders, ProviderInput } from '../types';
+import SettingGroup from './ui/SettingGroup.vue';
+import SettingRow from './ui/SettingRow.vue';
+import EmptyState from './ui/EmptyState.vue';
+import IconTile from './ui/IconTile.vue';
+const protocolLabel: Record<ModelProtocol, string> = {
+  'openai-compatible': 'OpenAI 兼容',
+  anthropic: 'Anthropic',
+  gemini: 'Gemini',
+};
+const book = ref<ModelProviders>({ defaultId: null, providers: [], legacyKeyAvailable: false });
+const loading = ref(true);
+const busy = ref(false);
+const error = ref('');
+const status = ref('');
+const editing = ref(false);
+const showKey = ref(false);
+const clearKey = ref(false);
+const draft = ref<ProviderInput>(empty());
+let disposed = false;
+function empty(): ProviderInput {
+  return {
+    id: null,
+    name: '',
+    baseUrl: '',
+    protocol: 'openai-compatible',
+    model: '',
+    apiKey: '',
+    useLegacyKey: false,
+  };
+}
+const current = computed(() => book.value.providers.find((p) => p.id === draft.value.id));
+const valid = computed(
+  () => draft.value.name.trim() && draft.value.baseUrl.trim() && draft.value.model.trim(),
+);
+function edit(provider?: ModelProvider) {
+  draft.value = provider
+    ? {
+        id: provider.id,
+        name: provider.name,
+        baseUrl: provider.baseUrl,
+        protocol: provider.protocol,
+        model: provider.model,
+        apiKey: '',
+        useLegacyKey: false,
+      }
+    : empty();
+  editing.value = true;
+  showKey.value = false;
+  clearKey.value = false;
+  error.value = '';
+  status.value = '';
+}
+function cancel() {
+  editing.value = false;
+  draft.value = empty();
+  showKey.value = false;
+  clearKey.value = false;
+}
+async function reload() {
+  const data = await bridge.modelProviders();
+  if (!disposed) book.value = data;
+}
+async function run(action: () => Promise<void>, message: string) {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = '';
+  status.value = '';
+  try {
+    await action();
+    await reload();
+    status.value = message;
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function save() {
+  if (!valid.value) return;
+  await run(async () => {
+    const apiKey = clearKey.value ? '' : draft.value.apiKey?.trim() || null;
+    await bridge.saveProvider({ ...draft.value, apiKey });
+    cancel();
+  }, '配置已保存');
+}
+function select(provider: ModelProvider) {
+  return run(() => bridge.selectProvider(provider.id), '已设为默认');
+}
+async function remove(provider: ModelProvider) {
+  await run(async () => {
+    if (
+      await ask(`移除“${provider.name}”及其保存的 API Key？`, {
+        title: '移除模型服务',
+        kind: 'warning',
+        okLabel: '移除',
+        cancelLabel: '取消',
+      })
+    ) {
+      await bridge.removeProvider(provider.id);
+      if (draft.value.id === provider.id) cancel();
+    }
+  }, '');
+}
+onMounted(async () => {
+  try {
+    await reload();
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    loading.value = false;
+  }
+});
+onBeforeUnmount(() => {
+  disposed = true;
+  draft.value.apiKey = '';
+});
+</script>
+<template>
+  <div>
+    <Transition name="drop">
+      <p v-if="error" class="notice" role="alert">{{ error }}</p>
+    </Transition>
+    <Transition name="drop">
+      <p v-if="status" class="notice success" role="status">{{ status }}</p>
+    </Transition>
+    <Transition name="section" mode="out-in">
+      <SettingGroup
+        v-if="!editing"
+        key="list"
+        title="模型厂商"
+        footnote="配置保存在本机，密钥加密存储且不会回显。模型调用将在 Agent 接入后启用。"
+      >
+        <template #actions>
+          <button class="btn small" :disabled="busy || loading" @click="edit()">
+            <Plus :size="14" />添加厂商
+          </button>
+        </template>
+        <EmptyState v-if="loading" compact :icon="LoaderCircle" busy title="正在读取配置…" />
+        <EmptyState
+          v-else-if="!book.providers.length"
+          compact
+          :icon="Server"
+          title="尚未配置模型服务"
+          description="添加 OpenAI 兼容、Anthropic 或 Gemini 接口"
+        >
+          <button class="btn primary small" :disabled="busy" @click="edit()">
+            <Plus :size="14" />添加厂商
+          </button>
+        </EmptyState>
+        <TransitionGroup v-else name="list">
+          <SettingRow v-for="provider in book.providers" :key="provider.id">
+            <template #leading>
+              <IconTile :tone="provider.id === book.defaultId ? 'blue' : 'gray'" :size="32">
+                <Server :size="16" />
+              </IconTile>
+            </template>
+            <template #title>
+              {{ provider.name }}
+              <span v-if="provider.id === book.defaultId" class="badge accent">默认</span>
+              <span class="badge">{{ protocolLabel[provider.protocol] }}</span>
+            </template>
+            <template #description>
+              {{ provider.model }} · {{ provider.keySet ? '已保存密钥' : '未设置密钥' }} ·
+              {{ provider.baseUrl }}
+            </template>
+            <button
+              v-if="provider.id !== book.defaultId"
+              class="btn ghost small"
+              :disabled="busy"
+              @click="select(provider)"
+            >
+              <Check :size="14" />设为默认
+            </button>
+            <button
+              class="btn ghost icon small"
+              :title="'编辑' + provider.name"
+              :aria-label="'编辑' + provider.name"
+              :disabled="busy"
+              @click="edit(provider)"
+            >
+              <Pencil :size="14" />
+            </button>
+            <button
+              class="btn ghost icon small danger"
+              :title="'移除' + provider.name"
+              :aria-label="'移除' + provider.name"
+              :disabled="busy"
+              @click="remove(provider)"
+            >
+              <Trash2 :size="14" />
+            </button>
+          </SettingRow>
+        </TransitionGroup>
+      </SettingGroup>
+
+      <SettingGroup v-else key="form" :title="draft.id ? '编辑厂商' : '添加厂商'">
+        <form class="provider-form" @submit.prevent="save">
+          <fieldset :disabled="busy">
+            <label for="provider-name">厂商名称</label
+            ><input
+              id="provider-name"
+              v-model="draft.name"
+              class="text-field"
+              placeholder="自定义名称"
+              required
+              maxlength="60"
+            />
+            <label for="provider-protocol">接口协议</label
+            ><select id="provider-protocol" v-model="draft.protocol" class="text-field">
+              <option value="openai-compatible">OpenAI 兼容</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Gemini</option>
+            </select>
+            <label for="provider-url">接口地址</label
+            ><input
+              id="provider-url"
+              v-model="draft.baseUrl"
+              class="text-field"
+              type="url"
+              placeholder="https://your-provider.example/v1"
+              required
+              maxlength="2048"
+              spellcheck="false"
+            />
+            <label for="provider-model">模型名称</label
+            ><input
+              id="provider-model"
+              v-model="draft.model"
+              class="text-field"
+              placeholder="填写厂商提供的模型 ID"
+              required
+              maxlength="256"
+              spellcheck="false"
+            />
+            <label for="provider-key">API Key</label>
+            <div class="field-shell">
+              <input
+                id="provider-key"
+                v-model="draft.apiKey"
+                :type="showKey ? 'text' : 'password'"
+                :placeholder="current?.keySet ? '留空保留现有密钥' : '输入 API Key；本地服务可留空'"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="8192"
+                :disabled="clearKey || draft.useLegacyKey"
+              /><button
+                class="btn ghost icon small"
+                type="button"
+                :aria-label="showKey ? '隐藏密钥' : '显示密钥'"
+                @click="showKey = !showKey"
+              >
+                <EyeOff v-if="showKey" :size="14" /><Eye v-else :size="14" />
+              </button>
+            </div>
+            <label v-if="current?.keySet" class="check-line"
+              ><input
+                v-model="clearKey"
+                type="checkbox"
+                :disabled="draft.useLegacyKey"
+                @change="draft.apiKey = ''"
+              />移除已保存的密钥</label
+            >
+            <label v-if="book.legacyKeyAvailable" class="check-line"
+              ><input
+                v-model="draft.useLegacyKey"
+                type="checkbox"
+                :disabled="clearKey"
+                @change="draft.apiKey = ''"
+              />使用之前保存的 API Key</label
+            >
+            <div class="form-actions">
+              <button type="button" class="btn" @click="cancel">取消</button
+              ><button class="btn primary" :disabled="!valid">
+                {{ busy ? '保存中…' : '保存配置' }}
+              </button>
+            </div>
+          </fieldset>
+        </form>
+      </SettingGroup>
+    </Transition>
+  </div>
+</template>

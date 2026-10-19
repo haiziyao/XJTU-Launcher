@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "local.campus-links",
+  "name": "校园导航",
+  "version": "0.1.0",
+  "description": "一个可以自行修改的本地导航插件。",
+  "icon": "compass",
+  "page": {
+    "type": "links",
+    "links": [
+      { "title": "西安交通大学", "description": "学校主页", "url": "https://www.xjtu.edu.cn" },
+      { "title": "图书馆", "description": "查找文献与学习资源", "url": "https://lib.xjtu.edu.cn" }
+    ]
+  },
+  "widget": true
+}
