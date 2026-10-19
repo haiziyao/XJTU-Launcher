@@ -2,7 +2,9 @@
 
 面向西安交通大学学生的桌面校园工作台，把校园账号、课表、常用网站和插件集中在一个应用中。
 
-使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS 和 Windows**。当前版本为 **0.1.0 开发版**，已在 macOS 构建运行，Windows 尚待实机验收。
+使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS、Windows 和 Linux**。当前版本为 **0.1.0**，Windows / Linux 校园业务尚待用户环境验收。
+
+**[下载安装包](https://github.com/haiziyao/XJTU-Launcher/releases/latest)**：Windows x64（exe / msi）、macOS Apple Silicon / Intel（dmg）、Linux x64（deb / AppImage）。安装要求与已知限制见 [v0.1.0 发布说明](docs/releases/v0.1.0.md)。
 
 ## 当前功能
 
@@ -80,6 +82,7 @@ npm run market:serve
 
 - **`main`**：应用源码、使用说明和插件协议。
 - **`dev`**：基于 main 继续开发，包含开发指南、设计资料和约定手册。
+- **`codex/windows-support`**：Windows 适配与三平台打包发布；版本标签固定发布源码，流程见 [版本发布](docs/RELEASING.md)。
 
 开发资料入口：[dev 分支文档](https://github.com/haiziyao/XJTU-Launcher/tree/dev/docs)、[开发指南](https://github.com/haiziyao/XJTU-Launcher/blob/dev/docs/DEVELOPMENT.md)、[约定手册](https://github.com/haiziyao/XJTU-Launcher/blob/dev/docs/CONVENTIONS.md)。
 
