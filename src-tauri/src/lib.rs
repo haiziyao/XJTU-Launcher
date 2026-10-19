@@ -1,4 +1,5 @@
 mod campus;
+mod campus_browser;
 mod config;
 mod plugins;
 mod providers;
@@ -230,6 +231,7 @@ async fn advance_account_login(
         let path = accounts_path(&app)?;
         let mut book = accounts::load(&path)?;
         book.upsert(account.clone())?;
+        campus_browser::close_all(&app)?;
         accounts::save(&path, &book)?;
         login.completed = None;
         state.generation.fetch_add(1, Ordering::SeqCst);
@@ -325,6 +327,7 @@ async fn switch_account(
     let path = accounts_path(&app)?;
     let mut book = accounts::load(&path)?;
     book.select(&account_id)?;
+    campus_browser::close_all(&app)?;
     accounts::save(&path, &book)?;
     state.generation.fetch_add(1, Ordering::SeqCst);
     account_changed(&app, "已切换校园账号");
@@ -344,6 +347,9 @@ async fn remove_account(
     let mut book = accounts::load(&path)?;
     let was_active = book.active_id.as_deref() == Some(&account_id);
     book.remove(&account_id)?;
+    if was_active {
+        campus_browser::close_all(&app)?;
+    }
     state.auth.cancel_all();
     accounts::save(&path, &book)?;
     if was_active {
@@ -389,6 +395,7 @@ async fn logout(
     main_only(&window)?;
     let _guard = state.auth_lock.lock().await;
     state.auth.cancel_all();
+    campus_browser::close_all(&app)?;
     let path = accounts_path(&app)?;
     let mut book = accounts::load(&path)?;
     if let Some(id) = book.active_id.clone() {
@@ -454,13 +461,40 @@ async fn query_timetable(
 }
 
 #[tauri::command]
-fn open_external(app: tauri::AppHandle, window: WebviewWindow, url: String) -> Result<(), String> {
+async fn open_external(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    url: String,
+) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     main_only(&window)?;
-    plugins::validate_url(&url)?;
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|_| "无法打开系统浏览器".into())
+    let url = plugins::validate_url(&url)?;
+    if !network::campus_web_url(&url) {
+        return app
+            .opener()
+            .open_url(url.as_str(), None::<&str>)
+            .map_err(|_| "无法打开系统浏览器".into());
+    }
+    // Keep account changes serialized with native cookie import and window creation.
+    let _guard = state.auth_lock.lock().await;
+    let book = accounts::load(&accounts_path(&app)?)?;
+    let account = book.active().ok_or("请先添加并登录校园账号")?;
+    let session = campus_browser::Session {
+        account_id: account.id.clone(),
+        generation: state.generation.load(Ordering::SeqCst),
+        display_name: account
+            .name
+            .clone()
+            .unwrap_or_else(|| account.username.clone()),
+        mode: account.mode,
+        cookies: account.cookies.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        campus_browser::open(&app, session, url).map(|_| ())
+    })
+    .await
+    .map_err(|_| "校园窗口初始化失败")?
 }
 
 fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -593,6 +627,16 @@ fn read_personal_image(
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .setup(|app| {
+            campus_browser::install_menu(app.handle())?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| campus_browser::menu_event(app, event.id().as_ref()))
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                let _ = campus_browser::close_all(window.app_handle());
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![

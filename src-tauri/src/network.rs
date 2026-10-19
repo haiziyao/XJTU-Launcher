@@ -40,6 +40,32 @@ pub fn vpn_url(url: &Url) -> Result<Url, String> {
     if !trusted(url) {
         return Err("校园请求地址不受支持".into());
     }
+    encode_vpn_url(url)
+}
+
+/// Browsing accepts university sites; authentication transport keeps its narrower allowlist.
+pub fn campus_web_url(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && url
+            .host_str()
+            .is_some_and(|host| host == "xjtu.edu.cn" || host.ends_with(".xjtu.edu.cn"))
+}
+
+pub fn browser_address(url: &Url, mode: AccessMode) -> Result<Url, String> {
+    if !campus_web_url(url) {
+        return Err("校园窗口仅支持学校 HTTPS 网站".into());
+    }
+    if mode == AccessMode::Webvpn {
+        encode_vpn_url(url)
+    } else {
+        Ok(url.clone())
+    }
+}
+
+fn encode_vpn_url(url: &Url) -> Result<Url, String> {
     if url.host_str() == Some(VPN_HOST) {
         return Ok(url.clone());
     }

@@ -24,7 +24,7 @@ function style(title: string): { icon: typeof Link2; tone: Tone } {
 </script>
 <template>
   <section class="desktop-page narrow-page">
-    <PageHeader :title="name" description="在默认浏览器中打开校园网站">
+    <PageHeader :title="name" description="使用当前校园账号打开校园网站">
       <template #actions>
         <label class="field-shell search"
           ><Search :size="14" /><input

@@ -174,7 +174,7 @@ const paired = computed(() => showCourses.value && showLinks.value);
             v-for="(link, i) in campusLinks"
             :key="link.url"
             class="shortcut"
-            :title="`${link.title} · 在浏览器中打开`"
+            :title="`${link.title} · 打开校园网页`"
             @click="emit('link', link.url)"
           >
             <IconTile :tone="shortcutStyle[i % shortcutStyle.length].tone" :size="38">
