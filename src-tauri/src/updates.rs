@@ -1,0 +1,216 @@
+use serde::Serialize;
+use std::{sync::Mutex, time::Duration};
+use tauri::{Emitter, WebviewWindow};
+use tauri_plugin_updater::UpdaterExt;
+
+const ENDPOINT: Option<&str> = option_env!("XJTU_UPDATE_ENDPOINT");
+const PUBLIC_KEY: Option<&str> = option_env!("XJTU_UPDATE_PUBLIC_KEY");
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    current_version: &'static str,
+    phase: &'static str,
+    version: Option<String>,
+    notes: Option<String>,
+    received: u64,
+    total: Option<u64>,
+    message: Option<String>,
+}
+impl Default for Status {
+    fn default() -> Self {
+        Self {
+            current_version: env!("CARGO_PKG_VERSION"),
+            phase: if configured() { "idle" } else { "unconfigured" },
+            version: None,
+            notes: None,
+            received: 0,
+            total: None,
+            message: None,
+        }
+    }
+}
+#[derive(Default)]
+pub struct State {
+    status: Mutex<Status>,
+    update: Mutex<Option<tauri_plugin_updater::Update>>,
+    operation: tokio::sync::Mutex<()>,
+}
+fn configured() -> bool {
+    ENDPOINT.is_some_and(|v| !v.is_empty()) && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
+}
+fn snapshot(state: &State) -> Result<Status, String> {
+    state
+        .status
+        .lock()
+        .map(|s| s.clone())
+        .map_err(|_| "更新服务繁忙".into())
+}
+fn publish(window: &WebviewWindow, state: &State, edit: impl FnOnce(&mut Status)) {
+    if let Ok(mut status) = state.status.lock() {
+        edit(&mut status);
+        let _ = window.emit("app-update", status.clone());
+    }
+}
+
+#[tauri::command]
+pub fn update_status(window: WebviewWindow, state: tauri::State<State>) -> Result<Status, String> {
+    crate::main_only(&window)?;
+    snapshot(&state)
+}
+
+#[tauri::command]
+pub async fn check_app_update(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, State>,
+) -> Result<Status, String> {
+    crate::main_only(&window)?;
+    let _operation = state.operation.try_lock().map_err(|_| "正在处理更新")?;
+    if !configured() || snapshot(&state)?.phase == "installed" {
+        return snapshot(&state);
+    }
+    publish(&window, &state, |s| {
+        s.phase = "checking";
+        s.message = None;
+    });
+    let result = async {
+        let url = crate::plugins::validate_url(ENDPOINT.ok_or("更新地址未配置")?)?;
+        if url.scheme() != "https" {
+            return Err("应用更新地址必须使用 HTTPS".to_string());
+        }
+        let updater = app
+            .updater_builder()
+            .pubkey(PUBLIC_KEY.ok_or("更新公钥未配置")?)
+            .endpoints(vec![url])
+            .map_err(|_| "更新地址无效")?
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|_| "更新配置无效")?;
+        updater
+            .check()
+            .await
+            .map_err(|_| "无法检查更新，请稍后重试".to_string())
+    }
+    .await;
+    match result {
+        Ok(update) => {
+            publish(&window, &state, |s| {
+                s.phase = if update.is_some() {
+                    "available"
+                } else {
+                    "current"
+                };
+                s.version = update.as_ref().map(|u| u.version.clone());
+                s.notes = update.as_ref().and_then(|u| u.body.clone());
+                s.received = 0;
+                s.total = None;
+            });
+            *state.update.lock().map_err(|_| "更新服务繁忙")? = update;
+        }
+        Err(error) => publish(&window, &state, |s| {
+            s.phase = "error";
+            s.message = Some(error);
+        }),
+    }
+    snapshot(&state)
+}
+
+#[tauri::command]
+pub async fn install_app_update(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, State>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    crate::main_only(&window)?;
+    let _operation = state.operation.try_lock().map_err(|_| "正在处理更新")?;
+    if snapshot(&state)?.phase == "installed" {
+        return Err("更新已安装，请重新启动应用".into());
+    }
+    let update = state
+        .update
+        .lock()
+        .map_err(|_| "更新服务繁忙")?
+        .clone()
+        .ok_or("请先检查更新")?;
+    publish(&window, &state, |s| {
+        s.phase = "downloading";
+        s.received = 0;
+        s.total = None;
+        s.message = None;
+    });
+    let result = async {
+        let bytes = update
+            .download(
+                |chunk, total| {
+                    publish(&window, &state, |s| {
+                        s.received += chunk as u64;
+                        s.total = total;
+                    })
+                },
+                || {},
+            )
+            .await
+            .map_err(|_| "下载或签名校验失败，请重新检查更新".to_string())?;
+        // Hold these locks through installation, including platforms whose installer exits the app.
+        let _school = app_state
+            .school_lock
+            .try_lock()
+            .map_err(|_| "校园任务正在执行，请稍后重试更新")?;
+        let _auth = app_state
+            .auth_lock
+            .try_lock()
+            .map_err(|_| "账号操作正在执行，请稍后重试更新")?;
+        let _market = app_state
+            .market_lock
+            .try_lock()
+            .map_err(|_| "插件正在安装，请稍后重试更新")?;
+        publish(&window, &state, |s| s.phase = "installing");
+        crate::campus_browser::close_all(&app)?;
+        update
+            .install(bytes)
+            .map_err(|_| "安装更新失败，请稍后重试".to_string())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            publish(&window, &state, |s| s.phase = "installed");
+            Ok(())
+        }
+        Err(error) => {
+            publish(&window, &state, |s| {
+                s.phase = "error";
+                s.message = Some(error.clone());
+            });
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+pub fn restart_after_update(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<State>,
+    app_state: tauri::State<crate::AppState>,
+) -> Result<(), String> {
+    crate::main_only(&window)?;
+    if snapshot(&state)?.phase != "installed" {
+        return Err("尚未完成更新安装".into());
+    }
+    let _school = app_state
+        .school_lock
+        .try_lock()
+        .map_err(|_| "校园任务正在执行，请稍后重启")?;
+    let _auth = app_state
+        .auth_lock
+        .try_lock()
+        .map_err(|_| "账号操作正在执行，请稍后重启")?;
+    let _market = app_state
+        .market_lock
+        .try_lock()
+        .map_err(|_| "插件正在安装，请稍后重启")?;
+    crate::campus_browser::close_all(&app)?;
+    app.restart()
+}

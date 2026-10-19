@@ -24,6 +24,14 @@ pub struct AppConfig {
     pub widgets: Vec<String>,
     pub plugin_order: Vec<String>,
     pub disabled_plugins: Vec<String>,
+    #[serde(default)]
+    pub hidden_plugins: Vec<String>,
+    #[serde(default)]
+    pub plugin_server: Option<String>,
+    #[serde(default = "default_show_seconds")]
+    pub check_plugin_updates: bool,
+    #[serde(default = "default_show_seconds")]
+    pub check_app_updates: bool,
 }
 
 fn default_sidebar_width() -> u32 {
@@ -50,6 +58,10 @@ impl Default for AppConfig {
             widgets: vec!["timetable".into(), "links".into(), "plugins".into()],
             plugin_order: vec![],
             disabled_plugins: vec![],
+            hidden_plugins: vec![],
+            plugin_server: None,
+            check_plugin_updates: true,
+            check_app_updates: true,
         }
     }
 }
@@ -73,13 +85,18 @@ impl AppConfig {
                 .any(|w| !["timetable", "links", "plugins"].contains(&w.as_str()))
             || self.plugin_order.len() > 256
             || self.disabled_plugins.len() > 256
+            || self.hidden_plugins.len() > 256
             || self
                 .plugin_order
                 .iter()
                 .chain(&self.disabled_plugins)
+                .chain(&self.hidden_plugins)
                 .any(|id| !crate::plugins::valid_id(id))
         {
             return Err("配置格式不受支持，请检查版本和字段".into());
+        }
+        if let Some(source) = &self.plugin_server {
+            crate::market::source_url(source)?;
         }
         let mut unique = self.widgets.clone();
         unique.sort();
@@ -140,6 +157,10 @@ mod tests {
         assert!(config.wallpaper.is_none());
         assert!(config.show_seconds);
         assert!(!config.reduce_motion);
+        assert!(config.hidden_plugins.is_empty());
+        assert!(config.plugin_server.is_none());
+        assert!(config.check_plugin_updates);
+        assert!(config.check_app_updates);
     }
 
     #[test]

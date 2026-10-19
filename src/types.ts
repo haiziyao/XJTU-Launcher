@@ -12,6 +12,10 @@ export interface AppConfig {
   widgets: string[];
   pluginOrder: string[];
   disabledPlugins: string[];
+  hiddenPlugins: string[];
+  pluginServer: string | null;
+  checkPluginUpdates: boolean;
+  checkAppUpdates: boolean;
 }
 
 export interface Link {
@@ -33,6 +37,7 @@ export interface PluginList {
   plugins: Plugin[];
   warnings: string[];
   directory: string;
+  sources: Record<string, string>;
 }
 export interface AccountStatus {
   connected: boolean;
@@ -125,4 +130,44 @@ export interface ProviderInput {
   model: string;
   apiKey: string | null;
   useLegacyKey: boolean;
+}
+
+export interface MarketEntry {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  minAppVersion: string;
+  downloadUrl: string;
+  sha256: string;
+}
+export interface MarketCatalog {
+  updates: string[];
+  source: string | null;
+  defaultSource: string | null;
+  plugins: MarketEntry[];
+}
+export interface SchoolFeature {
+  id: string;
+  name: string;
+  category: string;
+  backend: string;
+}
+export interface UpdateStatus {
+  currentVersion: string;
+  phase:
+    | 'unconfigured'
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'current'
+    | 'downloading'
+    | 'installing'
+    | 'installed'
+    | 'error';
+  version: string | null;
+  notes: string | null;
+  received: number;
+  total: number | null;
+  message: string | null;
 }

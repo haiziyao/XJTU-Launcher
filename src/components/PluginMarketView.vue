@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { marketBusy as busy, marketProgress as progress, marketError as error } from '../market';
+import { ask } from '@tauri-apps/plugin-dialog';
 import {
   ArrowDown,
   ArrowUp,
@@ -8,50 +10,146 @@ import {
   Download,
   RefreshCw,
   Search,
+  MoreHorizontal,
+  Package,
+  GraduationCap,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
-import type { AppConfig, Plugin } from '../types';
+import type { AppConfig, Plugin, MarketCatalog, MarketEntry, SchoolFeature } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import SegmentedTabs from './ui/SegmentedTabs.vue';
 const props = defineProps<{
   plugins: Plugin[];
   config: AppConfig;
   saving: boolean;
   warnings: string[];
+  sources: Record<string, string>;
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
+  visibility: [id: string];
   move: [index: number, delta: number];
   reload: [];
   open: [id: string];
+  settings: [];
 }>();
+const tabs = [
+  { id: 'campus', title: '校园功能' },
+  { id: 'remote', title: '远端市场' },
+  { id: 'installed', title: '已安装' },
+];
+const tab = ref('campus');
 const search = ref('');
-const importing = ref(false);
-const error = ref('');
-const filtered = computed(() =>
-  props.plugins.filter((p) =>
-    (p.name + p.description).toLowerCase().includes(search.value.trim().toLowerCase()),
-  ),
+const loading = ref(false);
+const loaded = ref(false);
+const features = ref<SchoolFeature[]>([]);
+const catalog = ref<MarketCatalog>({ source: null, defaultSource: null, plugins: [], updates: [] });
+const menu = ref('');
+let disposed = false;
+const matches = (p: { name: string; description?: string }) =>
+  (p.name + (p.description || '')).toLowerCase().includes(search.value.trim().toLowerCase());
+const filtered = computed(() => props.plugins.filter(matches));
+const builtins = computed(() =>
+  props.plugins.filter((p) => ['cn.xjtu.timetable', 'cn.xjtu.links'].includes(p.id) && matches(p)),
 );
+const remote = computed(() => catalog.value.plugins.filter(matches));
+const categories = computed(() => [
+  ...new Set(features.value.filter(matches).map((f) => f.category)),
+]);
+const installed = (id: string) => props.plugins.find((p) => p.id === id);
+const upgrade = (id: string) =>
+  catalog.value.plugins.find(
+    (p) =>
+      p.id === id && catalog.value.updates.includes(id) && installed(id)?.version !== p.version,
+  );
+async function refresh() {
+  if (loading.value) return;
+  loading.value = true;
+  error.value = '';
+  try {
+    const result = await bridge.pluginCatalog();
+    if (!disposed) {
+      catalog.value = result;
+      loaded.value = true;
+    }
+  } catch (e) {
+    if (!disposed) error.value = String(e);
+  } finally {
+    loading.value = false;
+  }
+}
 async function importPlugin() {
-  importing.value = true;
+  busy.value = 'import';
   error.value = '';
   try {
     if (await bridge.importPlugin()) emit('reload');
   } catch (e) {
     error.value = String(e);
   } finally {
-    importing.value = false;
+    busy.value = '';
   }
 }
+async function install(entry: MarketEntry) {
+  busy.value = entry.id;
+  progress.value = null;
+  error.value = '';
+  try {
+    await bridge.installPlugin(entry.id, entry.version);
+    emit('reload');
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    busy.value = '';
+    progress.value = null;
+  }
+}
+async function remove(plugin: Plugin) {
+  menu.value = '';
+  if (
+    !(await ask(`移除“${plugin.name}”？之后可重新安装。`, {
+      title: '移除插件',
+      kind: 'warning',
+      okLabel: '移除',
+      cancelLabel: '取消',
+    }))
+  )
+    return;
+  busy.value = plugin.id;
+  error.value = '';
+  try {
+    await bridge.removePlugin(plugin.id);
+    emit('reload');
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    busy.value = '';
+  }
+}
+watch(tab, (value) => {
+  menu.value = '';
+  search.value = '';
+  if (value === 'remote' && !loaded.value) void refresh();
+});
+onMounted(async () => {
+  try {
+    features.value = await bridge.schoolCatalog();
+    if (props.config.checkPluginUpdates && !disposed) void refresh();
+  } catch (e) {
+    if (!disposed) error.value = String(e);
+  }
+});
+onBeforeUnmount(() => {
+  disposed = true;
+});
 </script>
 <template>
-  <section class="desktop-page">
-    <PageHeader title="插件" description="管理已安装插件的启用状态与侧栏顺序">
+  <section class="desktop-page market-page">
+    <PageHeader title="插件市场">
       <template #actions>
         <label class="field-shell search"
           ><Search :size="14" /><input
@@ -59,88 +157,277 @@ async function importPlugin() {
             placeholder="搜索插件"
             aria-label="搜索插件"
         /></label>
-        <button
-          class="btn ghost icon"
-          title="刷新插件"
-          aria-label="刷新插件"
-          :disabled="importing || saving"
-          @click="emit('reload')"
-        >
-          <RefreshCw :size="15" />
+        <button v-if="tab === 'installed'" class="btn" :disabled="!!busy" @click="importPlugin">
+          <Download :size="14" />导入本地插件
         </button>
-        <button class="btn" :disabled="importing" @click="importPlugin">
-          <Download :size="14" />{{ importing ? '正在导入…' : '导入本地插件' }}
+        <button
+          v-if="tab !== 'campus'"
+          class="btn ghost icon"
+          title="刷新"
+          aria-label="刷新插件"
+          :disabled="loading || !!busy"
+          @click="
+            emit('reload');
+            refresh();
+          "
+        >
+          <RefreshCw :size="15" :class="{ spin: loading }" />
         </button>
       </template>
     </PageHeader>
-    <Transition name="drop">
-      <p v-if="error" class="notice" role="alert">{{ error }}</p>
-    </Transition>
+    <SegmentedTabs v-model="tab" :tabs="tabs" label="插件分类" />
+    <p v-if="error" class="notice" role="alert">{{ error }}</p>
     <p v-for="warning in warnings" :key="warning" class="notice warning" role="alert">
       {{ warning }}
     </p>
-    <SettingGroup :title="`已安装 · ${plugins.length}`">
-      <TransitionGroup name="list">
+    <div v-if="tab === 'campus'" role="tabpanel">
+      <EmptyState
+        v-if="!builtins.length && !categories.length"
+        compact
+        :icon="Search"
+        title="没有匹配的插件"
+      />
+      <SettingGroup v-if="builtins.length" title="常用功能">
         <SettingRow
-          v-for="plugin in filtered"
+          v-for="plugin in builtins"
           :key="plugin.id"
-          :class="{ 'plugin-disabled': config.disabledPlugins.includes(plugin.id) }"
+          :title="plugin.name"
+          :description="plugin.description"
         >
-          <template #leading>
-            <IconTile :tone="plugin.page.type === 'timetable' ? 'blue' : 'green'" :size="34">
-              <CalendarDays v-if="plugin.page.type === 'timetable'" :size="17" /><Compass
+          <template #leading
+            ><IconTile :size="34"
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
                 v-else
-                :size="17"
-              />
-            </IconTile>
-          </template>
-          <template #title>
-            {{ plugin.name }}<span class="badge">v{{ plugin.version }}</span>
-          </template>
-          <template #description>{{ plugin.description }}</template>
+                :size="19" /></IconTile
+          ></template>
           <button
-            class="btn ghost small"
+            class="btn small"
+            :disabled="saving"
+            @click="
+              config.disabledPlugins.includes(plugin.id)
+                ? emit('toggle', plugin.id)
+                : emit('open', plugin.id)
+            "
+          >
+            {{ config.disabledPlugins.includes(plugin.id) ? '启用' : '打开' }}
+          </button>
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup v-for="category in categories" :key="category" :title="category">
+        <SettingRow
+          v-for="feature in features.filter((f) => f.category === category && matches(f))"
+          :key="feature.id"
+          :title="feature.name"
+        >
+          <template #leading
+            ><IconTile :size="34" tone="gray"><GraduationCap :size="19" /></IconTile
+          ></template>
+          <span class="setting-value">待接入</span>
+        </SettingRow>
+      </SettingGroup>
+    </div>
+    <div v-else-if="tab === 'remote'" role="tabpanel">
+      <EmptyState v-if="loading && !loaded" :icon="RefreshCw" busy title="正在获取插件…" />
+      <EmptyState
+        v-else-if="!catalog.source && !error"
+        :icon="Package"
+        title="尚未配置插件服务"
+        description="在设置中添加插件服务器后，即可浏览和安装。"
+        ><button class="btn" @click="emit('settings')">插件服务设置</button></EmptyState
+      >
+      <SettingGroup v-else>
+        <SettingRow
+          v-for="entry in remote"
+          :key="entry.id"
+          :title="entry.name"
+          :description="entry.description"
+        >
+          <template #leading
+            ><IconTile :size="34"><Package :size="19" /></IconTile
+          ></template>
+          <span class="setting-value">{{ entry.version }}</span>
+          <button
+            class="btn small"
+            :disabled="!!busy || (!!installed(entry.id) && !upgrade(entry.id))"
+            @click="install(entry)"
+          >
+            {{
+              busy === entry.id
+                ? progress === null
+                  ? '安装中…'
+                  : `${progress}%`
+                : installed(entry.id)
+                  ? upgrade(entry.id)
+                    ? '更新'
+                    : '已安装'
+                  : '安装'
+            }}
+          </button>
+        </SettingRow>
+        <EmptyState
+          v-if="!remote.length && !error"
+          compact
+          :icon="Search"
+          :title="search ? '没有匹配的插件' : '服务端暂无插件'"
+        />
+      </SettingGroup>
+    </div>
+    <div v-else role="tabpanel">
+      <div class="installed-heading">
+        <span>插件</span><span>启用</span><span>侧栏显示</span><span></span>
+      </div>
+      <div v-for="plugin in filtered" :key="plugin.id" class="installed-item">
+        <div class="installed-row">
+          <div class="installed-name">
+            <IconTile :size="34"
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
+                v-else
+                :size="19"
+            /></IconTile>
+            <div>
+              <strong>{{ plugin.name }}</strong
+              ><small
+                >{{
+                  sources[plugin.id]
+                    ? '远端插件'
+                    : plugin.id.startsWith('cn.xjtu.')
+                      ? '校园功能'
+                      : '本地插件'
+                }}
+                · {{ plugin.version }}</small
+              >
+            </div>
+          </div>
+          <UiSwitch
+            :checked="!config.disabledPlugins.includes(plugin.id)"
+            :label="plugin.name + '启用'"
+            :disabled="saving || !!busy"
+            @toggle="emit('toggle', plugin.id)"
+          />
+          <UiSwitch
+            :checked="!config.hiddenPlugins.includes(plugin.id)"
+            :label="plugin.name + '侧栏显示'"
+            :disabled="saving || !!busy || config.disabledPlugins.includes(plugin.id)"
+            @toggle="emit('visibility', plugin.id)"
+          />
+          <button
+            class="btn ghost icon"
+            :aria-label="plugin.name + '操作'"
+            :aria-expanded="menu === plugin.id"
+            @click="menu = menu === plugin.id ? '' : plugin.id"
+          >
+            <MoreHorizontal :size="18" />
+          </button>
+        </div>
+        <div v-if="menu === plugin.id" class="installed-actions">
+          <span class="plugin-origin" :title="sources[plugin.id]">{{
+            sources[plugin.id] || plugin.description
+          }}</span>
+          <button
+            class="btn small"
             :disabled="config.disabledPlugins.includes(plugin.id)"
             @click="emit('open', plugin.id)"
           >
             打开
           </button>
-          <span class="row-actions reorder">
-            <button
-              class="btn ghost icon small"
-              title="上移"
-              aria-label="上移"
-              :disabled="saving || plugins.indexOf(plugin) === 0 || !!search.trim()"
-              @click="emit('move', plugins.indexOf(plugin), -1)"
-            >
-              <ArrowUp :size="14" />
-            </button>
-            <button
-              class="btn ghost icon small"
-              title="下移"
-              aria-label="下移"
-              :disabled="
-                saving || plugins.indexOf(plugin) === plugins.length - 1 || !!search.trim()
-              "
-              @click="emit('move', plugins.indexOf(plugin), 1)"
-            >
-              <ArrowDown :size="14" />
-            </button>
-          </span>
-          <UiSwitch
-            :checked="!config.disabledPlugins.includes(plugin.id)"
-            :label="plugin.name + '启用'"
-            :disabled="saving"
-            @toggle="emit('toggle', plugin.id)"
-          />
-        </SettingRow>
-      </TransitionGroup>
-      <EmptyState
-        v-if="!filtered.length"
-        compact
-        :icon="search ? Search : Compass"
-        :title="search ? '没有匹配的插件' : '暂无已安装插件'"
-      />
-    </SettingGroup>
+          <button
+            v-if="upgrade(plugin.id)"
+            class="btn small"
+            :disabled="!!busy"
+            @click="install(upgrade(plugin.id)!)"
+          >
+            {{ busy === plugin.id ? '更新中…' : '更新' }}
+          </button>
+          <button
+            class="btn ghost icon small"
+            aria-label="上移"
+            :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
+            @click="emit('move', plugins.indexOf(plugin), -1)"
+          >
+            <ArrowUp :size="14" />
+          </button>
+          <button
+            class="btn ghost icon small"
+            aria-label="下移"
+            :disabled="
+              saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
+            "
+            @click="emit('move', plugins.indexOf(plugin), 1)"
+          >
+            <ArrowDown :size="14" />
+          </button>
+          <button
+            v-if="!['cn.xjtu.timetable', 'cn.xjtu.links'].includes(plugin.id)"
+            class="btn ghost small danger"
+            :disabled="!!busy"
+            @click="remove(plugin)"
+          >
+            移除
+          </button>
+        </div>
+      </div>
+      <EmptyState v-if="!filtered.length" compact :icon="Search" title="没有匹配的插件" />
+    </div>
   </section>
 </template>
+<style scoped>
+.market-page :deep(.setting-card) {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+}
+.market-page :deep(.setting-row) {
+  min-height: 70px;
+  padding: 14px 12px;
+}
+.market-page :deep(.setting-group) {
+  margin-bottom: 30px;
+}
+.installed-heading,
+.installed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 100px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 12px;
+}
+.installed-heading {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.installed-row {
+  min-height: 86px;
+}
+.installed-item {
+  border-bottom: 1px solid var(--border);
+}
+.installed-name {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.installed-name strong {
+  font-weight: 600;
+}
+.installed-name small {
+  display: block;
+  color: var(--text-tertiary);
+  margin-top: 5px;
+}
+.installed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 14px 62px;
+}
+.plugin-origin {
+  flex: 1;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+</style>

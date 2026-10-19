@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "org.xjtu.resources",
+  "name": "学习资源导航",
+  "version": "0.1.0",
+  "description": "图书馆与学校公开学习资源入口。",
+  "icon": "compass",
+  "page": {
+    "type": "links",
+    "links": [
+      { "title": "图书馆", "description": "文献与学习资源", "url": "https://lib.xjtu.edu.cn" },
+      { "title": "学校主页", "description": "校园公开信息", "url": "https://www.xjtu.edu.cn" }
+    ]
+  },
+  "widget": true
+}

@@ -38,6 +38,7 @@ pub struct PluginList {
     pub plugins: Vec<Plugin>,
     pub warnings: Vec<String>,
     pub directory: String,
+    pub sources: std::collections::HashMap<String, String>,
 }
 
 pub fn valid_id(id: &str) -> bool {
@@ -64,7 +65,16 @@ pub fn validate_url(text: &str) -> Result<Url, String> {
 impl Plugin {
     pub fn validate(&self, builtin: bool) -> Result<(), String> {
         if self.schema_version != 1
-            || ["home", "agent", "market", "settings"].contains(&self.id.as_str())
+            || [
+                "home",
+                "agent",
+                "market",
+                "settings",
+                "personal",
+                "accounts",
+                "community",
+            ]
+            .contains(&self.id.as_str())
             || !valid_id(&self.id)
             || self.name.trim().is_empty()
             || self.name.chars().count() > 30
@@ -119,6 +129,7 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
     links.validate(true)?;
     let mut result = PluginList {
         plugins: vec![builtin, links],
+        sources: Default::default(),
         warnings: vec![],
         directory: directory.display().to_string(),
     };
@@ -130,23 +141,43 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
     paths.sort();
     let mut ids = HashSet::from([TIMETABLE_ID.to_string(), LINKS_ID.to_string()]);
     for path in paths.into_iter().take(256) {
-        if !path.is_dir() {
+        if !path.is_dir()
+            || path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        {
             continue;
         }
         let checked: Result<Plugin, String> = (|| {
             let real = path.canonicalize().map_err(|_| "无法定位插件目录")?;
             let root = directory.canonicalize().map_err(|_| "无法定位插件根目录")?;
+            let installed = real.join("installed.json");
             let manifest = real
-                .join("plugin.json")
+                .join(if installed.exists() {
+                    "installed.json"
+                } else {
+                    "plugin.json"
+                })
                 .canonicalize()
                 .map_err(|_| "找不到 plugin.json")?;
             if !real.starts_with(&root) || !manifest.starts_with(&real) {
                 return Err("不支持目录外的符号链接".into());
             }
-            let plugin = read(&manifest)?;
+            let (plugin, source) = if installed.exists() {
+                let package = crate::market::read_installed(&manifest)?;
+                (package.plugin, Some(package.source))
+            } else {
+                (read(&manifest)?, None)
+            };
             plugin.validate(false)?;
             if !ids.insert(plugin.id.clone()) {
                 return Err("插件 ID 重复".into());
+            }
+            if path.file_name().and_then(|n| n.to_str()) != Some(&plugin.id) {
+                return Err("插件目录与 ID 不一致".into());
+            }
+            if let Some(source) = source {
+                result.sources.insert(plugin.id.clone(), source);
             }
             Ok(plugin)
         })();

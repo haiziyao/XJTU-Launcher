@@ -7,6 +7,8 @@ mod campus;
 mod campus_browser;
 #[path = "../src/config.rs"]
 mod config;
+#[path = "../src/market.rs"]
+mod market;
 #[path = "../src/network.rs"]
 mod network;
 #[path = "../src/plugins.rs"]

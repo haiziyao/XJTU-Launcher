@@ -14,6 +14,10 @@ export const defaultConfig = (): AppConfig => ({
   widgets: ['timetable', 'links', 'plugins'],
   pluginOrder: [],
   disabledPlugins: [],
+  hiddenPlugins: [],
+  pluginServer: null,
+  checkPluginUpdates: true,
+  checkAppUpdates: true,
 });
 
 export const campusLinks = [
@@ -56,4 +60,10 @@ export function moveItem<T>(items: T[], from: number, delta: number): T[] {
   const [item] = result.splice(from, 1);
   result.splice(to, 0, item);
   return result;
+}
+
+export function visiblePlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
+  return plugins.filter(
+    (p) => !config.disabledPlugins.includes(p.id) && !config.hiddenPlugins.includes(p.id),
+  );
 }

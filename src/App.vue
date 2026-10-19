@@ -14,8 +14,10 @@ import {
   Settings,
   X,
 } from 'lucide-vue-next';
+import { initializeMarket } from './market';
+import { initializeUpdates } from './updates';
 import { bridge, native } from './bridge';
-import { coursesForDay, defaultConfig, moveItem, orderedPlugins } from './domain';
+import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
 import type { AccountStatus, AppConfig, PluginList, Timetable } from './types';
 import HomeView from './components/HomeView.vue';
 import AccountsView from './components/AccountsView.vue';
@@ -47,14 +49,16 @@ const primaryNav = [
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
 }
-const settingsSection = ref<'appearance' | 'home' | 'models'>('appearance');
-function openSettings(section: 'appearance' | 'home' | 'models' = 'appearance') {
+const settingsSection = ref<'appearance' | 'home' | 'models' | 'plugins' | 'updates'>('appearance');
+function openSettings(
+  section: 'appearance' | 'home' | 'models' | 'plugins' | 'updates' = 'appearance',
+) {
   settingsSection.value = section;
   route.value = 'settings';
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
-const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '' });
+const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
 const scheduleError = ref('');
@@ -68,6 +72,7 @@ const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, co
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
 );
+const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 watch(enabledPlugins, () => {
   if (
@@ -181,6 +186,18 @@ async function openLink(url: string) {
     error.value = errorText(e);
   }
 }
+function toggleVisibility(id: string) {
+  void persist({
+    ...config.value,
+    hiddenPlugins: config.value.hiddenPlugins.includes(id)
+      ? config.value.hiddenPlugins.filter((p) => p !== id)
+      : [...config.value.hiddenPlugins, id],
+  });
+}
+async function saveSource(source: string | null): Promise<boolean> {
+  await persist({ ...config.value, pluginServer: source });
+  return config.value.pluginServer === source;
+}
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
   await persist({
@@ -246,6 +263,8 @@ onMounted(async () => {
     error.value = errorText(e);
   }
   ready.value = true;
+  void initializeUpdates(config.value.checkAppUpdates).catch((e) => (error.value = errorText(e)));
+  void initializeMarket(reloadPlugins).catch((e) => (error.value = errorText(e)));
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -293,10 +312,10 @@ onBeforeUnmount(() => {
             <component :is="item.icon" :size="18" /><span>{{ item.title }}</span>
           </button>
         </div>
-        <div v-if="enabledPlugins.length" class="nav-section">
+        <div v-if="sidebarPlugins.length" class="nav-section">
           <div class="sidebar-group-label"><span>插件</span></div>
           <button
-            v-for="plugin in enabledPlugins"
+            v-for="plugin in sidebarPlugins"
             :key="plugin.id"
             class="desktop-nav-item"
             :class="{ selected: route === plugin.id }"
@@ -444,6 +463,7 @@ onBeforeUnmount(() => {
               <SettingsView
                 v-else-if="route === 'settings'"
                 :initial-section="settingsSection"
+                :save-source="saveSource"
                 :config="config"
                 :saving="saving"
                 @update="persist"
@@ -462,6 +482,9 @@ onBeforeUnmount(() => {
                 :config="config"
                 :saving="saving || !configLoaded"
                 :warnings="pluginList.warnings"
+                :sources="pluginList.sources"
+                @visibility="toggleVisibility"
+                @settings="openSettings('plugins')"
                 @toggle="togglePlugin"
                 @move="movePlugin"
                 @reload="reloadPlugins"

@@ -11,7 +11,8 @@
     "format": "prettier --write src plugins examples *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
     "format:check": "prettier --check src plugins examples *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
     "dev:frontend": "vite --host 127.0.0.1",
-    "app:build": "tauri build"
+    "app:build": "tauri build",
+    "market:serve": "node tools/plugin-server/server.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

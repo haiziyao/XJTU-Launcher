@@ -2,6 +2,9 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
+  MarketCatalog,
+  SchoolFeature,
+  UpdateStatus,
   ModelProviders,
   ProviderInput,
   CampusAccount,
@@ -19,6 +22,17 @@ import type {
 export const native = isTauri();
 
 export const bridge = {
+  pluginSource: () =>
+    invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
+  pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
+  schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
+  installPlugin: (id: string, version: string) =>
+    invoke<void>('install_market_plugin', { id, version }),
+  removePlugin: (id: string) => invoke<void>('remove_plugin', { id }),
+  updateStatus: () => invoke<UpdateStatus>('update_status'),
+  checkUpdate: () => invoke<UpdateStatus>('check_app_update'),
+  installUpdate: () => invoke<void>('install_app_update'),
+  restartUpdatedApp: () => invoke<void>('restart_after_update'),
   async modelProviders(): Promise<ModelProviders> {
     requireNative();
     return invoke('list_model_providers');
