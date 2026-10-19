@@ -1,75 +1,98 @@
 # XJTU Launcher
 
-面向学生的本地校园工作台，使用 **Tauri 2 + Rust + Vue 3 + TypeScript**，目标平台为 macOS 和 Windows。
+面向西安交通大学学生的桌面校园工作台，把校园账号、课表、常用网站和插件集中在一个应用中。
 
-## 当前开发版
+使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS 和 Windows**。当前版本为 **0.1.0 开发版**，已在 macOS 构建运行，Windows 尚待实机验收。
 
-用户已认可当前客户端风格，并要求继续实现校园登录、保存账号密码及默认 DeepSeek 配置。后续开发优先复用已有组件。当前包含：
+## 当前功能
 
-- 主页、可收起侧栏、本地插件管理、完整课表和校园导航；系统原生标题栏。
-- 左下角头像进入个人页：本机显示名称、个人头像、主页壁纸，以及校园账号管理入口。
-- 独立应用设置：减少动态效果、时钟秒数显示、多厂商模型配置。
-- 模型配置支持名称、协议、接口地址、模型、独立 API Key，以及新增、编辑、删除和默认项。密钥保存在 `~/.xjtu-launcher/auth.json`；可主动导入旧版单个 Key。这里只配置服务，Agent 模型调用仍属 V0.2。
-- 社区入口与未接入状态；尚未连接 Web 论坛。
-- 侧栏顶部留白，主页下方恢复 Agent 入口。图标点击反馈、文字渐隐与页面切换过渡；点击立即更新，串行保存配置。
-- 侧栏可拖动分隔线调整展开宽度并保存，双击恢复默认；保留 56px 收起宽度和 Cmd/Ctrl + 反斜杠。
-- 个人显示名称默认展示文字，点击后编辑。应用设置按“外观与交互 / 主页 / 模型服务”分类；Agent 入口暂显示真实未接入状态。
+| 模块 | 已实现 |
+| --- | --- |
+| 桌面工作台 | 原生窗口、可收起和拖动调整宽度的侧栏、个人头像与主页壁纸 |
+| 校园账号 | 本地多账号、账号密码登录、验证码与短信验证、WebVPN 回退、可选保存密码 |
+| 课表 | 读取当前账号课表，查看今日课程与完整课表 |
+| 校园导航 | 在独立校园窗口中复用账号会话，按需通过 WebVPN 访问 |
+| 插件市场 | 校园功能、远端市场、已安装三个分区；导入、下载、更新、移除及排序 |
+| 插件管理 | 启用与侧栏显示分别控制；修改插件服务地址前需确认 |
+| 模型设置 | 多厂商、API 地址、模型和 API Key，包含 DeepSeek 预设 |
+| 软件更新 | Tauri Updater 检查、下载和安装流程；正式更新服务仍待配置 |
 
-个人头像 → 校园账号 → 添加账号，可使用页内表单登录。支持校园直连 / WebVPN 自动选择、图形验证码、短信验证和身份选择。“保存账号密码”默认开启，可关闭；成功登录后在本机保存，支持重新登录及单独删除已存密码。没有向前端回读密码的接口。
+校园登录和真实课表已通过用户实测。部分校园网站仍可能要求重新认证。
 
-模型服务预置 DeepSeek，填入自己的 API Key 即可保存配置；Agent 调用仍待 V0.2。当前网络已实际验证能进入 WebVPN 登录表单，用户已实测校园账号登录和真实课表显示正常；账号信息保留，保存密码后的重新登录仍待明确验收。校园 HTTPS 链接现用独立原生窗口复用当前账号会话和 WebVPN 路径；切换账号时关闭旧窗口。真实网站逐站认证仍待验收。其他链接和主动选择“在系统浏览器中打开”使用浏览器自身的登录状态。
+**尚未完成：** Agent 运行时、MCP、Skill、长期记忆、Web 社区同步，以及更多校园功能页面。本科成绩、考试、空教室和评教等已有部分 Rust 适配，但尚未完成页面接入与真实业务验收。模型设置可保存配置，当前还不能在 Agent 中对话。
 
-## 本地凭据
+## 启动应用
 
-校园账号、已保存密码、会话和模型配置统一存放于 `~/.xjtu-launcher/auth.json`（明文 JSON），日常读写不经过系统钥匙串。macOS / Linux 目录权限为 0700、文件权限为 0600；使用原子写入。旧加密文件自动导入，可能需要系统授权读取旧密钥；迁移成功后仅使用 JSON，原文件保留。迁移失败或 JSON 损坏会报错并保留原数据。普通界面配置、图片和插件仍使用原有应用数据目录。
-
-## 启动桌面应用
-
-需要 Node.js 22.12+、Rust 和对应平台的 Tauri 构建环境。
+准备 Node.js 22.12+、Rust 工具链和对应平台的 Tauri 构建依赖：macOS 使用 Xcode Command Line Tools，Windows 使用 Visual Studio C++ Build Tools 与 WebView2。
 
 ```sh
 npm ci
 npm run dev
 ```
 
-`npm run dev` 启动 **Tauri 桌面窗口**。开发期间 Vite 仅作为窗口内部的资源服务器；不将浏览器页面作为产品或验收入口。浏览器模拟配置和模拟插件数据已删除。
+命令启动 Tauri 桌面应用。开发时 Vite 提供界面资源；打包后的应用可以独立运行。
 
-打包独立应用：
+构建安装包：
 
 ```sh
 npm run app:build
 ```
 
-macOS 本地快速打包开发版：
+仅构建 macOS App：
 
 ```sh
-npm run tauri -- build --debug --bundles app
+npm run app:build -- --bundles app
+open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 ```
 
-产物为 `src-tauri/target/debug/bundle/macos/XJTU Launcher.app`，可直接双击运行，不需要 Vite、浏览器或本地 HTTP 服务。正式包在 release 目录。Windows 安装包需在 Windows 构建和验证。
+Windows 安装包在 Windows 上构建，产物位于 `src-tauri/target/release/bundle/`。若终端找不到 `cargo`，先加载 Rust 环境，例如 macOS 下执行 `source "$HOME/.cargo/env"`。
 
-若终端找不到 cargo，在 macOS 执行 `source "$HOME/.cargo/env"`。
+## 使用
 
-## 检查
+1. 点击左下角个人头像，进入“校园账号”，添加并登录学校账号。应用会检测直连可用性，必要时进入 WebVPN 流程。
+2. 打开课表或校园导航；账号信息与选择保存的密码保留在本机。
+3. 在插件市场中管理功能。“启用”控制插件是否可用，“侧栏显示”仅控制导航入口。
+4. 在应用设置中调整外观、模型服务、插件来源和软件更新。
+
+校园账号、密码、会话与模型 API Key 按本地明文 JSON 保存于 `~/.xjtu-launcher/auth.json`；日常读写不使用系统钥匙串。旧加密数据仅在迁移时读取旧凭据。普通界面配置和插件使用系统应用数据目录。
+
+项目不要求注册启动器平台账号，也不提供校园凭据的云端保存服务。
+
+## 插件
+
+当前外部插件支持**声明式导航页面**，内置校园能力由 Rust 提供。动态脚本、自定义可执行插件和 Agent 工具运行时仍在后续开发范围。
+
+- [插件格式与使用](docs/PLUGINS.md)
+- [本地插件示例](examples/campus-links/plugin.json)
+- [插件目录服务说明](tools/plugin-server/README.md)
+
+本地运行目录服务：
+
+```sh
+npm run market:serve
+```
+
+在“应用设置 → 插件服务”中确认更改地址为 `http://127.0.0.1:17321`，即可下载安装示例插件。正式插件服务器尚未部署；客户端不会默认连接测试服务器或设计稿中的示例域名。
+
+应用更新使用独立的发布地址与签名公钥。开发构建尚未配置正式更新源，设置页会如实显示未配置。
+
+## 分支与开发
+
+- **`main`**：应用源码、使用说明和插件协议。
+- **`dev`**：基于 main 继续开发，包含开发指南、设计资料和约定手册。
+
+开发资料入口：[dev 分支文档](https://github.com/haiziyao/XJTU-Launcher/tree/dev/docs)、[开发指南](https://github.com/haiziyao/XJTU-Launcher/blob/dev/docs/DEVELOPMENT.md)、[约定手册](https://github.com/haiziyao/XJTU-Launcher/blob/dev/docs/CONVENTIONS.md)。
+
+本地检查：
 
 ```sh
 npm test
 npm run build
 npm run format:check
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-当前已完成 macOS 开发包构建和原生窗口检查；未完成 Windows 实机及正式签名公证。
+## 参考
 
-## 文档与版本
-
-- [产品要求与讨论上下文](docs/PROJECT_CONTEXT.md)
-- [V0.1 实现与验收](docs/V0.1.md)
-- [本地插件协议](docs/PLUGINS.md)
-- [校园参考项目](docs/REFERENCE_PROJECT.md)
-- [桌面界面参考依据](docs/design/DESKTOP_REFERENCES.md)
-
-V0.1 聚焦启动器、校园账户、本地插件和课表；V0.2 实现 Agent、MCP、Skill、长期记忆；V0.3 实现在线插件市场和完整主页 DIY。未建设启动器平台账户服务端，插件市场服务端可以后续建设。
-
-页面参考与授权记录见 [设计评审](docs/design/PAGES_REVIEW.md)。最新授权与登录验收边界见项目上下文和 V0.1 文档。
+校园业务优先参考 [XJTUToolBox](https://github.com/yan-xiaoo/XJTUToolBox) 的协议与交互，再按本项目的 Rust / Tauri 架构适配。参考项目不作为运行时依赖；涉及实际代码复用时需遵守原项目许可证。

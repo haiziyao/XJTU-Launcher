@@ -1,4 +1,4 @@
-//! Campus business adapters. Protocol research: docs/CAMPUS_FEATURES.md.
+//! Campus business adapters. Protocol research: docs/CAMPUS_FEATURES.md on the dev branch.
 //! This module never submits passwords or sends evaluation answers during a query.
 pub mod evaluation;
 mod queries;
