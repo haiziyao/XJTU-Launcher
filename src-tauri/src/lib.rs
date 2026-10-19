@@ -158,22 +158,18 @@ fn account_changed(app: &tauri::AppHandle, message: &str) {
     );
 }
 
-// Compatibility with the old, unapproved settings page. Do not open a remote login UI.
-#[tauri::command]
-fn begin_login(window: WebviewWindow, degree: String) -> Result<(), String> {
-    main_only(&window)?;
-    campus::domain(&degree)?;
-    Err("校园认证已改为应用自有流程；登录表单待设计确认后接入".into())
-}
-
 #[tauri::command]
 async fn start_account_login(
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
     degree: String,
+    request_id: String,
 ) -> Result<auth::View, String> {
     main_only(&window)?;
-    state.auth.insert(auth::Login::begin(degree).await?)
+    campus::domain(&degree)?;
+    let token = state.auth.reserve(&request_id)?;
+    let result = auth::Login::begin(degree).await;
+    state.auth.complete(&request_id, &token, result)
 }
 
 #[tauri::command]
@@ -192,9 +188,40 @@ async fn advance_account_login(
     }
     // Retry a failed local persistence operation without submitting school credentials again.
     if login.completed.is_none() {
+        let action = match action {
+            auth::Action::SavedCredentials {
+                account_id,
+                captcha,
+                remember_password,
+            } => {
+                let _guard = state.auth_lock.lock().await;
+                let book = accounts::load(&accounts_path(&app)?)?;
+                let record = book
+                    .accounts
+                    .iter()
+                    .find(|a| a.id == account_id)
+                    .ok_or("校园账号不存在")?;
+                if record.degree != login.degree() {
+                    return Err("所选账号身份与当前登录不匹配".into());
+                }
+                let password = record
+                    .password
+                    .as_ref()
+                    .ok_or("此账号未保存密码，请输入密码")?;
+                auth::Action::Credentials {
+                    username: record.username.clone(),
+                    password: password.0.clone(),
+                    remember_password,
+                    captcha,
+                }
+            }
+            other => other,
+        };
         login.act(action).await?;
     }
-    let view = login.view();
+    if handle.cancelled.load(Ordering::SeqCst) {
+        return Err("登录已取消".into());
+    }
     if let Some(account) = login.completed.as_ref() {
         let _guard = state.auth_lock.lock().await;
         if handle.cancelled.load(Ordering::SeqCst) {
@@ -209,7 +236,7 @@ async fn advance_account_login(
         state.auth.cancel(&flow_id)?;
         account_changed(&app, "校园账号已添加");
     }
-    Ok(view)
+    Ok(login.view())
 }
 
 #[tauri::command]
@@ -224,7 +251,44 @@ async fn account_login_captcha(
     if handle.cancelled.load(Ordering::SeqCst) {
         return Err("登录已取消".into());
     }
-    login.captcha().await
+    let image = login.captcha().await?;
+    if handle.cancelled.load(Ordering::SeqCst) {
+        return Err("登录已取消".into());
+    }
+    Ok(image)
+}
+
+#[tauri::command]
+async fn account_login_state(
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    flow_id: String,
+) -> Result<auth::View, String> {
+    main_only(&window)?;
+    let handle = state.auth.get(&flow_id)?;
+    let login = handle.login.lock().await;
+    if handle.cancelled.load(Ordering::SeqCst) {
+        return Err("登录已取消".into());
+    }
+    Ok(login.view())
+}
+
+#[tauri::command]
+async fn forget_account_password(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    account_id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state.auth_lock.lock().await;
+    state.auth.cancel_all();
+    let path = accounts_path(&app)?;
+    let mut book = accounts::load(&path)?;
+    book.forget_password(&account_id)?;
+    accounts::save(&path, &book)?;
+    account_changed(&app, "已删除保存的密码");
+    Ok(())
 }
 
 #[tauri::command]
@@ -280,6 +344,7 @@ async fn remove_account(
     let mut book = accounts::load(&path)?;
     let was_active = book.active_id.as_deref() == Some(&account_id);
     book.remove(&account_id)?;
+    state.auth.cancel_all();
     accounts::save(&path, &book)?;
     if was_active {
         state.generation.fetch_add(1, Ordering::SeqCst);
@@ -541,7 +606,8 @@ pub fn run() {
             list_plugins,
             import_plugin,
             account_status,
-            begin_login,
+            account_login_state,
+            forget_account_password,
             start_account_login,
             advance_account_login,
             account_login_captcha,

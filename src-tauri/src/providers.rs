@@ -27,6 +27,8 @@ pub struct Provider {
 pub struct Book {
     pub default_id: Option<String>,
     pub providers: Vec<Provider>,
+    #[serde(default)]
+    deepseek_preset_added: bool,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +72,30 @@ fn valid_url(value: &str) -> bool {
         && url.fragment().is_none()
 }
 impl Book {
+    fn ensure_deepseek(&mut self) -> bool {
+        if self.deepseek_preset_added {
+            return false;
+        }
+        self.deepseek_preset_added = true;
+        let exists = self.providers.iter().any(|p| {
+            url::Url::parse(&p.base_url).is_ok_and(|u| u.host_str() == Some("api.deepseek.com"))
+        });
+        if !exists && self.providers.len() < 32 {
+            let id = uuid::Uuid::new_v4().to_string();
+            if self.default_id.is_none() {
+                self.default_id = Some(id.clone());
+            }
+            self.providers.push(Provider {
+                id,
+                name: "DeepSeek".into(),
+                base_url: "https://api.deepseek.com".into(),
+                protocol: "openai-compatible".into(),
+                model: "deepseek-flash".into(),
+                api_key: String::new(),
+            });
+        }
+        true
+    }
     pub fn view(&self, legacy: bool) -> View {
         View {
             default_id: self.default_id.clone(),
@@ -153,6 +179,7 @@ impl Book {
         let mut next = Book {
             default_id: self.default_id.clone(),
             providers: self.providers.clone(),
+            deepseek_preset_added: self.deepseek_preset_added,
         };
         if next.default_id.is_none() {
             next.default_id = Some(provider.id.clone());
@@ -239,16 +266,21 @@ fn unseal(bytes: &[u8], key: &[u8]) -> Result<Book, String> {
     Ok(book)
 }
 pub fn load(path: &Path) -> Result<Book, String> {
-    if !path.exists() {
-        return Ok(Book::default());
+    let mut book = if !path.exists() {
+        Book::default()
+    } else {
+        if fs::metadata(path).map_err(|_| "无法读取模型文件")?.len() > 1024 * 1024 {
+            return Err("模型配置文件过大".into());
+        }
+        unseal(
+            &fs::read(path).map_err(|_| "无法读取模型配置")?,
+            &key(false)?,
+        )?
+    };
+    if book.ensure_deepseek() {
+        save(path, &book)?;
     }
-    if fs::metadata(path).map_err(|_| "无法读取模型文件")?.len() > 1024 * 1024 {
-        return Err("模型配置文件过大".into());
-    }
-    unseal(
-        &fs::read(path).map_err(|_| "无法读取模型配置")?,
-        &key(false)?,
-    )
+    Ok(book)
 }
 pub fn save(path: &Path, book: &Book) -> Result<(), String> {
     crate::config::write_atomic(path, &seal(book, &key(!path.exists())?)?)
@@ -257,6 +289,27 @@ pub fn save(path: &Path, book: &Book) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deepseek_preset_is_added_once_and_preserves_existing_default() {
+        let mut empty = Book::default();
+        assert!(empty.ensure_deepseek());
+        let p = &empty.providers[0];
+        assert_eq!(p.name, "DeepSeek");
+        assert_eq!(p.model, "deepseek-flash");
+        assert!(p.api_key.is_empty());
+        assert_eq!(empty.default_id.as_ref(), Some(&p.id));
+        let id = p.id.clone();
+        empty.remove(&id).unwrap();
+        assert!(!empty.ensure_deepseek());
+        assert!(empty.providers.is_empty());
+        let mut existing = Book::default();
+        existing.upsert(input(), None).unwrap();
+        let default = existing.default_id.clone();
+        existing.ensure_deepseek();
+        assert_eq!(existing.default_id, default);
+        assert_eq!(existing.providers.len(), 2);
+        existing.validate().unwrap();
+    }
     fn input() -> Input {
         Input {
             id: None,

@@ -1,6 +1,6 @@
-//! Native CAS driver. No remote login WebView and no password persistence.
+//! Native CAS driver. Password retention is explicit and encrypted with the account book.
 use crate::{
-    accounts::Account,
+    accounts::{Account, SavedPassword},
     campus,
     network::{self, AccessMode, Page, Transport},
 };
@@ -61,15 +61,30 @@ pub struct View {
     pub choices: Vec<Choice>,
     pub message: Option<String>,
     pub can_continue: bool,
+    pub retry_after_seconds: u64,
+    pub save_pending: bool,
 }
 #[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum Action {
     Credentials {
         username: String,
         password: String,
         #[serde(default)]
+        remember_password: bool,
+        #[serde(default)]
         captcha: String,
+    },
+    SavedCredentials {
+        account_id: String,
+        #[serde(default)]
+        captcha: String,
+        remember_password: bool,
     },
     Continue {
         #[serde(default)]
@@ -174,6 +189,8 @@ pub struct Login {
     page: Option<Page>,
     username: String,
     encrypted: Zeroizing<String>,
+    retained_password: Option<SavedPassword>,
+    pending_captcha: String,
     visitor: String,
     mfa: Option<Mfa>,
     choices: Vec<Choice>,
@@ -217,6 +234,8 @@ impl Login {
             page: None,
             username: String::new(),
             encrypted: Zeroizing::new(String::new()),
+            retained_password: None,
+            pending_captcha: String::new(),
             visitor: Uuid::new_v4().simple().to_string(),
             mfa: None,
             choices: vec![],
@@ -244,11 +263,19 @@ impl Login {
             phone: self.mfa.as_ref().and_then(|m| m.phone.clone()),
             choices: self.choices.clone(),
             message: self.message.clone(),
-            can_continue: !self.encrypted.is_empty() && self.phase == Phase::Credentials,
+            can_continue: !self.encrypted.is_empty()
+                && matches!(self.phase, Phase::Credentials | Phase::Captcha),
+            retry_after_seconds: self
+                .mfa
+                .as_ref()
+                .and_then(|m| m.sent)
+                .map(|sent| 60u64.saturating_sub(sent.elapsed().as_secs()))
+                .unwrap_or(0),
+            save_pending: self.completed.is_some(),
         }
     }
-    pub fn id(&self) -> &str {
-        &self.id
+    pub fn degree(&self) -> &str {
+        &self.degree
     }
     fn ensure_active(&self) -> Result<(), String> {
         if self.created.elapsed() > TTL || self.phase == Phase::Success {
@@ -307,6 +334,10 @@ impl Login {
         Ok(())
     }
     async fn password_page(&mut self, captcha: String) -> Result<Option<Page>, String> {
+        if !captcha.is_empty() {
+            self.pending_captcha = captcha;
+        }
+        let captcha = self.pending_captcha.clone();
         let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
         let form = parse_form(&page.html).ok_or("校园登录页面格式发生变化，请重新开始")?;
         if self.failures >= 3 && captcha.is_empty() {
@@ -419,6 +450,7 @@ impl Login {
                         name,
                         student_id: student_id.or(self.chosen.clone()),
                         avatar: None,
+                        password: self.retained_password.take(),
                         mode: self.mode,
                         token,
                         cookies: self.transport.snapshot()?,
@@ -426,6 +458,7 @@ impl Login {
                     self.phase = Phase::Success;
                     self.page = None;
                     self.encrypted.clear();
+                    self.pending_captcha.clear();
                     self.mfa = None;
                     self.choices.clear();
                     return Ok(());
@@ -437,6 +470,7 @@ impl Login {
                 self.step = Step::Campus;
                 self.mfa = None;
                 self.failures = 0;
+                self.pending_captcha.clear();
                 let target = Url::parse(&format!(
                     "https://{}/sa/auth/cas/login/student-pc",
                     campus::domain(&self.degree)?
@@ -460,6 +494,8 @@ impl Login {
                 self.failures = self.failures.saturating_add(1);
                 self.mfa = None;
                 self.encrypted.clear();
+                self.retained_password = None;
+                self.pending_captcha.clear();
                 self.phase = if self.failures >= 3 {
                     Phase::Captcha
                 } else {
@@ -572,6 +608,7 @@ impl Login {
             Action::Credentials {
                 username,
                 password,
+                remember_password,
                 captcha,
             } => {
                 let password = Zeroizing::new(password);
@@ -600,8 +637,14 @@ impl Login {
                     .map_err(|_| "校园登录公钥格式不受支持")?;
                 self.username = username.trim().to_string();
                 self.encrypted = Zeroizing::new(encrypt_password(&password, &pem)?);
+                self.retained_password =
+                    remember_password.then(|| SavedPassword(password.to_string()));
+                self.pending_captcha = captcha.clone();
                 self.mfa = None;
                 self.password_page(captcha).await?
+            }
+            Action::SavedCredentials { .. } => {
+                return Err("保存的凭据必须由本机账号服务读取".into())
             }
             Action::Continue { captcha } => {
                 if !matches!(self.phase, Phase::Credentials | Phase::Captcha)
@@ -713,30 +756,69 @@ impl Login {
 pub struct Handle {
     pub login: Arc<tokio::sync::Mutex<Login>>,
     pub cancelled: Arc<AtomicBool>,
-    pub created: Instant,
+}
+struct Slot {
+    created: Instant,
+    cancelled: Arc<AtomicBool>,
+    handle: Option<Handle>,
 }
 #[derive(Default)]
 pub struct Manager {
-    flows: Mutex<HashMap<String, Handle>>,
+    flows: Mutex<HashMap<String, Slot>>,
 }
 impl Manager {
-    pub fn insert(&self, login: Login) -> Result<View, String> {
-        let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
-        flows.retain(|_, h| h.created.elapsed() < TTL);
-        if flows.len() >= 4 {
-            return Err("待完成的登录过多，请先完成或取消现有登录".into());
+    pub fn reserve(&self, id: &str) -> Result<Arc<AtomicBool>, String> {
+        if Uuid::parse_str(id).is_err() {
+            return Err("登录请求标识无效".into());
         }
-        let view = login.view();
-        let id = login.id().to_string();
+        let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
+        flows.retain(|_, slot| {
+            let live = slot.created.elapsed() < TTL;
+            if !live {
+                slot.cancelled.store(true, Ordering::SeqCst);
+            }
+            live
+        });
+        if flows.contains_key(id) || flows.len() >= 4 {
+            return Err("待完成的登录过多或请求重复，请先取消现有登录".into());
+        }
+        let cancelled = Arc::new(AtomicBool::new(false));
         flows.insert(
-            id,
-            Handle {
+            id.into(),
+            Slot {
                 created: Instant::now(),
-                login: Arc::new(tokio::sync::Mutex::new(login)),
-                cancelled: Arc::new(AtomicBool::new(false)),
+                cancelled: cancelled.clone(),
+                handle: None,
             },
         );
-        Ok(view)
+        Ok(cancelled)
+    }
+    pub fn complete(
+        &self,
+        id: &str,
+        token: &Arc<AtomicBool>,
+        result: Result<Login, String>,
+    ) -> Result<View, String> {
+        let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
+        let slot = flows.get_mut(id).ok_or("登录已取消")?;
+        if !Arc::ptr_eq(token, &slot.cancelled) || token.load(Ordering::SeqCst) {
+            return Err("登录已取消".into());
+        }
+        match result {
+            Ok(mut login) => {
+                login.id = id.into();
+                let view = login.view();
+                slot.handle = Some(Handle {
+                    cancelled: token.clone(),
+                    login: Arc::new(tokio::sync::Mutex::new(login)),
+                });
+                Ok(view)
+            }
+            Err(e) => {
+                flows.remove(id);
+                Err(e)
+            }
+        }
     }
     pub fn get(&self, id: &str) -> Result<Handle, String> {
         let mut flows = self.flows.lock().map_err(|_| "认证服务繁忙")?;
@@ -747,7 +829,7 @@ impl Manager {
         }
         flows
             .get(id)
-            .cloned()
+            .and_then(|slot| slot.handle.clone())
             .ok_or("登录流程不存在或已过期，请重新开始".into())
     }
     pub fn cancel(&self, id: &str) -> Result<(), String> {
@@ -768,6 +850,112 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ui_actions_decode_remember_password_and_saved_account_fields() {
+        let action: Action = serde_json::from_value(
+            json!({"type":"credentials","username":"u","password":"p","rememberPassword":true}),
+        )
+        .unwrap();
+        assert!(matches!(
+            action,
+            Action::Credentials {
+                remember_password: true,
+                ..
+            }
+        ));
+        let saved: Action = serde_json::from_value(
+            json!({"type":"savedCredentials","accountId":"local-id","rememberPassword":false}),
+        )
+        .unwrap();
+        assert!(matches!(
+            saved,
+            Action::SavedCredentials {
+                remember_password: false,
+                ..
+            }
+        ));
+    }
+    #[test]
+    fn cancellation_and_expiry_invalidate_inflight_initialization() {
+        let manager = Manager::default();
+        let id = Uuid::new_v4().to_string();
+        let token = manager.reserve(&id).unwrap();
+        manager.cancel(&id).unwrap();
+        assert!(token.load(Ordering::SeqCst));
+        assert!(manager
+            .complete(&id, &token, Err("late result".into()))
+            .is_err());
+        let token = manager.reserve(&id).unwrap();
+        manager.flows.lock().unwrap().get_mut(&id).unwrap().created =
+            Instant::now() - TTL - Duration::from_secs(1);
+        manager.reserve(&Uuid::new_v4().to_string()).unwrap();
+        assert!(token.load(Ordering::SeqCst));
+        assert!(manager.get(&id).is_err());
+        manager.cancel_all();
+        assert!(manager.flows.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn captcha_survives_mfa_pause_without_resubmitting_credentials() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let mut login = Login {
+                id: Uuid::new_v4().to_string(),
+                created: Instant::now(),
+                transport: Transport::new(None).unwrap(),
+                degree: "undergraduate".into(),
+                mode: AccessMode::Direct,
+                step: Step::Campus,
+                phase: Phase::Captcha,
+                page: Some(Page {
+                    url: Url::parse("https://login.xjtu.edu.cn/cas/login").unwrap(),
+                    status: StatusCode::OK,
+                    html: "<input name='execution' value='e1s1'>".into(),
+                }),
+                username: "student".into(),
+                encrypted: Zeroizing::new("encrypted-test".into()),
+                retained_password: None,
+                pending_captcha: String::new(),
+                visitor: "test".into(),
+                mfa: Some(Mfa {
+                    state: "mfa-state".into(),
+                    flow: "mfa",
+                    gid: Some("gid".into()),
+                    phone: None,
+                    verified: false,
+                    sent: None,
+                }),
+                choices: vec![],
+                chosen: None,
+                failures: 3,
+                message: None,
+                completed: None,
+            };
+            assert!(login.password_page("ABC1".into()).await.unwrap().is_none());
+            assert_eq!(login.phase as u8, Phase::Mfa as u8);
+            assert!(login.password_page(String::new()).await.unwrap().is_none());
+            assert_eq!(login.pending_captcha, "ABC1");
+        });
+    }
+    #[test]
+    #[ignore = "Network-only entry probe; never submits credentials or sends SMS"]
+    fn live_login_entry_probe() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let login = runtime
+            .block_on(Login::begin("undergraduate".into()))
+            .unwrap();
+        let view = login.view();
+        assert!(matches!(view.phase, Phase::Credentials | Phase::Captcha));
+        println!(
+            "Entry reachable; route={:?}, credentials form parsed",
+            view.access_mode
+        );
+    }
     #[test]
     fn html_fields_choices_and_safety_forms_are_parsed_without_executing_scripts() {
         let form=parse_form(r#"<form><input value='e1s1' name='execution'><input name='secState' value='s&amp;x'><input name='_eventId' value='submit'></form><div class='account-wrap'><div class='name'>研究生</div><el-radio label='20260000'></el-radio></div>"#).unwrap();

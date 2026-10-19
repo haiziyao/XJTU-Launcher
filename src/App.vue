@@ -117,7 +117,12 @@ const timetableEnabled = computed(() =>
 const todayCourses = computed(() =>
   timetable.value ? coursesForDay(timetable.value, now.value) : [],
 );
-const displayName = computed(() => config.value.nickname || account.value.name || '未登录');
+const displayName = computed(
+  () =>
+    config.value.nickname ||
+    account.value.name ||
+    (account.value.connected ? '校园账号' : '未登录'),
+);
 const displayAvatar = computed(() => config.value.avatar || account.value.avatar);
 const identity = computed(() =>
   [displayName.value, account.value.studentId].filter(Boolean).join(' · '),

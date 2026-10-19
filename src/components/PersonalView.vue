@@ -45,7 +45,9 @@ async function choose(kind: 'avatar' | 'wallpaper') {
         <span class="profile-avatar-overlay" aria-hidden="true"><Camera :size="18" /></span>
       </button>
       <div class="profile-copy">
-        <strong>{{ config.nickname || account.name || '未登录' }}</strong>
+        <strong>{{
+          config.nickname || account.name || (account.connected ? '校园账号' : '未登录')
+        }}</strong>
         <small>{{ account.studentId || '本机个人资料' }}</small>
       </div>
       <div class="row-actions">

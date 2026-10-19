@@ -72,18 +72,26 @@ export const bridge = {
     requireNative();
     return invoke('account_status');
   },
-  // Native authentication API; account/login page visuals await approval.
+  // Native campus authentication and local account management.
   async accounts(): Promise<CampusAccountList> {
     requireNative();
     return invoke('list_accounts');
   },
-  async startAccountLogin(degree: CampusDegree): Promise<CampusLogin> {
+  async startAccountLogin(degree: CampusDegree, requestId: string): Promise<CampusLogin> {
     requireNative();
-    return invoke('start_account_login', { degree });
+    return invoke('start_account_login', { degree, requestId });
   },
   async advanceAccountLogin(flowId: string, action: CampusLoginAction): Promise<CampusLogin> {
     requireNative();
     return invoke('advance_account_login', { flowId, action });
+  },
+  async accountLoginState(flowId: string): Promise<CampusLogin> {
+    requireNative();
+    return invoke('account_login_state', { flowId });
+  },
+  async forgetAccountPassword(accountId: string): Promise<void> {
+    requireNative();
+    return invoke('forget_account_password', { accountId });
   },
   async accountLoginCaptcha(flowId: string): Promise<string> {
     requireNative();

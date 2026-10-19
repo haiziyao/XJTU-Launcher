@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { GraduationCap, LoaderCircle, MoreHorizontal, Pencil } from 'lucide-vue-next';
+import {
+  GraduationCap,
+  LoaderCircle,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  LogIn,
+  KeyRound,
+} from 'lucide-vue-next';
 import { Menu } from '@tauri-apps/api/menu';
 import { LogicalPosition } from '@tauri-apps/api/dpi';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -11,12 +19,27 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
 import UiAvatar from './ui/UiAvatar.vue';
+import CampusLoginForm from './CampusLoginForm.vue';
 
 const emit = defineEmits<{ changed: [] }>();
 const book = ref<CampusAccountList>({ activeId: null, accounts: [] });
 const busy = ref(false);
 const loading = ref(true);
 const error = ref('');
+const adding = ref(false);
+const loginAccount = ref<CampusAccount | null>(null);
+const notice = ref('');
+function beginLogin(account: CampusAccount | null = null) {
+  loginAccount.value = account;
+  adding.value = true;
+  notice.value = '';
+}
+async function loggedIn() {
+  adding.value = false;
+  loginAccount.value = null;
+  notice.value = '校园账号已登录';
+  await run(async () => {});
+}
 let menu: Menu | undefined;
 let disposed = false;
 async function load() {
@@ -61,13 +84,32 @@ async function more(event: MouseEvent, account: CampusAccount) {
           action: () => void run(() => bridge.clearAccountAvatar(account.id)),
         },
         { item: 'Separator' },
+        { id: 'reauthenticate', text: '重新登录', action: () => beginLogin(account) },
+        {
+          id: 'forget-password',
+          text: '删除保存的密码',
+          enabled: account.passwordSaved,
+          action: () =>
+            void run(async () => {
+              if (
+                await ask('删除此设备保存的密码？当前校园会话保留，下次重新登录需输入密码。', {
+                  title: '删除密码',
+                  kind: 'warning',
+                  okLabel: '删除',
+                  cancelLabel: '取消',
+                })
+              )
+                await bridge.forgetAccountPassword(account.id);
+            }),
+        },
+        { item: 'Separator' },
         {
           id: 'remove',
           text: '移除账号',
           action: () =>
             void run(async () => {
               if (
-                await ask('移除此设备保存的账号和会话？学校账号不会被注销。', {
+                await ask('移除此设备保存的账号、密码和会话？学校账号不会被注销。', {
                   title: '移除账号',
                   kind: 'warning',
                   okLabel: '移除',
@@ -99,8 +141,21 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="desktop-page narrow-page">
-    <PageHeader title="校园账号" description="账号与会话只保存在本机，学校账号不会被注销" />
+  <CampusLoginForm
+    v-if="adding"
+    :account="loginAccount"
+    @cancel="adding = false"
+    @success="loggedIn"
+  />
+  <section v-else class="desktop-page narrow-page">
+    <PageHeader title="校园账号" description="管理本机保存的校园账号">
+      <template #actions
+        ><button class="btn primary small" :disabled="busy || loading" @click="beginLogin()">
+          <Plus :size="14" />添加账号
+        </button></template
+      >
+    </PageHeader>
+    <p v-if="notice" class="notice success" role="status">{{ notice }}</p>
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
     </Transition>
@@ -112,7 +167,10 @@ onBeforeUnmount(() => {
         :icon="GraduationCap"
         title="尚未添加校园账号"
         description="添加账号后即可同步课表等校园数据"
-      />
+        ><button class="btn primary small" :disabled="busy" @click="beginLogin()">
+          <Plus :size="14" />添加账号
+        </button></EmptyState
+      >
       <TransitionGroup v-else name="list">
         <SettingRow v-for="account in book.accounts" :key="account.id">
           <template #leading>
@@ -130,12 +188,18 @@ onBeforeUnmount(() => {
           <template #title>
             {{ account.name || account.username }}
             <span v-if="account.id === book.activeId" class="badge accent">当前</span>
+            <span v-if="account.passwordSaved" class="badge"
+              ><KeyRound :size="10" />已保存密码</span
+            >
           </template>
           <template #description>
             {{ account.studentId || account.username }} ·
             {{ account.degree === 'undergraduate' ? '本科生' : '研究生' }}
             <template v-if="account.accessMode === 'webvpn'"> · WebVPN</template>
           </template>
+          <button class="btn ghost small" :disabled="busy" @click="beginLogin(account)">
+            <LogIn :size="14" />重新登录
+          </button>
           <button
             v-if="account.id !== book.activeId"
             class="btn small"

@@ -9,11 +9,20 @@ use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Cursor, path::Path};
 use uuid::Uuid;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 const HEADER: &[u8] = b"XJTU-ACCOUNTS-1\0";
 const KEY_NAME: &str = "campus-accounts-key-v1";
 const MAX_FILE: u64 = 24 * 1024 * 1024;
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct SavedPassword(pub String);
+impl Drop for SavedPassword {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -27,6 +36,8 @@ pub struct Account {
     pub mode: AccessMode,
     pub token: String,
     pub cookies: String,
+    #[serde(default)]
+    pub password: Option<SavedPassword>,
 }
 
 #[derive(Clone, Serialize)]
@@ -39,6 +50,7 @@ pub struct Profile {
     pub student_id: Option<String>,
     pub avatar: Option<String>,
     pub access_mode: AccessMode,
+    pub password_saved: bool,
 }
 impl From<&Account> for Profile {
     fn from(a: &Account) -> Self {
@@ -50,6 +62,7 @@ impl From<&Account> for Profile {
             student_id: a.student_id.clone(),
             avatar: a.avatar.clone(),
             access_mode: a.mode,
+            password_saved: a.password.is_some(),
         }
     }
 }
@@ -116,6 +129,15 @@ impl Book {
         self.active_id = Some(account.id.clone());
         Ok(Profile::from(&account))
     }
+    pub fn forget_password(&mut self, id: &str) -> Result<(), String> {
+        let account = self
+            .accounts
+            .iter_mut()
+            .find(|a| a.id == id)
+            .ok_or("校园账号不存在")?;
+        account.password = None;
+        Ok(())
+    }
     fn validate(&self) -> Result<(), String> {
         if self.accounts.len() > 32 || self.active_id.is_some() && self.active().is_none() {
             return Err("校园账号数据格式损坏".into());
@@ -127,6 +149,9 @@ impl Book {
                 || a.username.is_empty()
                 || a.username.len() > 256
                 || crate::campus::domain(&a.degree).is_err()
+                || a.password
+                    .as_ref()
+                    .is_some_and(|p| p.0.is_empty() || p.0.len() > 512)
                 || a.token.is_empty()
                 || a.cookies.len() > 2 * 1024 * 1024
             {
@@ -208,7 +233,7 @@ pub fn load(path: &Path) -> Result<Book, String> {
     )
 }
 pub fn save(path: &Path, book: &Book) -> Result<(), String> {
-    let bytes = seal(book, &key(true)?)?;
+    let bytes = seal(book, &key(!path.exists())?)?;
     if bytes.len() as u64 > MAX_FILE {
         return Err("校园账号文件超过大小限制".into());
     }
@@ -250,6 +275,48 @@ pub fn avatar(path: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_password_is_encrypted_hidden_and_removable() {
+        let mut book = Book::default();
+        let mut account = record("saved-user");
+        account.password = Some(SavedPassword("private-campus-password".into()));
+        let id = book.upsert(account).unwrap().id;
+        let encoded = seal(&book, &[4; 32]).unwrap();
+        assert!(!String::from_utf8_lossy(&encoded).contains("private-campus-password"));
+        let mut restored = unseal(&encoded, &[4; 32]).unwrap();
+        assert_eq!(
+            restored.active().unwrap().password.as_ref().unwrap().0,
+            "private-campus-password"
+        );
+        let public = serde_json::to_string(&restored.view()).unwrap();
+        assert!(public.contains("\"passwordSaved\":true"));
+        assert!(!public.contains("private-campus-password"));
+        restored.forget_password(&id).unwrap();
+        assert!(!restored.view().accounts[0].password_saved);
+        assert!(unseal(&seal(&restored, &[4; 32]).unwrap(), &[4; 32])
+            .unwrap()
+            .active()
+            .unwrap()
+            .password
+            .is_none());
+        assert!(restored.active().is_some());
+    }
+    #[test]
+    fn old_accounts_load_without_password_and_relogin_can_disable_remembering() {
+        let mut account = record("student");
+        let mut old = serde_json::to_value(&account).unwrap();
+        old.as_object_mut().unwrap().remove("password");
+        assert!(serde_json::from_value::<Account>(old)
+            .unwrap()
+            .password
+            .is_none());
+        account.password = Some(SavedPassword("saved".into()));
+        let mut book = Book::default();
+        let id = book.upsert(account).unwrap().id;
+        book.upsert(record("student")).unwrap();
+        assert_eq!(book.active().unwrap().id, id);
+        assert!(book.active().unwrap().password.is_none());
+    }
     fn record(user: &str) -> Account {
         Account {
             id: Uuid::new_v4().to_string(),
@@ -261,6 +328,7 @@ mod tests {
             mode: AccessMode::Direct,
             token: format!("token-{user}"),
             cookies: "[]".into(),
+            password: None,
         }
     }
     #[test]

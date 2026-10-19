@@ -71,6 +71,7 @@ export interface CampusAccount {
   studentId: string | null;
   avatar: string | null;
   accessMode: 'direct' | 'webvpn';
+  passwordSaved: boolean;
 }
 export interface CampusAccountList {
   activeId: string | null;
@@ -85,9 +86,18 @@ export interface CampusLogin {
   choices: { label: string; name: string }[];
   message: string | null;
   canContinue: boolean;
+  retryAfterSeconds: number;
+  savePending: boolean;
 }
 export type CampusLoginAction =
-  | { type: 'credentials'; username: string; password: string; captcha?: string }
+  | {
+      type: 'credentials';
+      username: string;
+      password: string;
+      captcha?: string;
+      rememberPassword: boolean;
+    }
+  | { type: 'savedCredentials'; accountId: string; captcha?: string; rememberPassword: boolean }
   | { type: 'continue'; captcha?: string }
   | { type: 'sendMfa' }
   | { type: 'verifyMfa'; code: string }
