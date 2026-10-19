@@ -1,4 +1,4 @@
-//! Native CAS driver. Password retention is explicit and encrypted with the account book.
+//! Native CAS driver. Password retention is explicit and stored with the local account book.
 use crate::{
     accounts::{Account, SavedPassword},
     campus,

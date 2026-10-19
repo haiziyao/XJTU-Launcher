@@ -1,10 +1,11 @@
-//! Local account records. The OS vault holds only the AES key, avoiding Windows credential size limits.
+//! Local account records in auth.json; encrypted files are read only for migration.
 use crate::network::AccessMode;
 use aes_gcm::{
     aead::{Aead, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
+#[cfg(test)]
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Cursor, path::Path};
@@ -161,23 +162,17 @@ impl Book {
         Ok(())
     }
 }
-fn key(create: bool) -> Result<Zeroizing<Vec<u8>>, String> {
-    if let Some(value) = crate::vault::get(KEY_NAME)? {
-        let bytes = STANDARD.decode(value).map_err(|_| "校园账号密钥损坏")?;
-        if bytes.len() != 32 {
-            return Err("校园账号密钥损坏".into());
-        }
-        return Ok(Zeroizing::new(bytes));
+fn legacy_key() -> Result<Zeroizing<Vec<u8>>, String> {
+    let value =
+        crate::vault::legacy_get(KEY_NAME)?.ok_or("校园账号密钥不存在，已保留原加密文件")?;
+    let bytes = Zeroizing::new(STANDARD.decode(value).map_err(|_| "校园账号密钥损坏")?);
+    if bytes.len() != 32 {
+        return Err("校园账号密钥损坏".into());
     }
-    if !create {
-        return Err("校园账号密钥不存在，已保留加密文件".into());
-    }
-    let mut bytes = Zeroizing::new(vec![0; 32]);
-    OsRng.fill_bytes(&mut bytes);
-    crate::vault::set(KEY_NAME, &STANDARD.encode(&bytes))?;
     Ok(bytes)
 }
-fn seal(book: &Book, key: &[u8]) -> Result<Vec<u8>, String> {
+#[cfg(test)]
+pub(crate) fn seal(book: &Book, key: &[u8]) -> Result<Vec<u8>, String> {
     book.validate()?;
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| "校园账号密钥无效")?;
     let plaintext = Zeroizing::new(serde_json::to_vec(book).map_err(|_| "无法编码校园账号")?);
@@ -216,28 +211,27 @@ fn unseal(bytes: &[u8], key: &[u8]) -> Result<Book, String> {
     book.validate()?;
     Ok(book)
 }
-pub fn load(path: &Path) -> Result<Book, String> {
-    if !path.exists() {
-        return Ok(Book::default());
-    }
-    if fs::metadata(path)
-        .map_err(|_| "无法读取校园账号文件")?
-        .len()
-        > MAX_FILE
-    {
-        return Err("校园账号文件过大".into());
-    }
-    unseal(
-        &fs::read(path).map_err(|_| "无法读取校园账号文件")?,
-        &key(false)?,
-    )
+pub fn load(legacy_path: &Path) -> Result<Book, String> {
+    let book = crate::vault::read_or_import("campusAccounts", || {
+        match fs::metadata(legacy_path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err("无法读取旧校园账号文件".into()),
+            Ok(info) if info.len() > MAX_FILE => return Err("校园账号文件过大".into()),
+            Ok(_) => {}
+        }
+        unseal(
+            &fs::read(legacy_path).map_err(|_| "无法读取旧校园账号文件")?,
+            &legacy_key()?,
+        )
+        .map(Some)
+    })?
+    .unwrap_or_default();
+    book.validate()?;
+    Ok(book)
 }
-pub fn save(path: &Path, book: &Book) -> Result<(), String> {
-    let bytes = seal(book, &key(!path.exists())?)?;
-    if bytes.len() as u64 > MAX_FILE {
-        return Err("校园账号文件超过大小限制".into());
-    }
-    crate::config::write_atomic(path, &bytes)
+pub fn save(_legacy_path: &Path, book: &Book) -> Result<(), String> {
+    book.validate()?;
+    crate::vault::save("campusAccounts", book)
 }
 pub fn avatar(path: &Path) -> Result<String, String> {
     let metadata = fs::metadata(path).map_err(|_| "无法读取头像")?;

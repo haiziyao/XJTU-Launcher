@@ -1,9 +1,10 @@
-//! Model profiles are encrypted together; public views never contain API keys.
+//! Model profiles in auth.json; public views never contain API keys.
 use aes_gcm::{
     aead::{Aead, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
+#[cfg(test)]
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
@@ -211,23 +212,16 @@ impl Book {
         Ok(())
     }
 }
-fn key(create: bool) -> Result<Zeroizing<Vec<u8>>, String> {
-    if let Some(s) = crate::vault::get(KEY)? {
-        let bytes = Zeroizing::new(STANDARD.decode(s).map_err(|_| "模型存储密钥损坏")?);
-        if bytes.len() != 32 {
-            return Err("模型存储密钥损坏".into());
-        }
-        return Ok(bytes);
+fn legacy_key() -> Result<Zeroizing<Vec<u8>>, String> {
+    let value = crate::vault::legacy_get(KEY)?.ok_or("模型存储密钥不存在，已保留原加密文件")?;
+    let bytes = Zeroizing::new(STANDARD.decode(value).map_err(|_| "模型存储密钥损坏")?);
+    if bytes.len() != 32 {
+        return Err("模型存储密钥损坏".into());
     }
-    if !create {
-        return Err("模型存储密钥缺失，原文件已保留".into());
-    }
-    let mut bytes = Zeroizing::new(vec![0; 32]);
-    OsRng.fill_bytes(&mut bytes);
-    crate::vault::set(KEY, &STANDARD.encode(&bytes))?;
     Ok(bytes)
 }
-fn seal(book: &Book, key: &[u8]) -> Result<Vec<u8>, String> {
+#[cfg(test)]
+pub(crate) fn seal(book: &Book, key: &[u8]) -> Result<Vec<u8>, String> {
     book.validate()?;
     let plain = Zeroizing::new(serde_json::to_vec(book).map_err(|_| "无法编码模型配置")?);
     let mut nonce = [0; 12];
@@ -265,25 +259,30 @@ fn unseal(bytes: &[u8], key: &[u8]) -> Result<Book, String> {
     book.validate()?;
     Ok(book)
 }
-pub fn load(path: &Path) -> Result<Book, String> {
-    let mut book = if !path.exists() {
-        Book::default()
-    } else {
-        if fs::metadata(path).map_err(|_| "无法读取模型文件")?.len() > 1024 * 1024 {
-            return Err("模型配置文件过大".into());
+pub fn load(legacy_path: &Path) -> Result<Book, String> {
+    let mut book = crate::vault::read_or_import("modelProviders", || {
+        match fs::metadata(legacy_path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err("无法读取旧模型配置文件".into()),
+            Ok(info) if info.len() > 1024 * 1024 => return Err("模型配置文件过大".into()),
+            Ok(_) => {}
         }
         unseal(
-            &fs::read(path).map_err(|_| "无法读取模型配置")?,
-            &key(false)?,
-        )?
-    };
+            &fs::read(legacy_path).map_err(|_| "无法读取旧模型配置文件")?,
+            &legacy_key()?,
+        )
+        .map(Some)
+    })?
+    .unwrap_or_default();
+    book.validate()?;
     if book.ensure_deepseek() {
-        save(path, &book)?;
+        save(legacy_path, &book)?;
     }
     Ok(book)
 }
-pub fn save(path: &Path, book: &Book) -> Result<(), String> {
-    crate::config::write_atomic(path, &seal(book, &key(!path.exists())?)?)
+pub fn save(_legacy_path: &Path, book: &Book) -> Result<(), String> {
+    book.validate()?;
+    crate::vault::save("modelProviders", book)
 }
 
 #[cfg(test)]

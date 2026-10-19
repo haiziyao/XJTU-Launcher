@@ -628,6 +628,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .setup(|app| {
+            vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
             campus_browser::install_menu(app.handle())?;
             Ok(())
         })

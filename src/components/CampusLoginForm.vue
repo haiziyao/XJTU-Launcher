@@ -254,8 +254,7 @@ onBeforeUnmount(() => {
             </template>
             <div v-if="!flow.canContinue || hasCredentials" class="login-remember">
               <div>
-                <strong>保存账号密码</strong
-                ><small>登录成功后加密保存在本机，之后可直接重新登录</small>
+                <strong>保存账号密码</strong><small>登录成功后保存在本机，之后可直接重新登录</small>
               </div>
               <UiSwitch
                 :checked="remember"

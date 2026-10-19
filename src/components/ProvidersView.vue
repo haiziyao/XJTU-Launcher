@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
         v-if="!editing"
         key="list"
         title="模型厂商"
-        footnote="配置保存在本机，密钥加密存储且不会回显。模型调用将在 Agent 接入后启用。"
+        footnote="配置和密钥保存在本机，密钥不会回显。模型调用将在 Agent 接入后启用。"
       >
         <template #actions>
           <button class="btn small" :disabled="busy || loading" @click="edit()">

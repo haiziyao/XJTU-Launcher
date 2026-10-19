@@ -6,3 +6,5 @@ src-tauri/gen/
 *.local
 test-results/
 playwright-report/
+
+.xjtu-launcher/
