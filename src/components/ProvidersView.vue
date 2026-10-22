@@ -320,6 +320,7 @@ onBeforeUnmount(() => {
                   :model-value="draft.model"
                   :options="modelOptions"
                   label="模型名称"
+                  placeholder="选择模型…"
                   @update:model-value="setModel"
                 />
                 <input

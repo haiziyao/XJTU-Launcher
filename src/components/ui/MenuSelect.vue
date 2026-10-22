@@ -11,13 +11,17 @@ const props = defineProps<{
   modelValue: string;
   options: MenuOption[];
   label: string;
+  placeholder?: string;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const current = computed(
-  () => props.options.find((option) => option.value === props.modelValue)?.label ?? '',
+  () =>
+    props.options.find((option) => option.value === props.modelValue)?.label ??
+    props.placeholder ??
+    '',
 );
 function choose(value: string) {
   emit('update:modelValue', value);
