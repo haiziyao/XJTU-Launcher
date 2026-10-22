@@ -994,4 +994,23 @@ onBeforeUnmount(() => {
   color: var(--text-tertiary);
   font-size: 11px;
 }
+
+/* With a wallpaper the page stays translucent so the photo is not blocked. */
+.desktop-shell.has-wallpaper .agent-composer-wrap {
+  background: linear-gradient(transparent, var(--panel) 45%);
+}
+.desktop-shell.has-wallpaper .agent-composer {
+  border-color: var(--panel-border);
+  background: var(--panel);
+}
+.desktop-shell.has-wallpaper .agent-user {
+  background: var(--panel);
+}
+.desktop-shell.has-wallpaper .agent-task {
+  border-color: var(--panel-border);
+  background: var(--panel);
+}
+.desktop-shell.has-wallpaper .agent-task:hover {
+  background: var(--surface-hover);
+}
 </style>
