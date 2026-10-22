@@ -599,7 +599,7 @@ async fn check_network(
     } else if vpn {
         NetworkCheck {
             environment: "vpn",
-            message: "校园网连接失败，目前是 vpn 环境",
+            message: "检测到非校园网环境",
         }
     } else {
         NetworkCheck {

@@ -28,14 +28,13 @@ pub fn callback(url: &Url, degree: &str) -> Option<(String, String)> {
 }
 
 async fn response_json(response: reqwest::Response) -> Result<Value, String> {
-    if [401, 403].contains(&response.status().as_u16()) {
-        return Err("校园会话已失效，请重新登录".into());
+    let status = response.status();
+    // Redirects land on the campus or WebVPN login page: the saved session expired.
+    if status.is_redirection() || [401, 403].contains(&status.as_u16()) {
+        return Err("校园会话已失效，请重新登录校园账号".into());
     }
-    if !response.status().is_success() {
-        return Err(format!(
-            "校园系统暂不可用（HTTP {}）",
-            response.status().as_u16()
-        ));
+    if !status.is_success() {
+        return Err(format!("校园系统暂不可用（HTTP {}）", status.as_u16()));
     }
     // Do not forward response bodies/errors: they may contain tokens or personal data.
     let json: Value = response
