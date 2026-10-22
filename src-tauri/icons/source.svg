@@ -1,8 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect x="32" y="32" width="960" height="960" rx="220" fill="#edf1e8"/>
-  <g transform="translate(225 265) skewY(-20)" fill="#608576">
-    <rect width="145" height="510" rx="12"/>
-    <rect x="212" y="130" width="145" height="330" rx="12" opacity=".72"/>
-    <rect x="424" y="65" width="145" height="430" rx="12" opacity=".43"/>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="#f6f5f1"/>
+  <!-- three beats, one colour each -->
+  <g>
+    <rect x="254" y="200" width="132" height="300" rx="66" fill="#7d6ad2"/>
+    <rect x="446" y="270" width="132" height="230" rx="66" fill="#2f9a9d"/>
+    <rect x="638" y="240" width="132" height="260" rx="66" fill="#e3b23c"/>
+  </g>
+  <!-- XJTU wordmark -->
+  <g fill="none" stroke-width="76" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(191 590) scale(0.46)" stroke="#d9574f">
+      <path d="M30 25 270 215 M270 25 30 215"/>
+    </g>
+    <g transform="translate(359 590) scale(0.46)" stroke="#e08a3e">
+      <path d="M270 25 V165 A72 72 0 0 1 126 165"/>
+    </g>
+    <g transform="translate(527 590) scale(0.46)" stroke="#4f9d6b">
+      <path d="M30 25 H270 M150 25 V215"/>
+    </g>
+    <g transform="translate(695 590) scale(0.46)" stroke="#3f7fd4">
+      <path d="M30 25 V160 A120 120 0 0 0 270 160 V25"/>
+    </g>
   </g>
 </svg>
