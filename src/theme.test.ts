@@ -27,6 +27,17 @@ describe('accentTokens', () => {
     }
   });
 
+  it('tints muted text with the accent and keeps it readable', () => {
+    const blue = accentTokens('#1f6fe5');
+    const rose = accentTokens('#c93a6b');
+    expect(blue['--text-secondary']).not.toBe(rose['--text-secondary']);
+    for (const preset of ACCENT_PRESETS) {
+      const tokens = accentTokens(preset.value);
+      expect(contrast(tokens['--text-secondary'], '#ffffff')).toBeGreaterThanOrEqual(7);
+      expect(contrast(tokens['--text-tertiary'], '#ffffff')).toBeGreaterThanOrEqual(5);
+    }
+  });
+
   it('darkens text and picks dark ink for a very light accent', () => {
     const tokens = accentTokens('#f5f5f5');
     expect(tokens['--accent-contrast']).toBe('#1f2329');

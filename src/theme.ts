@@ -70,14 +70,24 @@ function rgba(color: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** Darkens the accent just enough to read as text on the given background. */
-export function readableAccent(accent: string, background = '#ffffff'): string {
-  let candidate = accent;
+// Muted text keeps the neutral greys' hierarchy but picks up a little of the
+// accent's hue, so it still reads where a wallpaper shows through the page.
+const MUTED_BASE = '#4a505a';
+const FAINT_BASE = '#6f7681';
+
+/** Darkens `color` towards black until it reaches the required contrast. */
+function ensureContrast(color: string, background: string, target: number): string {
+  let candidate = color;
   for (let step = 1; step <= 32; step += 1) {
-    if (contrast(candidate, background) >= 4.5) return candidate;
-    candidate = mix(accent, '#000000', step * 0.04);
+    if (contrast(candidate, background) >= target) return candidate;
+    candidate = mix(color, '#000000', step * 0.04);
   }
   return candidate;
+}
+
+/** Darkens the accent just enough to read as text on the given background. */
+export function readableAccent(accent: string, background = '#ffffff'): string {
+  return ensureContrast(accent, background, 4.5);
 }
 
 /** Text colour for content set directly on an accent fill. */
@@ -100,6 +110,8 @@ export function accentTokens(value: unknown): Record<string, string> {
     '--accent-tint': rgba(accent, 0.13),
     '--nav-active': highlight,
     '--nav-active-text': text,
+    '--text-secondary': ensureContrast(mix(MUTED_BASE, accent, 0.18), '#ffffff', 7),
+    '--text-tertiary': ensureContrast(mix(FAINT_BASE, accent, 0.2), '#ffffff', 5),
     '--focus-ring': `0 0 0 3px ${rgba(accent, 0.22)}`,
   };
 }
