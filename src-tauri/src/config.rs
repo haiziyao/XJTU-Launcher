@@ -34,6 +34,9 @@ pub struct AppConfig {
     pub check_plugin_updates: bool,
     #[serde(default = "default_show_seconds")]
     pub check_app_updates: bool,
+    /// Tool ids pinned to the top of the 畅行校园 page, in display order.
+    #[serde(default)]
+    pub campus_pinned: Vec<String>,
 }
 
 fn default_sidebar_width() -> u32 {
@@ -69,6 +72,7 @@ impl Default for AppConfig {
             plugin_server: None,
             check_plugin_updates: true,
             check_app_updates: true,
+            campus_pinned: Vec::new(),
         }
     }
 }
@@ -103,6 +107,14 @@ impl AppConfig {
             || bad_accent(&self.accent)
             || !["xixi", "anan", "jiaojiao", "tongtong", "dada", "xuexue"]
                 .contains(&self.pet.as_str())
+            || self.campus_pinned.len() > 24
+            || self.campus_pinned.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 64
+                    || !id
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            })
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
             || self

@@ -17,6 +17,7 @@ export interface AppConfig {
   pluginServer: string | null;
   checkPluginUpdates: boolean;
   checkAppUpdates: boolean;
+  campusPinned: string[];
 }
 
 export interface Link {

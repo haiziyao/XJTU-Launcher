@@ -41,6 +41,7 @@ async function loadOptions() {
     campus.value = options.value.campuses[0]?.id ?? '';
     building.value = options.value.buildings[0]?.id ?? '';
   } catch (e) {
+    console.error('[campus] room options', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -61,6 +62,7 @@ async function search() {
       end: Number(end.value),
     })) as Rooms;
   } catch (e) {
+    console.error('[campus] rooms', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;

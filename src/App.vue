@@ -268,6 +268,9 @@ async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
 }
+async function setPinnedTools(ids: string[]) {
+  void persist({ ...config.value, campusPinned: ids });
+}
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
   await persist({
@@ -615,6 +618,8 @@ onBeforeUnmount(() => {
                 v-else-if="activePlugin?.page.type === 'campus'"
                 :key="activePlugin.id"
                 :name="activePlugin.name"
+                :pinned="config.campusPinned"
+                @update-pinned="setPinnedTools"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"

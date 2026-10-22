@@ -28,6 +28,7 @@ async function loadTerms() {
     terms.value = (await bridge.schoolQuery({ type: 'terms' })) as Terms;
     term.value = terms.value.rows[0]?.id ?? '';
   } catch (e) {
+    console.error('[campus] terms', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -46,6 +47,7 @@ async function search() {
       campus: '',
     })) as Courses;
   } catch (e) {
+    console.error('[campus] courses', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;

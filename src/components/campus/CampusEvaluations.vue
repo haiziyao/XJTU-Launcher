@@ -39,6 +39,7 @@ async function load() {
     selected.value = list.value.rows.map((row) => row.id);
     outcomes.value = null;
   } catch (e) {
+    console.error('[campus] evaluations list', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -61,6 +62,7 @@ async function prepare() {
     });
     outcomes.value = null;
   } catch (e) {
+    console.error('[campus] evaluation preview', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;

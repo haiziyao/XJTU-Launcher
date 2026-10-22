@@ -29,6 +29,7 @@ async function loadYears() {
       await loadScore();
     }
   } catch (e) {
+    console.error('[campus] fitness years', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -45,6 +46,7 @@ async function loadScore() {
       year: year.value,
     })) as FitnessScore;
   } catch (e) {
+    console.error('[campus] fitness score', e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;

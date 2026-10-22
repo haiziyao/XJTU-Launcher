@@ -23,6 +23,7 @@ export const defaultConfig = (): AppConfig => ({
   pluginServer: null,
   checkPluginUpdates: true,
   checkAppUpdates: true,
+  campusPinned: [],
 });
 
 export const campusLinks = [

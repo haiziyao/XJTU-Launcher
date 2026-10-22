@@ -2,7 +2,9 @@
 import { computed, onMounted, ref, type Component } from 'vue';
 import {
   Activity,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   BarChart3,
   BookMarked,
   BookOpen,
@@ -36,7 +38,8 @@ import type {
   SchoolFeature,
 } from '../types';
 
-defineProps<{ name: string }>();
+const props = defineProps<{ name: string; pinned: string[] }>();
+const emit = defineEmits<{ 'update-pinned': [ids: string[]] }>();
 
 type Tone = 'blue' | 'green' | 'orange' | 'violet' | 'teal' | 'gray';
 interface Tool {
@@ -142,7 +145,31 @@ const READY = [
   'rooms',
   'courses',
   'evaluations',
+  'fitness',
 ];
+const TOOLS = SECTIONS.flatMap((section) => section.tools);
+const pinnedTools = computed(() =>
+  props.pinned
+    .map((id) => TOOLS.find((item) => item.id === id))
+    .filter((item): item is Tool => !!item),
+);
+const visibleSections = computed(() =>
+  SECTIONS.map((section) => ({
+    title: section.title,
+    tools: section.tools.filter((item) => !props.pinned.includes(item.id)),
+  })),
+);
+const currentTool = computed(() => TOOLS.find((item) => item.id === tool.value));
+const title = computed(() => currentTool.value?.name ?? props.name);
+function pin(id: string) {
+  if (!props.pinned.includes(id)) emit('update-pinned', [id, ...props.pinned]);
+}
+function unpin(id: string) {
+  emit(
+    'update-pinned',
+    props.pinned.filter((item) => item !== id),
+  );
+}
 const features = ref<SchoolFeature[]>([]);
 const tool = ref('');
 const error = ref('');
@@ -190,6 +217,7 @@ async function open(id: string) {
     else if (id === 'calendar')
       calendar.value = (await bridge.schoolQuery({ type: 'calendar' })) as CalendarList;
   } catch (e) {
+    console.error('[campus] open', tool.value, e);
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -221,6 +249,7 @@ async function turn(delta: number) {
     if (tool.value === 'card') await loadCard();
     else if (tool.value === 'attendance') await loadStreams();
   } catch (e) {
+    console.error('[campus] page', tool.value, e);
     error.value = e instanceof Error ? e.message : String(e);
     page.value -= delta;
   } finally {
@@ -249,10 +278,35 @@ onMounted(async () => {
 
 <template>
   <section class="desktop-page">
-    <PageHeader :title="name" />
+    <PageHeader :title="title" />
     <template v-if="!tool">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
-      <SettingGroup v-for="section in SECTIONS" :key="section.title" :title="section.title">
+      <SettingGroup v-if="pinnedTools.length" title="常用">
+        <SettingRow
+          v-for="item in pinnedTools"
+          :key="item.id"
+          :title="item.name"
+          :description="item.description"
+        >
+          <template #leading
+            ><IconTile :size="32" :tone="item.tone"
+              ><component :is="item.icon" :size="16" /></IconTile
+          ></template>
+          <span class="badge" :class="{ accent: available(item.id) }">{{ badge(item.id) }}</span>
+          <button
+            class="btn ghost icon small"
+            :title="`将${item.name}移回原位置`"
+            :aria-label="`将${item.name}移回原位置`"
+            @click="unpin(item.id)"
+          >
+            <ArrowDown :size="14" />
+          </button>
+          <button class="btn small" :disabled="!available(item.id)" @click="open(item.id)">
+            {{ available(item.id) ? '打开' : '未开放' }}
+          </button>
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup v-for="section in visibleSections" :key="section.title" :title="section.title">
         <SettingRow
           v-for="item in section.tools"
           :key="item.id"
@@ -264,6 +318,14 @@ onMounted(async () => {
               ><component :is="item.icon" :size="16" /></IconTile
           ></template>
           <span class="badge" :class="{ accent: available(item.id) }">{{ badge(item.id) }}</span>
+          <button
+            class="btn ghost icon small"
+            :title="`将${item.name}置顶到常用`"
+            :aria-label="`将${item.name}置顶到常用`"
+            @click="pin(item.id)"
+          >
+            <ArrowUp :size="14" />
+          </button>
           <button class="btn small" :disabled="!available(item.id)" @click="open(item.id)">
             {{ available(item.id) ? '打开' : '未开放' }}
           </button>
