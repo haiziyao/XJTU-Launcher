@@ -53,7 +53,7 @@ impl Default for AppConfig {
             wallpaper: None,
             reduce_motion: false,
             show_seconds: true,
-            accent: "blue".into(),
+            accent: "#1f6fe5".into(),
             greeting: "把校园，放在手边。".into(),
             widgets: vec!["timetable".into(), "links".into(), "plugins".into()],
             plugin_order: vec![],
@@ -66,6 +66,16 @@ impl Default for AppConfig {
     }
 }
 
+// The accent is a #rrggbb colour; older configs still use the original names.
+fn bad_accent(value: &str) -> bool {
+    const LEGACY: [&str; 4] = ["sage", "blue", "violet", "amber"];
+    if LEGACY.contains(&value) {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    bytes.len() != 7 || bytes[0] != b'#' || !bytes[1..].iter().all(u8::is_ascii_hexdigit)
+}
+
 impl AppConfig {
     pub fn validate(&self) -> Result<(), String> {
         if !(130..=320).contains(&self.sidebar_width)
@@ -76,7 +86,7 @@ impl AppConfig {
                 })
             })
             || self.version != 1
-            || !["sage", "blue", "violet", "amber"].contains(&self.accent.as_str())
+            || bad_accent(&self.accent)
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
             || self

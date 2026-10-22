@@ -1,4 +1,5 @@
 import type { AppConfig, Course, Plugin, Timetable } from './types';
+import { DEFAULT_ACCENT } from './theme';
 
 export const DEFAULT_SIDEBAR_WIDTH = 140;
 
@@ -11,7 +12,7 @@ export const defaultConfig = (): AppConfig => ({
   wallpaper: null,
   reduceMotion: false,
   showSeconds: true,
-  accent: 'blue',
+  accent: DEFAULT_ACCENT,
   greeting: '把校园，放在手边。',
   widgets: ['timetable', 'links', 'plugins'],
   pluginOrder: [],

@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { SlidersHorizontal, Home, Server, Package, Download } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import {
+  Check,
+  Download,
+  Home,
+  Package,
+  Pipette,
+  Server,
+  SlidersHorizontal,
+} from 'lucide-vue-next';
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
+import { ACCENT_PRESETS, normalizeAccent } from '../theme';
 import PluginSourceSettings from './PluginSourceSettings.vue';
 import AppUpdateSettings from './AppUpdateSettings.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
@@ -20,6 +29,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
 const tab = ref<string>(props.initialSection || 'appearance');
+const accent = computed(() => normalizeAccent(props.config.accent));
+const customAccent = computed(() => !ACCENT_PRESETS.some((p) => p.value === accent.value));
+function setAccent(value: string) {
+  const next = normalizeAccent(value);
+  if (next !== accent.value) emit('update', { ...props.config, accent: next });
+}
 const sections = [
   { id: 'appearance', title: '外观与交互', icon: SlidersHorizontal },
   { id: 'home', title: '主页', icon: Home },
@@ -36,6 +51,43 @@ const sections = [
       <div class="settings-detail">
         <Transition name="section" mode="out-in">
           <div v-if="tab === 'appearance'" key="appearance">
+            <SettingGroup title="主题">
+              <SettingRow title="主题色" description="用于侧边栏选中项和界面的强调色">
+                <div class="accent-picker" role="group" aria-label="主题色">
+                  <button
+                    v-for="preset in ACCENT_PRESETS"
+                    :key="preset.value"
+                    type="button"
+                    class="accent-swatch"
+                    :class="{ active: accent === preset.value }"
+                    :style="{ '--swatch': preset.value }"
+                    :title="preset.name"
+                    :aria-label="preset.name"
+                    :aria-pressed="accent === preset.value"
+                    :disabled="saving"
+                    @click="setAccent(preset.value)"
+                  >
+                    <Check v-if="accent === preset.value" :size="12" aria-hidden="true" />
+                  </button>
+                  <label
+                    class="accent-swatch custom"
+                    :class="{ active: customAccent, picked: customAccent }"
+                    :style="{ '--swatch': accent }"
+                    title="自定义颜色"
+                  >
+                    <input
+                      type="color"
+                      :value="accent"
+                      :disabled="saving"
+                      aria-label="自定义主题色"
+                      @change="setAccent(($event.target as HTMLInputElement).value)"
+                    />
+                    <Check v-if="customAccent" :size="12" aria-hidden="true" />
+                    <Pipette v-else :size="12" aria-hidden="true" />
+                  </label>
+                </div>
+              </SettingRow>
+            </SettingGroup>
             <SettingGroup title="动态效果">
               <SettingRow title="减少动态效果" description="关闭导航、侧栏和页面的过渡动画">
                 <UiSwitch
@@ -94,6 +146,65 @@ const sections = [
 </template>
 
 <style scoped>
+.accent-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accent-swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--swatch);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration) ease;
+}
+.accent-swatch:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+.accent-swatch.active {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--swatch);
+}
+.accent-swatch.custom {
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.accent-swatch.custom.picked {
+  background: var(--swatch);
+  color: var(--accent-contrast);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+.accent-swatch.custom.active {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--swatch);
+}
+.accent-swatch.custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.accent-swatch.custom input:disabled {
+  cursor: default;
+}
 .settings-layout {
   display: block;
 }

@@ -7,7 +7,7 @@ export interface AppConfig {
   wallpaper: string | null;
   reduceMotion: boolean;
   showSeconds: boolean;
-  accent: 'sage' | 'blue' | 'violet' | 'amber';
+  accent: string;
   greeting: string;
   widgets: string[];
   pluginOrder: string[];

@@ -32,6 +32,7 @@ import TimetableView from './components/TimetableView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
+import { applyAccent, normalizeAccent } from './theme';
 import './ui.css';
 import './pages.css';
 import './desktop-shell.css';
@@ -58,6 +59,8 @@ function openSettings(
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
+// Accent tokens live on the document root so teleported dialogs inherit them too.
+watch(() => config.value.accent, applyAccent, { immediate: true });
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
@@ -238,7 +241,7 @@ onMounted(async () => {
   const results = await Promise.allSettled([bridge.config(), bridge.plugins(), bridge.account()]);
   if (disposed) return;
   if (results[0].status === 'fulfilled') {
-    config.value = results[0].value;
+    config.value = { ...results[0].value, accent: normalizeAccent(results[0].value.accent) };
     configLoaded.value = true;
   } else error.value = errorText(results[0].reason);
   if (results[1].status === 'fulfilled') pluginList.value = results[1].value;
