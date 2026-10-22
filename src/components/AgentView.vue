@@ -1125,6 +1125,8 @@ onBeforeUnmount(() => {
   font-size: 12.5px;
 }
 .agent-composer-wrap {
+  position: relative;
+  z-index: 22;
   padding: 8px 0 0;
 }
 .agent-composer {

@@ -239,17 +239,14 @@ function commitCreating() {
   background: var(--surface);
   box-shadow: 10px 0 30px rgba(15, 23, 42, 0.12);
   overflow-y: auto;
-  /* Only the last row reaching the composer fades out. */
+  /* Solid until the very bottom of the page, then a short fade; the padded
+     list keeps every entry above it, so scrolling never hides one. */
   -webkit-mask-image: linear-gradient(
     to bottom,
-    #000 calc(100% - 180px),
-    transparent calc(100% - 140px)
+    #000 calc(100% - 80px),
+    transparent calc(100% - 40px)
   );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - 180px),
-    transparent calc(100% - 140px)
-  );
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 80px), transparent calc(100% - 40px));
 }
 .history-head {
   display: flex;
