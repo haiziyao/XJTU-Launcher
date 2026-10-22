@@ -3,7 +3,6 @@ import { computed, onMounted, ref, type Component } from 'vue';
 import {
   Activity,
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   BarChart3,
   BookMarked,
@@ -11,6 +10,7 @@ import {
   BookOpenText,
   CalendarCheck,
   CalendarDays,
+  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   CreditCard,
@@ -254,6 +254,13 @@ async function open(id: string) {
   }
 }
 
+/** Return to the tool list from a sub-view. */
+function close() {
+  tool.value = '';
+  error.value = '';
+  page.value = 1;
+}
+
 async function loadCard() {
   const [start, end] = range(30);
   const [card, list] = await Promise.all([
@@ -308,7 +315,22 @@ onMounted(async () => {
 
 <template>
   <section class="desktop-page">
-    <PageHeader :title="title" />
+    <PageHeader :title="title">
+      <template v-if="tool" #title>
+        <nav class="campus-breadcrumb" aria-label="当前位置">
+          <button
+            type="button"
+            class="campus-breadcrumb-parent"
+            :title="`返回${name}`"
+            @click="close"
+          >
+            {{ name }}
+          </button>
+          <ChevronRight :size="14" :stroke-width="2" aria-hidden="true" />
+          <span aria-current="page">{{ title }}</span>
+        </nav>
+      </template>
+    </PageHeader>
     <template v-if="!tool">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
       <SettingGroup v-if="pinnedTools.length" title="常用">
@@ -364,9 +386,6 @@ onMounted(async () => {
     </template>
 
     <template v-else>
-      <button class="back-button" @click="tool = ''">
-        <ArrowLeft :size="14" /><span>{{ name }}</span>
-      </button>
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
 
       <template v-if="tool === 'card'">
@@ -539,6 +558,30 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.campus-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.campus-breadcrumb-parent {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--duration-fast) ease;
+}
+.campus-breadcrumb-parent:hover {
+  color: var(--accent);
+}
+.campus-breadcrumb svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
 .card-balance {
   font-size: 18px;
   font-weight: 600;

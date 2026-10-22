@@ -5,7 +5,9 @@ defineProps<{ title: string; description?: string }>();
 <template>
   <header class="page-header">
     <div class="page-header-copy">
-      <h1>{{ title }}</h1>
+      <h1>
+        <slot name="title">{{ title }}</slot>
+      </h1>
       <p v-if="description || $slots.description">
         <slot name="description">{{ description }}</slot>
       </p>
