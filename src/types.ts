@@ -47,6 +47,14 @@ export interface AccountStatus {
   degree: 'undergraduate' | 'postgraduate' | null;
   apiKeySet: boolean;
 }
+/** Result of the sidebar self-check probe against the campus API. */
+export interface CampusCheck {
+  bound: boolean;
+  online: boolean;
+  message: string;
+}
+/** Animation state of the sidebar pet. */
+export type PetState = 'idle' | 'checking' | 'ok' | 'warn';
 export interface Course {
   name: string;
   teacher: string;

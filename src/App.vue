@@ -18,7 +18,8 @@ import { initializeMarket } from './market';
 import { initializeUpdates } from './updates';
 import { bridge, native } from './bridge';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
-import type { AccountStatus, AppConfig, PluginList, Timetable } from './types';
+import type { AccountStatus, AppConfig, PetState, PluginList, Timetable } from './types';
+import SidebarPet from './components/SidebarPet.vue';
 import HomeView from './components/HomeView.vue';
 import AccountsView from './components/AccountsView.vue';
 import PersonalView from './components/PersonalView.vue';
@@ -70,6 +71,9 @@ const ready = ref(false);
 const error = ref('');
 const saving = ref(false);
 const now = ref(new Date());
+const petState = ref<PetState>('idle');
+const petMessage = ref('');
+let petTimer: ReturnType<typeof setTimeout> | undefined;
 const macNative = native && /Mac/.test(navigator.userAgent);
 // The embedded macOS title bar paints the window buttons over the rail's top-left.
 const sidebarCollapsedWidth = macNative ? 76 : 56;
@@ -185,6 +189,38 @@ function onKey(event: KeyboardEvent) {
     toggleSidebar();
   }
 }
+// Clicking the sidebar pet refreshes the background state that has to stay alive
+// even though the bound account does not change — today that is the campus session.
+async function checkCampusSession() {
+  if (petState.value === 'checking') return;
+  if (petTimer) clearTimeout(petTimer);
+  petState.value = 'checking';
+  petMessage.value = '';
+  const started = performance.now();
+  let next: PetState = 'warn';
+  let message = '';
+  try {
+    const result = await bridge.checkCampusSession();
+    next = result.online ? 'ok' : 'warn';
+    message = result.message;
+    // A bound account that lost its session needs the page-level notice.
+    if (result.bound && !result.online) error.value = result.message;
+  } catch (e) {
+    message = errorText(e);
+    error.value = message;
+  }
+  // Keep the thinking pose on screen long enough to read.
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(0, 900 - (performance.now() - started))),
+  );
+  if (disposed) return;
+  petMessage.value = message;
+  petState.value = next;
+  petTimer = setTimeout(() => {
+    petState.value = 'idle';
+    petMessage.value = '';
+  }, 2600);
+}
 async function openLink(url: string) {
   try {
     await bridge.openUrl(url);
@@ -276,6 +312,7 @@ onBeforeUnmount(() => {
   disposed = true;
   unlisten?.();
   if (timer) clearInterval(timer);
+  if (petTimer) clearTimeout(petTimer);
   window.removeEventListener('keydown', onKey);
 });
 </script>
@@ -299,6 +336,7 @@ onBeforeUnmount(() => {
   >
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
       <div class="sidebar-top-space" aria-hidden="true"></div>
+      <SidebarPet :state="petState" :message="petMessage" @check="checkCampusSession" />
       <nav ref="navigation" class="desktop-navigation" aria-label="主导航">
         <span
           class="nav-indicator"

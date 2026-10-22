@@ -545,6 +545,66 @@ async fn query_timetable(
     Ok(timetable)
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CampusCheck {
+    bound: bool,
+    online: bool,
+    message: String,
+}
+
+/// Sidebar self-check: a bound account can still lose its campus/WebVPN session,
+/// so ask the campus API once and report what the saved session can do.
+#[tauri::command]
+async fn check_campus_session(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<CampusCheck, String> {
+    main_only(&window)?;
+    let generation = state.generation.load(Ordering::SeqCst);
+    let session = {
+        let _guard = state.auth_lock.lock().await;
+        let path = accounts_path(&app)?;
+        let book = accounts::load(&path)?;
+        if let Some(account) = book.active() {
+            Some(vault::Session {
+                degree: account.degree.clone(),
+                token: account.token.clone(),
+                mode: account.mode,
+                cookies: Some(account.cookies.clone()),
+            })
+        } else if !path.exists() {
+            vault::session()?
+        } else {
+            None
+        }
+    };
+    let Some(session) = session else {
+        return Ok(CampusCheck {
+            bound: false,
+            online: false,
+            message: "未绑定校园账号".into(),
+        });
+    };
+    let result = campus::probe(&session).await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账户状态已变化，请重新检查".into());
+    }
+    Ok(match result {
+        Ok(()) => CampusCheck {
+            bound: true,
+            online: true,
+            message: "校园会话正常".into(),
+        },
+        Err(message) => CampusCheck {
+            bound: true,
+            online: false,
+            message,
+        },
+    })
+}
+
 #[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,
@@ -911,6 +971,7 @@ pub fn run() {
             logout,
             save_api_key,
             query_timetable,
+            check_campus_session,
             open_external
         ])
         .run(tauri::generate_context!())

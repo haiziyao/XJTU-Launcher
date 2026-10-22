@@ -166,6 +166,14 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
         .collect()
 }
 
+/// Lightweight request behind the sidebar self-check: it reuses the timetable's
+/// first call to tell a live campus/VPN session from an expired one.
+pub async fn probe(session: &crate::vault::Session) -> Result<(), String> {
+    get(session, "/student/service/timetable/semesters", &[])
+        .await
+        .map(|_| ())
+}
+
 pub async fn timetable(session: &crate::vault::Session) -> Result<Timetable, String> {
     let semesters: Vec<Semester> =
         serde_json::from_value(get(session, "/student/service/timetable/semesters", &[]).await?)
