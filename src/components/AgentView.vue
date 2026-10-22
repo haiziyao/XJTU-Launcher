@@ -882,7 +882,7 @@ onBeforeUnmount(() => {
   width: fit-content;
   padding: 8px 13px;
   border-radius: 14px;
-  background: var(--surface-sunken);
+  background: var(--accent-soft);
   color: var(--text);
   font-size: 14px;
   line-height: 1.6;
@@ -1263,12 +1263,14 @@ onBeforeUnmount(() => {
   background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
-  background: rgba(255, 255, 255, 0.92);
+  background-color: rgba(255, 255, 255, 0.9);
+  background-image: linear-gradient(var(--accent-tint), var(--accent-tint));
 }
 .desktop-shell.has-wallpaper .agent-assistant {
   padding: 8px 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.86);
+  background-color: rgba(255, 255, 255, 0.86);
+  background-image: linear-gradient(var(--accent-wash), var(--accent-wash));
 }
 .desktop-shell.has-wallpaper .agent-task {
   border-color: var(--panel-border);
