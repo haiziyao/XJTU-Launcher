@@ -197,6 +197,13 @@ pub async fn reachable(
         .is_ok()
 }
 
+/// Whether the saved session can still fetch authenticated campus data.
+pub async fn session_valid(session: &crate::vault::Session) -> bool {
+    get(session, "/student/service/timetable/semesters", &[])
+        .await
+        .is_ok()
+}
+
 pub async fn timetable(session: &crate::vault::Session) -> Result<Timetable, String> {
     let semesters: Vec<Semester> =
         serde_json::from_value(get(session, "/student/service/timetable/semesters", &[]).await?)

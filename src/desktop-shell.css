@@ -136,14 +136,16 @@
   white-space: nowrap;
   overflow: hidden;
 }
-/* In the compact rail the label becomes a short divider at the same height. */
+/* In the compact rail the label becomes a short divider at the same height.
+   top 13px balances the 6px section gap above against the 2px item gap plus
+   the label's remaining height below. */
 .sidebar-group-label::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 18px;
-  width: 20px;
-  margin-left: -10px;
+  top: 13px;
+  width: 28px;
+  margin-left: -14px;
   border-top: 1px solid var(--border-strong);
   opacity: 0;
   transition: opacity var(--duration) ease;

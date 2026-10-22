@@ -550,7 +550,57 @@ async fn query_timetable(
 struct NetworkCheck {
     /// campus | vpn | offline | unbound
     environment: &'static str,
-    message: &'static str,
+    message: String,
+}
+
+enum SessionRefresh {
+    Refreshed,
+    NeedsManual,
+}
+
+/// Re-run the saved account's login with its stored password. Only used by the
+/// explicit sidebar self-check; the password never leaves this process.
+async fn refresh_saved_session(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<SessionRefresh, String> {
+    let path = accounts_path(app)?;
+    let (account_id, username, degree, password) = {
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("未绑定校园账号")?;
+        let saved = record.password.as_ref().ok_or("此账号未保存密码")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            record.degree.clone(),
+            saved.0.clone(),
+        )
+    };
+    let mut login = auth::Login::begin(degree).await?;
+    login
+        .act(auth::Action::Credentials {
+            username,
+            password,
+            remember_password: true,
+            captcha: String::new(),
+        })
+        .await?;
+    let Some(account) = login.completed.take() else {
+        // The school login page asked for a captcha (or another verification step).
+        return Ok(SessionRefresh::NeedsManual);
+    };
+    let _guard = state.auth_lock.lock().await;
+    let mut book = accounts::load(&path)?;
+    if book.active().map(|a| a.id.as_str()) != Some(account_id.as_str()) {
+        return Ok(SessionRefresh::NeedsManual);
+    }
+    book.upsert(account)?;
+    accounts::save(&path, &book)?;
+    drop(_guard);
+    state.generation.fetch_add(1, Ordering::SeqCst);
+    campus_browser::close_all(app)?;
+    account_changed(app, "校园会话已刷新");
+    Ok(SessionRefresh::Refreshed)
 }
 
 /// Sidebar self-check: try the campus host through a direct connection first,
@@ -583,7 +633,7 @@ async fn check_network(
     let Some(session) = session else {
         return Ok(NetworkCheck {
             environment: "unbound",
-            message: "未绑定校园账号，无法检测校园网络",
+            message: "未绑定校园账号，无法检测校园网络".into(),
         });
     };
     let direct = campus::reachable(&session, network::AccessMode::Direct).await;
@@ -591,25 +641,32 @@ async fn check_network(
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账户状态已变化，请重新检查".into());
     }
-    Ok(if direct {
-        NetworkCheck {
-            environment: "campus",
-            message: "校园网环境下，网络可正常访问",
-        }
+    let (environment, mut message) = if direct {
+        ("campus", "校园网环境下，网络可正常访问".to_string())
     } else if vpn {
-        NetworkCheck {
-            environment: "vpn",
-            message: "检测到非校园网环境",
-        }
+        ("vpn", "检测到非校园网环境".to_string())
     } else {
-        NetworkCheck {
+        return Ok(NetworkCheck {
             environment: "offline",
-            message: "校园网和 vpn 均不可用",
+            message: "校园网和 vpn 均不可用".into(),
+        });
+    };
+    // A bound account can outlive its VPN session; refresh it on the spot when
+    // the saved password allows an unattended login.
+    if !campus::session_valid(&session).await {
+        match refresh_saved_session(&app, &state).await {
+            Ok(SessionRefresh::Refreshed) => message.push_str("，校园会话已刷新"),
+            Ok(SessionRefresh::NeedsManual) => {
+                message.push_str("，校园会话已失效，请手动重新登录")
+            }
+            Err(error) => message.push_str(&format!("，自动登录失败：{error}")),
         }
+    }
+    Ok(NetworkCheck {
+        environment,
+        message,
     })
-}
-
-#[tauri::command]
+}#[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,
     window: WebviewWindow,
