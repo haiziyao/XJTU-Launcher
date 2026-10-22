@@ -128,36 +128,27 @@
 }
 .sidebar-group-label {
   position: relative;
-  display: flex;
-  align-items: center;
-  height: 14px;
-  padding: 0 11px;
+  height: 30px;
+  padding: 12px 11px 0;
   color: var(--text-tertiary);
   font-size: 11px;
-  line-height: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
 }
 /* The group block keeps one height in both states, so the plugin icons never
-   shift vertically when the sidebar toggles. The divider sits 8px from the
-   icons above and below once the item gap is counted. */
+   shift vertically when the sidebar toggles. top 13px balances the 6px section
+   gap above against the 2px item gap plus the rest of the label below. */
 .sidebar-group-label::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 8px;
+  top: 13px;
   width: 28px;
   margin-left: -14px;
   border-top: 1px solid var(--border-strong);
   opacity: 0;
   transition: opacity var(--duration) ease;
-}
-.nav-section:has(.sidebar-group-label) {
-  margin-top: 0;
-}
-.sidebar-collapsed .sidebar-group-label {
-  padding: 0;
 }
 .sidebar-collapsed .sidebar-group-label::after {
   opacity: 1;
