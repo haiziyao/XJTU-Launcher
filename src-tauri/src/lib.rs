@@ -203,6 +203,8 @@ struct AccountStatus {
     api_key_set: bool,
     /// Current access mode: some services are only reachable directly.
     access_mode: Option<network::AccessMode>,
+    /// Whether this account also holds a direct session for card/fitness/profile.
+    direct_session: bool,
 }
 
 #[tauri::command]
@@ -224,6 +226,9 @@ async fn account_status(
     let access_mode = active
         .map(|account| account.mode)
         .or_else(|| legacy.as_ref().map(|session| session.mode));
+    let direct_session = active
+        .and_then(|account| account.direct_cookies.as_ref())
+        .is_some();
     Ok(AccountStatus {
         connected: active.is_some() || legacy.is_some(),
         degree: active
@@ -234,6 +239,7 @@ async fn account_status(
         avatar: active.and_then(|a| a.avatar.clone()),
         api_key_set: vault::api_key_set()?,
         access_mode,
+        direct_session,
     })
 }
 
@@ -628,6 +634,56 @@ async fn refresh_saved_session(
     Ok(SessionRefresh::Refreshed)
 }
 
+/// Services such as the campus card refuse WebVPN sessions, so they get a CAS
+/// session of their own. The UI calls this before opening one of those tools and
+/// the self-check renews it in the background; a captcha or phone step falls
+/// back to the "VPN 下不可用" label.
+#[tauri::command]
+async fn refresh_direct_session(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    main_only(&window)?;
+    renew_direct_session(&app, &state).await?;
+    Ok(true)
+}
+
+/// Shared by the command above and the self-check's quiet renewal.
+async fn renew_direct_session(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let path = accounts_path(app)?;
+    let (account_id, username, password) = {
+        let _guard = state.auth_lock.lock().await;
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("请先登录校园账号")?;
+        let saved = record
+            .password
+            .as_ref()
+            .ok_or("此账号未保存密码，无法自动直连")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            zeroize::Zeroizing::new(saved.0.clone()),
+        )
+    };
+    let generation = state.generation.load(Ordering::SeqCst);
+    let cookies = auth::direct_login(school::CARD_LOGIN, &username, &password).await?;
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新打开".into());
+    }
+    let mut book = accounts::load(&path)?;
+    book.accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?
+        .direct_cookies = Some(cookies);
+    accounts::save(&path, &book)
+}
+
 /// Sidebar self-check: try the campus host through a direct connection first,
 /// then through WebVPN, so the pet can report which network is in effect.
 #[tauri::command]
@@ -701,6 +757,17 @@ async fn check_network(
                     message: format!("自动登录失败：{error}，请手动重新登录"),
                 })
             }
+        }
+    }
+    // Direct-only tools (card, fitness) need their own CAS session. Prepare it
+    // here so opening one does not have to wait; failures leave the existing
+    // "VPN 下不可用" label untouched.
+    if let Some(account) = &account {
+        if account.mode == network::AccessMode::Webvpn
+            && account.direct_cookies.is_none()
+            && account.password.is_some()
+        {
+            let _ = renew_direct_session(&app, &state).await;
         }
     }
     Ok(NetworkCheck { tone, message })
@@ -1219,6 +1286,7 @@ pub fn run() {
             logout,
             save_api_key,
             query_timetable,
+            refresh_direct_session,
             check_network,
             open_external
         ])

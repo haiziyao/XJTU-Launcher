@@ -49,6 +49,8 @@ export interface AccountStatus {
   degree: 'undergraduate' | 'postgraduate' | null;
   apiKeySet: boolean;
   accessMode?: 'direct' | 'webvpn' | null;
+  /** Whether this account also holds a direct session for card/fitness/profile. */
+  directSession?: boolean;
 }
 /** Result of the sidebar network self-check. */
 export interface NetworkCheck {

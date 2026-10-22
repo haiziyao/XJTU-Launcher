@@ -230,6 +230,7 @@ mod tests {
                 mode: crate::network::AccessMode::Direct,
                 token: "test-token".into(),
                 cookies: "[]".into(),
+                direct_cookies: None,
                 password: Some(accounts::SavedPassword("test-password".into())),
             })
             .unwrap();

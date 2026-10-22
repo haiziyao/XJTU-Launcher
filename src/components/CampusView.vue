@@ -28,6 +28,7 @@ import CampusCourses from './campus/CampusCourses.vue';
 import CampusEvaluations from './campus/CampusEvaluations.vue';
 import CampusFitness from './campus/CampusFitness.vue';
 import { bridge } from '../bridge';
+import { directQuery, ensureDirectSession } from '../campusSession';
 import type {
   AttendanceStreams,
   CalendarList,
@@ -42,8 +43,9 @@ const props = defineProps<{
   name: string;
   pinned: string[];
   accessMode: 'direct' | 'webvpn' | null;
+  directSession?: boolean;
 }>();
-const emit = defineEmits<{ 'update-pinned': [ids: string[]] }>();
+const emit = defineEmits<{ 'update-pinned': [ids: string[]]; 'direct-session': [] }>();
 
 type Tone = 'blue' | 'green' | 'orange' | 'violet' | 'teal' | 'gray';
 interface Tool {
@@ -187,10 +189,13 @@ const calendar = ref<CalendarList | null>(null);
 const page = ref(1);
 
 const backend = (id: string) => features.value.find((feature) => feature.id === id)?.backend;
-// These services have no WebVPN route; the app marks them instead of hiding them.
+const directReady = ref(false);
+const hasDirect = computed(() => props.directSession || directReady.value);
+// These services have no WebVPN route; a direct login unlocks them.
 const DIRECT_ONLY = ['card', 'fitness', 'profile'];
-const vpnBlocked = (id: string) => props.accessMode === 'webvpn' && DIRECT_ONLY.includes(id);
-const available = (id: string) => READY.includes(id) && !vpnBlocked(id);
+const vpnBlocked = (id: string) =>
+  props.accessMode === 'webvpn' && !hasDirect.value && DIRECT_ONLY.includes(id);
+const available = (id: string) => READY.includes(id);
 const badge = (id: string) => {
   if (vpnBlocked(id)) return 'VPN 下不可用';
   if (available(id)) return '可用';
@@ -198,6 +203,21 @@ const badge = (id: string) => {
   if (!state) return '…';
   return state === 'pending' ? '待接入' : '界面待实现';
 };
+
+/** Direct-only tools log in on demand; a failed login explains itself. */
+async function openDirect(id: string): Promise<boolean> {
+  if (props.accessMode !== 'webvpn' || hasDirect.value || !DIRECT_ONLY.includes(id)) return true;
+  try {
+    await ensureDirectSession();
+    directReady.value = true;
+    emit('direct-session');
+    return true;
+  } catch (e) {
+    console.error('[campus] direct login', id, e);
+    error.value = e instanceof Error ? e.message : String(e);
+    return false;
+  }
+}
 
 function range(days: number): [string, string] {
   const end = new Date();
@@ -212,6 +232,8 @@ function range(days: number): [string, string] {
 
 async function open(id: string) {
   if (!available(id)) return;
+  error.value = '';
+  if (!(await openDirect(id))) return;
   tool.value = id;
   error.value = '';
   page.value = 1;
@@ -235,11 +257,11 @@ async function open(id: string) {
 async function loadCard() {
   const [start, end] = range(30);
   const [card, list] = await Promise.all([
-    bridge.schoolQuery({ type: 'card' }),
-    bridge.schoolQuery({ type: 'cardTransactions', start, end, page: page.value }),
+    directQuery<CardInfo>({ type: 'card' }),
+    directQuery<CardTransactions>({ type: 'cardTransactions', start, end, page: page.value }),
   ]);
-  info.value = card as CardInfo;
-  transactions.value = list as CardTransactions;
+  info.value = card;
+  transactions.value = list;
 }
 
 async function loadStreams() {

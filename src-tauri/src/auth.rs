@@ -199,6 +199,105 @@ fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
     Ok(format!("__RSA__{}", STANDARD.encode(bytes)))
 }
 
+/// An unattended password login that starts at a service, so services which
+/// reject WebVPN get a real CAS session of their own. The returned cookie jar
+/// holds that CAS session plus whatever the service sets on the way back.
+/// Captcha and two-step verification are reported instead of guessed.
+pub async fn direct_login(service: &str, username: &str, password: &str) -> Result<String, String> {
+    if username.trim().is_empty() || password.is_empty() || password.len() > 512 {
+        return Err("保存的校园密码无效，请重新登录".into());
+    }
+    let service = Url::parse(service).map_err(|_| "直连服务地址无效")?;
+    if !network::trusted(&service) {
+        return Err("直连服务地址不受支持".into());
+    }
+    let degree = "undergraduate";
+    let transport = Transport::new(None)?;
+    let mut page = transport.page(&service, AccessMode::Direct, degree).await?;
+    if page.url.host_str() != Some("login.xjtu.edu.cn") {
+        // Without the CAS page there is nothing to submit; do not keep a
+        // service session that cannot authenticate the user.
+        return Err("直连登录未能打开校园认证页面，请稍后重试".into());
+    }
+    let first = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请手动登录")?;
+    let response = transport
+        .get(
+            &Url::parse(&format!("{CAS}/cas/jwt/publicKey")).unwrap(),
+            AccessMode::Direct,
+        )
+        .await?;
+    if !response.status().is_success() {
+        return Err("校园登录公钥获取失败".into());
+    }
+    let pem = String::from_utf8(network::limited_bytes(response, 32 * 1024).await?)
+        .map_err(|_| "校园登录公钥格式不受支持")?;
+    let encrypted = Zeroizing::new(encrypt_password(password, &pem)?);
+    let visitor = Uuid::new_v4().simple().to_string();
+    // The detection call also opens the server-side verification state that the
+    // password submission must echo back, even when no phone step is needed.
+    let mut mfa_state = String::new();
+    if first.mfa_enabled {
+        let url = Url::parse(&format!("{CAS}/cas/mfa/detect")).unwrap();
+        let response = transport
+            .client
+            .post(Transport::address(&url, AccessMode::Direct)?)
+            .header("Referer", page.url.as_str())
+            .form(&[
+                ("username", username),
+                ("password", encrypted.as_str()),
+                ("fpVisitorId", visitor.as_str()),
+                ("loginType", "passwordLogin"),
+            ])
+            .send()
+            .await
+            .map_err(|_| "无法检测校园两步验证")?;
+        let data = network::json(response).await?;
+        mfa_state = data
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let need = data.get("need").and_then(Value::as_bool).unwrap_or(true);
+        if need {
+            return Err("该账号需要手机验证，无法自动直连".into());
+        }
+    }
+    // The campus CAS may show one confirmation step before the service callback.
+    for attempt in 0..2 {
+        let form = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请手动登录")?;
+        let response = transport
+            .client
+            .post(Transport::address(&page.url, AccessMode::Direct)?)
+            .form(&[
+                ("username", username.to_string()),
+                ("password", encrypted.to_string()),
+                ("execution", form.execution),
+                ("_eventId", "submit".into()),
+                ("submit1", "Login1".into()),
+                ("fpVisitorId", visitor.clone()),
+                ("captcha", String::new()),
+                ("currentMenu", "1".into()),
+                ("failN", attempt.to_string()),
+                ("mfaState", mfa_state.clone()),
+                ("geolocation", String::new()),
+                ("trustAgent", "false".into()),
+            ])
+            .send()
+            .await
+            .map_err(|_| "校园登录提交失败，请检查网络")?;
+        page = transport
+            .follow(response, AccessMode::Direct, degree)
+            .await?;
+        if page.url.host_str() != Some("login.xjtu.edu.cn") {
+            return transport.snapshot();
+        }
+        if has_error(&page.html) {
+            return Err("校园账号或密码不正确，请重新登录校园账号".into());
+        }
+    }
+    Err("直连登录需要验证码，请稍后重试或手动登录".into())
+}
+
 pub struct Login {
     id: String,
     pub created: Instant,
@@ -475,6 +574,7 @@ impl Login {
                         mode: self.mode,
                         token,
                         cookies: self.transport.snapshot()?,
+                        direct_cookies: None,
                     });
                     self.phase = Phase::Success;
                     self.page = None;

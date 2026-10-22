@@ -37,7 +37,12 @@ pub struct Client {
 
 impl Client {
     pub async fn connect(account: &Account) -> Result<Self, String> {
-        let transport = Transport::new(Some(&account.cookies))?;
+        // The fitness platform only accepts a direct CAS session.
+        let saved = account
+            .direct_cookies
+            .as_deref()
+            .unwrap_or(&account.cookies);
+        let transport = Transport::new(Some(saved))?;
         let http = Http::builder()
             .cookie_provider(transport.cookies.clone())
             .redirect(Policy::custom(|attempt| {

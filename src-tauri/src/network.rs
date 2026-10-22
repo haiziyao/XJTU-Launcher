@@ -35,6 +35,9 @@ pub fn trusted(url: &Url) -> bool {
                     | "jwxt.xjtu.edu.cn"
                     | "dean.xjtu.edu.cn"
                     | "org.xjtu.edu.cn"
+                    | "ncard.xjtu.edu.cn"
+                    | "tyxylp.xjtu.edu.cn"
+                    | "hello.xjtu.edu.cn"
             )
         )
 }

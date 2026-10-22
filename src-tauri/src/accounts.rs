@@ -37,6 +37,9 @@ pub struct Account {
     pub mode: AccessMode,
     pub token: String,
     pub cookies: String,
+    /// Separate CAS session for services that refuse WebVPN (card, fitness, profile).
+    #[serde(default)]
+    pub direct_cookies: Option<String>,
     #[serde(default)]
     pub password: Option<SavedPassword>,
 }
@@ -155,6 +158,9 @@ impl Book {
                     .is_some_and(|p| p.0.is_empty() || p.0.len() > 512)
                 || a.token.is_empty()
                 || a.cookies.len() > 2 * 1024 * 1024
+                || a.direct_cookies
+                    .as_ref()
+                    .is_some_and(|cookies| cookies.len() > 2 * 1024 * 1024)
             {
                 return Err("校园账号数据格式损坏".into());
             }
@@ -300,10 +306,10 @@ mod tests {
         let mut account = record("student");
         let mut old = serde_json::to_value(&account).unwrap();
         old.as_object_mut().unwrap().remove("password");
-        assert!(serde_json::from_value::<Account>(old)
-            .unwrap()
-            .password
-            .is_none());
+        old.as_object_mut().unwrap().remove("directCookies");
+        let loaded = serde_json::from_value::<Account>(old).unwrap();
+        assert!(loaded.password.is_none());
+        assert!(loaded.direct_cookies.is_none());
         account.password = Some(SavedPassword("saved".into()));
         let mut book = Book::default();
         let id = book.upsert(account).unwrap().id;
@@ -322,6 +328,7 @@ mod tests {
             mode: AccessMode::Direct,
             token: format!("token-{user}"),
             cookies: "[]".into(),
+            direct_cookies: None,
             password: None,
         }
     }

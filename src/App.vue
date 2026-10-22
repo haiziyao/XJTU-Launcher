@@ -157,6 +157,16 @@ async function reloadAccount() {
     error.value = errorText(e);
   }
 }
+/** A direct session was added; refresh flags without dropping the timetable. */
+async function refreshAccountStatus() {
+  const generation = ++accountGeneration;
+  try {
+    const next = await bridge.account();
+    if (!disposed && generation === accountGeneration) account.value = next;
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
 const timetableEnabled = computed(() =>
   sortedPlugins.value.some(
     (p) => p.page.type === 'timetable' && !config.value.disabledPlugins.includes(p.id),
@@ -620,7 +630,9 @@ onBeforeUnmount(() => {
                 :name="activePlugin.name"
                 :pinned="config.campusPinned"
                 :access-mode="account.accessMode ?? null"
+                :direct-session="account.directSession ?? false"
                 @update-pinned="setPinnedTools"
+                @direct-session="refreshAccountStatus"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"

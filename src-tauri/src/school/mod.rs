@@ -7,6 +7,9 @@ mod fitness;
 mod queries;
 mod transport;
 
+/// SSO entry used when a direct session is created; the card service is the
+/// most common reason to need one.
+pub(crate) use card::LOGIN_URL as CARD_LOGIN;
 pub use queries::{query, Query};
 use serde::Serialize;
 

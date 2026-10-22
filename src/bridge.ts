@@ -125,6 +125,10 @@ export const bridge = {
     requireNative();
     return invoke('check_network');
   },
+  async refreshDirectSession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_direct_session');
+  },
   // Native campus authentication and local account management.
   async accounts(): Promise<CampusAccountList> {
     requireNative();

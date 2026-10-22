@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use url::Url;
 
-const LOGIN_URL: &str =
+pub(crate) const LOGIN_URL: &str =
     "https://ncard.xjtu.edu.cn/berserker-base/redirect?type=login&loginFrom=h5&synAccessSource=h5";
 const TOKEN_URL: &str = "https://ncard.xjtu.edu.cn/berserker-auth/oauth/token";
 const USER_URL: &str = "https://ncard.xjtu.edu.cn/berserker-base/user?synAccessSource=h5";
@@ -16,7 +16,6 @@ const TURNOVER_URL: &str = "https://ncard.xjtu.edu.cn/berserker-search/search/pe
 // Public client credentials used by the H5 campus-card frontend.
 const BASIC_AUTH: &str =
     "Basic bW9iaWxlX3NlcnZpY2VfcGxhdGZvcm06bW9iaWxlX3NlcnZpY2VfcGxhdGZvcm1fc2VjcmV0";
-const MOBILE_UA: &str = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
 pub struct Client {
     http: Http,
@@ -34,7 +33,12 @@ fn card_host(url: &Url) -> bool {
 }
 
 fn http_client(account: &Account) -> Result<Http, String> {
-    let transport = crate::network::Transport::new(Some(&account.cookies))?;
+    // The card service rejects WebVPN sessions; prefer its own direct CAS login.
+    let saved = account
+        .direct_cookies
+        .as_deref()
+        .unwrap_or(&account.cookies);
+    let transport = crate::network::Transport::new(Some(saved))?;
     Http::builder()
         .cookie_provider(transport.cookies.clone())
         .redirect(Policy::custom(|attempt| {
@@ -44,7 +48,9 @@ fn http_client(account: &Account) -> Result<Http, String> {
                 attempt.stop()
             }
         }))
-        .user_agent(MOBILE_UA)
+        // The CAS session is bound to the user agent that created it, so the
+        // card client must keep the shared transport agent; ncard accepts it.
+        .user_agent(crate::network::USER_AGENT)
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|_| "无法创建校园卡连接".into())

@@ -5,7 +5,7 @@ import SettingGroup from '../ui/SettingGroup.vue';
 import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
-import { bridge } from '../../bridge';
+import { directQuery } from '../../campusSession';
 import type { FitnessScore, FitnessYears } from '../../types';
 
 const years = ref<FitnessYears | null>(null);
@@ -22,7 +22,7 @@ async function loadYears() {
   loading.value = true;
   error.value = '';
   try {
-    years.value = (await bridge.schoolQuery({ type: 'fitness' })) as FitnessYears;
+    years.value = await directQuery<FitnessYears>({ type: 'fitness' });
     const preferred = years.value.rows.find((item) => item.checked) ?? years.value.rows[0];
     if (preferred) {
       year.value = preferred.year;
@@ -41,10 +41,10 @@ async function loadScore() {
   loading.value = true;
   error.value = '';
   try {
-    score.value = (await bridge.schoolQuery({
+    score.value = await directQuery<FitnessScore>({
       type: 'fitnessScore',
       year: year.value,
-    })) as FitnessScore;
+    });
   } catch (e) {
     console.error('[campus] fitness score', e);
     error.value = e instanceof Error ? e.message : String(e);

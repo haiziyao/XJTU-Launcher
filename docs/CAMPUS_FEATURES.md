@@ -41,10 +41,13 @@
 
 2026-10-23 补充：考勤流水与课程考勤查询已接入 `school_query`（`attendanceStreams` / `attendanceRecords`），复用账号保存的本科/研究生考勤业务 token，按账号当前直连或 WebVPN 模式访问。校园卡查询（`card` / `cardTransactions`）用已保存的 CAS Cookie 向 ncard 换临时令牌，支持余额与流水。两者页面尚未实现，未实机验收。
 
+2026-10-23 补充：账号现在可以同时保存两套会话。教务、考勤继续使用登录时保存的直连/WebVPN 会话；校园卡、体测等只接受直连的服务改用账号内新增的 `directCookies`（`auth.json`，旧账号缺省为空）。外部网络下首次打开这些工具（或点击侧边栏宠物触发自检）时，Rust 用已保存密码从校园卡登录地址发起一次 CAS 服务登录，成功后保存这套直连 Cookie；需要验证码或手机验证的账号无法自动完成，仍显示“VPN 下不可用”并可手动登录。直连查询遇到失效会续期一次再重试。
+
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 
 - `school_catalog`：校园能力清单及后端进度，现已接入插件市场校园列表，尚无新业务页面的项目显示待接入；`pending` 项不是可用功能。
-- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历、考勤、校园卡。
+- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历、考勤、校园卡、体测。
+- `refresh_direct_session`：为只接受直连的服务重建 CAS 会话，保存到账号的 `directCookies`；验证码、手机验证或未保存密码会返回错误，由界面提示。
 - `school_prepare_evaluations`：按当前账号重新读取开放问卷及真实选项，生成精确的待提交答案。模板等级 1–5 对应选项顺序；文字意见由用户提供，必填文字题为空时返回错误。支持逐题覆盖答案。预览不会发送评价。
 - `school_submit_evaluations`：消费一次性预览 ID 后逐份提交；账号、会话代次与 15 分钟有效期必须匹配。返回每份 `submitted/failed/skipped/cancelled/unknown` 结果，并发送 `school-evaluation-progress` 事件。网络结果不明时不自动重发，停止余下提交，提示刷新学校状态。
 - `school_cancel_evaluations`：丢弃尚未执行的预览，或在当前请求返回后停止后续提交。已经发送的请求不会宣称撤回成功。
