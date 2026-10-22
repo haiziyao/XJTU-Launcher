@@ -33,22 +33,26 @@ fn card_host(url: &Url) -> bool {
             .is_some_and(|host| host == "xjtu.edu.cn" || host.ends_with(".xjtu.edu.cn"))
 }
 
+fn http_client(account: &Account) -> Result<Http, String> {
+    let transport = crate::network::Transport::new(Some(&account.cookies))?;
+    Http::builder()
+        .cookie_provider(transport.cookies.clone())
+        .redirect(Policy::custom(|attempt| {
+            if card_host(attempt.url()) {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        }))
+        .user_agent(MOBILE_UA)
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|_| "无法创建校园卡连接".into())
+}
+
 impl Client {
     pub async fn connect(account: &Account) -> Result<Self, String> {
-        let transport = crate::network::Transport::new(Some(&account.cookies))?;
-        let http = Http::builder()
-            .cookie_provider(transport.cookies.clone())
-            .redirect(Policy::custom(|attempt| {
-                if card_host(attempt.url()) {
-                    attempt.follow()
-                } else {
-                    attempt.stop()
-                }
-            }))
-            .user_agent(MOBILE_UA)
-            .timeout(Duration::from_secs(20))
-            .build()
-            .map_err(|_| "无法创建校园卡连接")?;
+        let http = http_client(account)?;
         let response = http
             .get(LOGIN_URL)
             .send()
