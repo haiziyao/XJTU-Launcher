@@ -3,6 +3,7 @@ import { computed, onMounted, ref, type Component } from 'vue';
 import {
   Activity,
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   BarChart3,
   BookMarked,
@@ -329,6 +330,11 @@ onMounted(async () => {
           <ChevronRight :size="14" :stroke-width="2" aria-hidden="true" />
           <span aria-current="page">{{ title }}</span>
         </nav>
+      </template>
+      <template v-if="tool" #actions>
+        <button class="btn ghost small" @click="close">
+          <ArrowLeft :size="14" aria-hidden="true" />返回
+        </button>
       </template>
     </PageHeader>
     <template v-if="!tool">
