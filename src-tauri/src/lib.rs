@@ -632,21 +632,24 @@ async fn check_network(
 ) -> Result<NetworkCheck, String> {
     main_only(&window)?;
     let generation = state.generation.load(Ordering::SeqCst);
-    let session = {
+    let (session, account) = {
         let _guard = state.auth_lock.lock().await;
         let path = accounts_path(&app)?;
         let book = accounts::load(&path)?;
         if let Some(account) = book.active() {
-            Some(vault::Session {
-                degree: account.degree.clone(),
-                token: account.token.clone(),
-                mode: account.mode,
-                cookies: Some(account.cookies.clone()),
-            })
+            (
+                Some(vault::Session {
+                    degree: account.degree.clone(),
+                    token: account.token.clone(),
+                    mode: account.mode,
+                    cookies: Some(account.cookies.clone()),
+                }),
+                Some(account.clone()),
+            )
         } else if !path.exists() {
-            vault::session()?
+            (vault::session()?, None)
         } else {
-            None
+            (None, None)
         }
     };
     let Some(session) = session else {
@@ -673,7 +676,11 @@ async fn check_network(
     // A bound account can outlive its VPN session; refresh it on the spot when
     // the saved password allows an unattended login. A session that cannot be
     // renewed turns the whole result red.
-    if !campus::session_valid(&session).await {
+    let academic_ok = match &account {
+        Some(account) => school::academic_available(account).await,
+        None => true,
+    };
+    if !campus::session_valid(&session).await || !academic_ok {
         match refresh_saved_session(&app, &state).await {
             Ok(SessionRefresh::Refreshed) => message.push_str("，校园会话已刷新"),
             Ok(SessionRefresh::NeedsManual) => {

@@ -20,6 +20,12 @@ pub struct Feature {
     pub reference: &'static str,
 }
 
+/// Whether the saved account can still open the academic system. Only the
+/// undergraduate adapter has a lightweight session probe today.
+pub async fn academic_available(account: &crate::accounts::Account) -> bool {
+    account.degree != "undergraduate" || transport::Client::connect(account.clone()).await.is_ok()
+}
+
 /// Backend availability is separate from UI completion and real-account verification.
 pub fn catalog() -> Vec<Feature> {
     [
