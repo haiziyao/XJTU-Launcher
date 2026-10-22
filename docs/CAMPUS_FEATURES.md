@@ -22,7 +22,7 @@
 | 全校课程 | `jwxt/school_course.py` | Rust 学期/课程名/校区筛选及分页；未实机验收 |
 | 校历 | `jwxt/calendar.py` | Rust 图片链接解析，未知学年保留为空；未实机验收 |
 | 研究生成绩、课表与评教 | `gmis/`、`gste/` | 待适配；不能套用本科接口 |
-| 考勤统计与流水 | `attendance/attendance.py` | 待迁入，既有课表不等于考勤功能 |
+| 考勤统计与流水 | `attendance/attendance.py` | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收 |
 | 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 待适配 |
 | 通知订阅与推送 | `app/threads/NoticeThread.py` | 待适配 |
 | 校园卡余额与流水 | `card/campus_card.py` | 待适配 |
@@ -34,6 +34,8 @@
 参考仓库有实现不代表学校当前环境必然可用；所有新服务的真实账号联调单独记录。
 
 ## 当前后端接口
+
+2026-10-23 补充：考勤流水与课程考勤查询已接入 `school_query`（`attendanceStreams` / `attendanceRecords`），复用账号保存的本科/研究生考勤业务 token，按账号当前直连或 WebVPN 模式访问；页面尚未实现，未实机验收。
 
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 
@@ -51,7 +53,7 @@
 
 1. 按用户反馈修订页面参考稿，确认后接通现有插件管理及新的查询/评教页面。
 2. 验证本科教务的会话复用与请求格式，补站点自动重认证，实际提交由用户在客户端操作验收。
-3. 继续迁入研究生教务、考勤、思源学堂和校园生活模块，逐项标记实现/联调/可用状态。
+3. 继续迁入研究生教务、思源学堂和校园生活模块，逐项标记实现/联调/可用状态；考勤后台已适配，待实机验收。
 4. 实现完整 Agent：模型流式响应、工具循环、取消和重试、持久对话、文件与命令工具、校园插件工具；复用现有多厂商模型配置。
 5. Agent 扩展：MCP（stdio 与 Streamable HTTP）、Skills 发现与执行、长期记忆读写/检索/删除和跨对话恢复。Agent 数据继续放 `~/.xjtu-launcher/`，账号和密钥仍放 `auth.json`。
 

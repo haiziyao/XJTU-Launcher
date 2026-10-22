@@ -1,5 +1,6 @@
 //! Campus business adapters. Protocol research: docs/CAMPUS_FEATURES.md on the dev branch.
 //! This module never submits passwords or sends evaluation answers during a query.
+mod attendance;
 pub mod evaluation;
 mod queries;
 mod transport;
@@ -66,7 +67,7 @@ pub fn catalog() -> Vec<Feature> {
             "attendance",
             "考勤查询",
             "学习与教务",
-            "pending",
+            "undergraduate",
             "attendance/attendance.py",
         ),
         ("lms", "思源学堂", "学习与教务", "pending", "lms/lms.py"),
