@@ -1,7 +1,8 @@
 /* Design tokens shared by the shell, pages and UI components. */
 :root {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI',
+    'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --text: #1f2329;
@@ -54,6 +55,8 @@
   --duration: 200ms;
   --duration-slow: 300ms;
 
+  /* The UI has no dark theme yet; keep native controls light under Windows dark mode. */
+  color-scheme: light;
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--surface);

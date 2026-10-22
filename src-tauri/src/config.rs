@@ -73,6 +73,16 @@ impl Default for AppConfig {
     }
 }
 
+// Personal images are stored inline as data URLs produced by `personal_image`.
+fn bad_image(value: &Option<String>, formats: &[&str]) -> bool {
+    value.as_ref().is_some_and(|s| {
+        s.len() > 12 * 1024 * 1024
+            || !formats
+                .iter()
+                .any(|f| s.starts_with(&format!("data:image/{f};base64,")))
+    })
+}
+
 // The accent is a #rrggbb colour; older configs still use the original names.
 fn bad_accent(value: &str) -> bool {
     const LEGACY: [&str; 4] = ["sage", "blue", "violet", "amber"];
@@ -87,11 +97,8 @@ impl AppConfig {
     pub fn validate(&self) -> Result<(), String> {
         if !(130..=320).contains(&self.sidebar_width)
             || self.nickname.chars().count() > 40
-            || [&self.avatar, &self.wallpaper].iter().any(|v| {
-                v.as_ref().is_some_and(|s| {
-                    s.len() > 12 * 1024 * 1024 || !s.starts_with("data:image/png;base64,")
-                })
-            })
+            || bad_image(&self.avatar, &["png"])
+            || bad_image(&self.wallpaper, &["png", "jpeg"])
             || self.version != 1
             || bad_accent(&self.accent)
             || !["xixi", "anan", "jiaojiao", "tongtong", "dada", "xuexue"]
@@ -202,6 +209,23 @@ mod tests {
         fs::write(&path, b"broken").unwrap();
         assert!(load(&path).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"broken");
+    }
+
+    #[test]
+    fn personal_images_must_be_inline_data_urls() {
+        let mut config = AppConfig {
+            avatar: Some("data:image/png;base64,AAAA".into()),
+            wallpaper: Some("data:image/jpeg;base64,AAAA".into()),
+            ..AppConfig::default()
+        };
+        config.validate().unwrap();
+        config.wallpaper = Some("data:image/png;base64,AAAA".into());
+        config.validate().unwrap();
+        config.avatar = Some("data:image/jpeg;base64,AAAA".into());
+        assert!(config.validate().is_err());
+        config.avatar = None;
+        config.wallpaper = Some("https://example.com/wallpaper.jpg".into());
+        assert!(config.validate().is_err());
     }
 
     #[test]

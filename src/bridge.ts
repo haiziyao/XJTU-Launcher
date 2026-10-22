@@ -2,8 +2,10 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
+  ImageCrop,
   MarketCatalog,
   ModelListInput,
+  PersonalImageKind,
   SchoolFeature,
   UpdateStatus,
   ModelProviders,
@@ -55,7 +57,10 @@ export const bridge = {
     requireNative();
     return invoke('list_provider_models', { input });
   },
-  async personalImage(kind: 'avatar' | 'wallpaper'): Promise<string | null> {
+  /** Picks a source image; the preview is a blob URL the caller must revoke. */
+  async pickPersonalImage(
+    kind: PersonalImageKind,
+  ): Promise<{ path: string; preview: string } | null> {
     requireNative();
     const path = await open({
       multiple: false,
@@ -63,7 +68,16 @@ export const bridge = {
       title: kind === 'avatar' ? '选择头像' : '选择壁纸',
       filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
     });
-    return path ? invoke('read_personal_image', { path, kind }) : null;
+    if (!path) return null;
+    // Raw bytes let the webview decode the preview natively instead of waiting on Rust.
+    const bytes = await invoke<ArrayBuffer>('personal_image_source', { path, kind });
+    const ext = path.split('.').pop()?.toLowerCase();
+    const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    return { path, preview: URL.createObjectURL(new Blob([bytes], { type })) };
+  },
+  cropPersonalImage(path: string, kind: PersonalImageKind, crop: ImageCrop): Promise<string> {
+    requireNative();
+    return invoke('read_personal_image', { path, kind, crop });
   },
   async config(): Promise<AppConfig> {
     requireNative();

@@ -99,6 +99,7 @@ function showToast(message: string, tone: ToastTone) {
   toastTimer = setTimeout(() => (toast.value = null), 3000);
 }
 const macNative = native && /Mac/.test(navigator.userAgent);
+const windowsNative = native && /Windows/.test(navigator.userAgent);
 // The embedded macOS title bar paints the window buttons over the rail's top-left.
 const sidebarCollapsedWidth = macNative ? 76 : 56;
 const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, config.value));
@@ -107,6 +108,7 @@ const enabledPlugins = computed(() =>
 );
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
+const showWallpaper = computed(() => !!config.value.wallpaper);
 watch(enabledPlugins, () => {
   if (
     !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
@@ -357,6 +359,8 @@ onBeforeUnmount(() => {
       'sidebar-collapsed': sidebarCollapsed,
       'sidebar-resizing': resizing,
       'mac-native': macNative,
+      'platform-windows': windowsNative,
+      'has-wallpaper': showWallpaper,
       'motion-ready': ready,
       'reduce-motion': config.reduceMotion,
     }"
@@ -365,8 +369,16 @@ onBeforeUnmount(() => {
       '--sidebar-collapsed-width': collapsedWidth + 'px',
     }"
   >
+    <!-- Spans the whole window so sidebar width changes never rescale the image.
+         An <img> src is patched only when it changes; a style binding would re-apply the
+         multi-megabyte data URL on every clock tick and drag frame. -->
+    <Transition name="fade">
+      <div v-if="config.wallpaper" class="desktop-wallpaper" aria-hidden="true">
+        <img :src="config.wallpaper" alt="" decoding="async" />
+      </div>
+    </Transition>
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
-      <div class="sidebar-top-space" aria-hidden="true"></div>
+      <div class="sidebar-top-space" data-tauri-drag-region aria-hidden="true"></div>
       <SidebarPet
         :state="petState"
         :message="petMessage"
@@ -494,7 +506,7 @@ onBeforeUnmount(() => {
     >
       <ChevronLeft :size="14" class="sidebar-toggle-icon" />
     </button>
-    <main class="desktop-main" :class="{ 'has-wallpaper': route === 'home' && config.wallpaper }">
+    <main class="desktop-main">
       <Transition name="pet-toast">
         <div
           v-if="toast"
@@ -512,14 +524,8 @@ onBeforeUnmount(() => {
           <span>{{ toast.message }}</span>
         </div>
       </Transition>
-      <Transition name="fade">
-        <div
-          v-if="route === 'home' && config.wallpaper"
-          class="desktop-wallpaper"
-          :style="{ backgroundImage: `url(${config.wallpaper})` }"
-          aria-hidden="true"
-        ></div>
-      </Transition>
+      <!-- The macOS title bar is embedded, so this strip keeps the window draggable. -->
+      <div v-if="macNative" class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
       <div ref="content" class="desktop-content">
         <div class="desktop-content-inner" :class="{ 'is-home': route === 'home' }">
           <Transition name="drop">

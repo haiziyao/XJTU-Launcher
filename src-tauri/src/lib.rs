@@ -2,6 +2,7 @@ mod campus;
 mod campus_browser;
 mod config;
 mod market;
+mod personal_image;
 mod plugins;
 mod providers;
 mod school;
@@ -969,55 +970,37 @@ fn select_model_provider(
     book.select(&id)?;
     providers::save(&path, &book)
 }
+// Image work runs off the main thread so the window stays responsive.
+// The source goes back as raw bytes; the webview decodes the crop preview natively.
 #[tauri::command]
-fn read_personal_image(
+async fn personal_image_source(
     window: WebviewWindow,
     path: String,
     kind: String,
-) -> Result<String, String> {
-    use base64::Engine;
+) -> Result<tauri::ipc::Response, String> {
     main_only(&window)?;
-    if kind == "avatar" {
-        return accounts::avatar(std::path::Path::new(&path));
-    }
-    if kind != "wallpaper" {
-        return Err("图片类型无效".into());
-    }
-    let meta = std::fs::metadata(&path).map_err(|_| "无法读取图片")?;
-    if !meta.is_file() || meta.len() > 10 * 1024 * 1024 {
-        return Err("请选择不超过 10 MB 的图片".into());
-    }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(
-        std::fs::read(path).map_err(|_| "无法读取图片")?,
-    ))
-    .with_guessed_format()
-    .map_err(|_| "图片格式无效")?;
-    if !matches!(
-        reader.format(),
-        Some(image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP)
-    ) {
-        return Err("仅支持 PNG、JPEG 和 WebP".into());
-    }
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(8192);
-    limits.max_image_height = Some(8192);
-    limits.max_alloc = Some(128 * 1024 * 1024);
-    reader.limits(limits);
-    let img = reader
-        .decode()
-        .map_err(|_| "图片损坏或尺寸过大")?
-        .thumbnail(1920, 1200);
-    let mut output = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut output, image::ImageFormat::Png)
-        .map_err(|_| "无法处理图片")?;
-    let value = format!(
-        "data:image/png;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(output.into_inner())
-    );
-    if value.len() > 12 * 1024 * 1024 {
-        return Err("图片处理后仍过大，请选择较小图片".into());
-    }
-    Ok(value)
+    let kind = personal_image::Kind::parse(&kind)?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        personal_image::source(std::path::Path::new(&path), kind)
+    })
+    .await
+    .map_err(|_| "无法处理图片".to_string())??;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+#[tauri::command]
+async fn read_personal_image(
+    window: WebviewWindow,
+    path: String,
+    kind: String,
+    crop: personal_image::Crop,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let kind = personal_image::Kind::parse(&kind)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        personal_image::crop(std::path::Path::new(&path), kind, &crop)
+    })
+    .await
+    .map_err(|_| "无法处理图片".to_string())?
 }
 
 pub fn run() {
@@ -1057,6 +1040,7 @@ pub fn run() {
             save_model_provider,
             remove_model_provider,
             select_model_provider,
+            personal_image_source,
             read_personal_image,
             load_config,
             save_config,

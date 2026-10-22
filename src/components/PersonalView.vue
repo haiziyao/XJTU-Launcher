@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 import EditableText from './EditableText.vue';
 import { Camera, GraduationCap, ImagePlus } from 'lucide-vue-next';
-import type { AccountStatus, AppConfig } from '../types';
+import type { AccountStatus, AppConfig, ImageCrop, PersonalImageKind } from '../types';
 import { bridge } from '../bridge';
+import ImageCropDialog from './ImageCropDialog.vue';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
@@ -13,18 +14,38 @@ const props = defineProps<{ config: AppConfig; account: AccountStatus; saving: b
 const emit = defineEmits<{ update: [config: AppConfig]; accounts: [] }>();
 const error = ref('');
 const importing = ref(false);
-async function choose(kind: 'avatar' | 'wallpaper') {
+const cropping = ref<{ kind: PersonalImageKind; path: string; preview: string } | null>(null);
+async function choose(kind: PersonalImageKind) {
   importing.value = true;
   error.value = '';
   try {
-    const image = await bridge.personalImage(kind);
-    if (image) emit('update', { ...props.config, [kind]: image });
+    const picked = await bridge.pickPersonalImage(kind);
+    if (picked) cropping.value = { kind, ...picked };
   } catch (e) {
     error.value = String(e);
   } finally {
     importing.value = false;
   }
 }
+function closeCrop() {
+  if (cropping.value) URL.revokeObjectURL(cropping.value.preview);
+  cropping.value = null;
+}
+async function applyCrop(crop: ImageCrop) {
+  const target = cropping.value;
+  if (!target) return;
+  importing.value = true;
+  try {
+    const image = await bridge.cropPersonalImage(target.path, target.kind, crop);
+    emit('update', { ...props.config, [target.kind]: image });
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    closeCrop();
+    importing.value = false;
+  }
+}
+onBeforeUnmount(closeCrop);
 </script>
 <template>
   <section class="desktop-page narrow-page">
@@ -93,7 +114,7 @@ async function choose(kind: 'avatar' | 'wallpaper') {
         </div>
         <div class="wallpaper-copy">
           <strong>{{ config.wallpaper ? '自定义壁纸' : '默认背景' }}</strong>
-          <small>壁纸只在主页显示，卡片会自动加上半透明底色。</small>
+          <small>壁纸铺满整个窗口，侧栏与卡片会自动变为半透明。</small>
           <div class="row-actions">
             <button class="btn small" :disabled="saving || importing" @click="choose('wallpaper')">
               <ImagePlus :size="14" />选择图片
@@ -124,5 +145,13 @@ async function choose(kind: 'avatar' | 'wallpaper') {
         <span v-if="account.connected" class="badge success">已连接</span>
       </SettingRow>
     </SettingGroup>
+    <ImageCropDialog
+      v-if="cropping"
+      :src="cropping.preview"
+      :kind="cropping.kind"
+      :busy="importing"
+      @confirm="applyCrop"
+      @cancel="closeCrop"
+    />
   </section>
 </template>
