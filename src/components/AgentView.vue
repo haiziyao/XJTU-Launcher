@@ -666,7 +666,7 @@ onBeforeUnmount(() => {
               @update:model-value="changeModel"
             />
             <span
-              v-if="usage"
+              v-if="modelChoice"
               class="agent-usage"
               :title="`上下文 ${formatTokens(usedTokens)} / ${formatTokens(contextWindow)}`"
             >

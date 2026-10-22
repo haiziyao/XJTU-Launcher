@@ -85,6 +85,10 @@ export const bridge = {
     requireNative();
     return invoke('set_provider_model', { id, model });
   },
+  async testProvider(id: string): Promise<number> {
+    requireNative();
+    return invoke('test_provider', { id });
+  },
   async providerBalance(id: string): Promise<ProviderBalance | null> {
     requireNative();
     return invoke('provider_balance', { id });

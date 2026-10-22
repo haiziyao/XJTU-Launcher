@@ -5,6 +5,8 @@ import {
   Pencil,
   Trash2,
   Check,
+  Play,
+  PlugZap,
   Server,
   Eye,
   EyeOff,
@@ -37,6 +39,7 @@ const loading = ref(true);
 const busy = ref(false);
 const error = ref('');
 const status = ref('');
+const testing = ref('');
 const editing = ref(false);
 const showKey = ref(false);
 const clearKey = ref(false);
@@ -44,7 +47,6 @@ const draft = ref<ProviderInput>(empty());
 const models = ref<string[]>([]);
 const modelStatus = ref('');
 const fetching = ref(false);
-const manualModel = ref(false);
 let disposed = false;
 function empty(): ProviderInput {
   return {
@@ -59,9 +61,7 @@ function empty(): ProviderInput {
   };
 }
 const current = computed(() => book.value.providers.find((p) => p.id === draft.value.id));
-const valid = computed(
-  () => draft.value.name.trim() && draft.value.baseUrl.trim() && draft.value.model.trim(),
-);
+const valid = computed(() => draft.value.name.trim() && draft.value.baseUrl.trim());
 function edit(provider?: ModelProvider) {
   draft.value = provider
     ? {
@@ -82,7 +82,6 @@ function edit(provider?: ModelProvider) {
   status.value = '';
   models.value = provider?.models.slice() ?? [];
   modelStatus.value = '';
-  manualModel.value = false;
   // Existing providers already have a stored key, so refresh the catalogue right away.
   if (provider) void fetchModels();
 }
@@ -93,7 +92,6 @@ function cancel() {
   clearKey.value = false;
   models.value = [];
   modelStatus.value = '';
-  manualModel.value = false;
 }
 watch(
   () => [draft.value.baseUrl, draft.value.protocol],
@@ -129,6 +127,20 @@ async function fetchModels() {
     modelStatus.value = String(e);
   } finally {
     fetching.value = false;
+  }
+}
+async function test(provider: ModelProvider) {
+  if (testing.value) return;
+  testing.value = provider.id;
+  status.value = '';
+  error.value = '';
+  try {
+    const count = await bridge.testProvider(provider.id);
+    status.value = `${provider.name} 连接正常${count ? `，可获取 ${count} 个模型` : ''}`;
+  } catch (e) {
+    error.value = `${provider.name} 连接失败：${String(e)}`;
+  } finally {
+    testing.value = '';
   }
 }
 async function reload() {
@@ -239,12 +251,26 @@ onBeforeUnmount(() => {
               {{ provider.baseUrl }}
             </template>
             <button
-              v-if="provider.id !== book.defaultId"
-              class="btn ghost small"
-              :disabled="busy"
+              class="btn ghost icon small"
+              :class="{ accent: provider.id === book.defaultId }"
+              :title="provider.id === book.defaultId ? '正在使用' : `使用${provider.name}`"
+              :aria-label="provider.id === book.defaultId ? '正在使用' : `使用${provider.name}`"
+              :disabled="busy || provider.id === book.defaultId"
+              :aria-pressed="provider.id === book.defaultId"
               @click="select(provider)"
             >
-              <Check :size="14" />设为默认
+              <Check v-if="provider.id === book.defaultId" :size="14" />
+              <Play v-else :size="14" />
+            </button>
+            <button
+              class="btn ghost icon small"
+              :title="`测试${provider.name}连通性`"
+              :aria-label="`测试${provider.name}连通性`"
+              :disabled="busy || testing === provider.id"
+              @click="test(provider)"
+            >
+              <LoaderCircle v-if="testing === provider.id" :size="14" class="spinning" />
+              <PlugZap v-else :size="14" />
             </button>
             <button
               class="btn ghost icon small"
@@ -320,38 +346,11 @@ onBeforeUnmount(() => {
                 <RefreshCw v-else :size="14" />
                 获取模型列表
               </button>
-              <button
-                v-if="!models.length && !manualModel"
-                type="button"
-                class="btn ghost small"
-                @click="manualModel = true"
-              >
-                手动填写
-              </button>
             </SettingRow>
             <SettingRow v-if="models.length" title="已获取的模型">
               <div class="model-cloud">
                 <span v-for="model in models" :key="model" class="badge">{{ model }}</span>
               </div>
-            </SettingRow>
-            <SettingRow v-if="manualModel" title="当前模型">
-              <template #description>厂商没有模型列表时手动填写</template>
-              <input
-                id="provider-model"
-                v-model="draft.model"
-                class="text-field"
-                placeholder="填写厂商提供的模型 ID"
-                aria-label="当前模型"
-                maxlength="256"
-                spellcheck="false"
-              />
-            </SettingRow>
-            <SettingRow v-else-if="draft.model" title="当前模型">
-              <template #description>可在 Agent 对话框里随时切换</template>
-              <span class="setting-value">{{ draft.model }}</span>
-              <button type="button" class="btn ghost small" @click="manualModel = true">
-                手动修改
-              </button>
             </SettingRow>
             <SettingRow title="API Key">
               <template #description>
@@ -409,6 +408,12 @@ onBeforeUnmount(() => {
   </div>
 </template>
 <style scoped>
+.btn.accent {
+  color: var(--accent);
+}
+.btn.accent:disabled {
+  opacity: 1;
+}
 .model-cloud {
   display: flex;
   flex-wrap: wrap;

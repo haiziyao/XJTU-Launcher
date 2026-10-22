@@ -138,7 +138,6 @@ impl Book {
                 || !ids.insert(&p.id)
                 || p.name.trim().is_empty()
                 || p.name.chars().count() > 60
-                || p.model.trim().is_empty()
                 || p.model.len() > 256
                 || p.models.len() > 200
                 || p.models
