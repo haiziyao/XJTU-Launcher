@@ -7,6 +7,7 @@ import type {
   ModelListInput,
   PersonalImageKind,
   SchoolFeature,
+  SchoolQuery,
   UpdateStatus,
   ModelProviders,
   ProviderInput,
@@ -30,6 +31,7 @@ export const bridge = {
     invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
+  schoolQuery: (query: SchoolQuery) => invoke<unknown>('school_query', { query }),
   installPlugin: (id: string, version: string) =>
     invoke<void>('install_market_plugin', { id, version }),
   removePlugin: (id: string) => invoke<void>('remove_plugin', { id }),

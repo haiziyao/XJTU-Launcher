@@ -31,7 +31,7 @@ export interface Plugin {
   version: string;
   description: string;
   icon: string;
-  page: { type: 'timetable' } | { type: 'links'; links: Link[] };
+  page: { type: 'timetable' } | { type: 'links'; links: Link[] } | { type: 'campus' };
   widget: boolean;
 }
 export interface PluginList {
@@ -162,6 +162,33 @@ export interface MarketCatalog {
   source: string | null;
   defaultSource: string | null;
   plugins: MarketEntry[];
+}
+/** Closed query set for the campus plugin page. */
+export type SchoolQuery =
+  { type: 'card' } | { type: 'cardTransactions'; start: string; end: string; page: number };
+export interface CardInfo {
+  name: string;
+  studentNo: string;
+  account: string;
+  balance: number;
+  pending: number;
+  lost: boolean;
+  frozen: boolean;
+  cardType: string;
+  expireDate: string;
+}
+export interface CardTransaction {
+  time: string;
+  amount: number;
+  balance: number;
+  merchant: string;
+  type: string;
+  description: string;
+}
+export interface CardTransactions {
+  page: number;
+  total: number;
+  rows: CardTransaction[];
 }
 export interface SchoolFeature {
   id: string;

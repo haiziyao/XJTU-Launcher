@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LoaderCircle,
   MessagesSquare,
+  Route,
   Settings,
   Wifi,
   WifiOff,
@@ -40,6 +41,7 @@ import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
+import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
@@ -420,10 +422,10 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Compass
-              v-else
+            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
+              v-else-if="plugin.page.type === 'campus'"
               :size="20"
-            /><span>{{ plugin.name }}</span>
+            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -604,6 +606,11 @@ onBeforeUnmount(() => {
                 :error="scheduleError"
                 @refresh="refreshTimetable"
                 @account="route = 'accounts'"
+              />
+              <CampusView
+                v-else-if="activePlugin?.page.type === 'campus'"
+                :key="activePlugin.id"
+                :name="activePlugin.name"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"

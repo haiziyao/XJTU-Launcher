@@ -8,11 +8,12 @@ import {
   CalendarDays,
   Compass,
   Download,
-  RefreshCw,
-  Search,
+  GraduationCap,
   MoreHorizontal,
   Package,
-  GraduationCap,
+  RefreshCw,
+  Route,
+  Search,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type { AppConfig, Plugin, MarketCatalog, MarketEntry, SchoolFeature } from '../types';
@@ -196,9 +197,9 @@ onBeforeUnmount(() => {
         >
           <template #leading
             ><IconTile :size="34"
-              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
-                v-else
-                :size="19" /></IconTile
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
+                v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Compass v-else :size="19" /></IconTile
           ></template>
           <button
             class="btn small"
@@ -280,9 +281,9 @@ onBeforeUnmount(() => {
         <div class="installed-row">
           <div class="installed-name">
             <IconTile :size="34"
-              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
-                v-else
-                :size="19"
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
+                v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Compass v-else :size="19"
             /></IconTile>
             <div>
               <strong>{{ plugin.name }}</strong
