@@ -277,6 +277,26 @@ onBeforeUnmount(() => {
             :disabled="saving || !!busy"
             @toggle="emit('toggle', plugin.id)"
           />
+          <span class="installed-move">
+            <button
+              class="btn ghost icon small"
+              aria-label="上移"
+              :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
+              @click="emit('move', plugins.indexOf(plugin), -1)"
+            >
+              <ArrowUp :size="14" />
+            </button>
+            <button
+              class="btn ghost icon small"
+              aria-label="下移"
+              :disabled="
+                saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
+              "
+              @click="emit('move', plugins.indexOf(plugin), 1)"
+            >
+              <ArrowDown :size="14" />
+            </button>
+          </span>
           <button
             class="btn ghost icon"
             :aria-label="plugin.name + '操作'"
@@ -304,24 +324,6 @@ onBeforeUnmount(() => {
             @click="install(upgrade(plugin.id)!)"
           >
             {{ busy === plugin.id ? '更新中…' : '更新' }}
-          </button>
-          <button
-            class="btn ghost icon small"
-            aria-label="上移"
-            :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
-            @click="emit('move', plugins.indexOf(plugin), -1)"
-          >
-            <ArrowUp :size="14" />
-          </button>
-          <button
-            class="btn ghost icon small"
-            aria-label="下移"
-            :disabled="
-              saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
-            "
-            @click="emit('move', plugins.indexOf(plugin), 1)"
-          >
-            <ArrowDown :size="14" />
           </button>
           <button
             v-if="!['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(plugin.id)"
@@ -354,7 +356,7 @@ onBeforeUnmount(() => {
 .installed-heading,
 .installed-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 100px 36px;
+  grid-template-columns: minmax(0, 1fr) 72px auto 36px;
   gap: 12px;
   align-items: center;
   padding: 16px 12px;
@@ -382,6 +384,11 @@ onBeforeUnmount(() => {
   display: block;
   color: var(--text-tertiary);
   margin-top: 5px;
+}
+.installed-move {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 2px;
 }
 .installed-actions {
   display: flex;
