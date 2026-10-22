@@ -302,42 +302,10 @@
 .provider-form .field-shell [aria-expanded='true'] svg {
   transform: rotate(180deg);
 }
-.provider-form .model-menu {
-  position: absolute;
-  z-index: 8;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  max-height: 240px;
-  margin: 0;
-  padding: 4px;
-  overflow-y: auto;
-  list-style: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-md);
-}
-.provider-form .model-menu button {
-  display: block;
+.provider-form .setting-row-control > .menu-field {
   width: 100%;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-size: 12.5px;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
 }
-.provider-form .model-menu button:hover,
-.provider-form .model-menu button.active {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
+
 .provider-form .model-field .btn {
   flex-shrink: 0;
   white-space: nowrap;

@@ -17,6 +17,7 @@ import { bridge } from '../bridge';
 import type { ModelProtocol, ModelProvider, ModelProviders, ProviderInput } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 const protocolLabel: Record<ModelProtocol, string> = {
@@ -24,6 +25,14 @@ const protocolLabel: Record<ModelProtocol, string> = {
   anthropic: 'Anthropic',
   gemini: 'Gemini',
 };
+const protocolOptions = [
+  { value: 'openai-compatible', label: 'OpenAI 兼容' },
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'gemini', label: 'Gemini' },
+];
+function setProtocol(value: string) {
+  draft.value.protocol = value as ModelProtocol;
+}
 const book = ref<ModelProviders>({ defaultId: null, providers: [], legacyKeyAvailable: false });
 const loading = ref(true);
 const busy = ref(false);
@@ -281,16 +290,12 @@ onBeforeUnmount(() => {
               />
             </SettingRow>
             <SettingRow title="接口协议">
-              <select
-                id="provider-protocol"
-                v-model="draft.protocol"
-                class="text-field"
-                aria-label="接口协议"
-              >
-                <option value="openai-compatible">OpenAI 兼容</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="gemini">Gemini</option>
-              </select>
+              <MenuSelect
+                :model-value="draft.protocol"
+                :options="protocolOptions"
+                label="接口协议"
+                @update:model-value="setProtocol"
+              />
             </SettingRow>
             <SettingRow title="接口地址" description="OpenAI 兼容填到 /v1 为止">
               <input
@@ -308,7 +313,7 @@ onBeforeUnmount(() => {
             <SettingRow title="模型名称">
               <template #description>{{ modelStatus || '可从厂商读取模型列表' }}</template>
               <div class="model-field">
-                <div ref="picker" class="model-pick" @keydown.esc="pickerOpen = false">
+                <div ref="picker" class="model-pick menu-field" @keydown.esc="pickerOpen = false">
                   <div class="field-shell">
                     <input
                       id="provider-model"
@@ -332,7 +337,7 @@ onBeforeUnmount(() => {
                   </div>
                   <ul
                     v-if="pickerOpen && models.length"
-                    class="model-menu"
+                    class="menu-field-menu"
                     role="listbox"
                     aria-label="模型列表"
                   >
