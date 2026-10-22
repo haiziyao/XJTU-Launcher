@@ -995,11 +995,10 @@ onBeforeUnmount(() => {
 
 /* With a wallpaper the page stays translucent so the photo is not blocked. */
 .desktop-shell.has-wallpaper .agent-composer-wrap {
-  background: none;
+  background: linear-gradient(transparent, var(--panel) 45%);
 }
 .desktop-shell.has-wallpaper .agent-composer {
-  background: transparent;
-  box-shadow: none;
+  background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
   background: var(--panel);
