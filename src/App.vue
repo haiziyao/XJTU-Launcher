@@ -69,7 +69,7 @@ const saving = ref(false);
 const now = ref(new Date());
 const macNative = native && /Mac/.test(navigator.userAgent);
 // The embedded macOS title bar paints the window buttons over the rail's top-left.
-const sidebarCollapsedWidth = macNative ? 88 : 56;
+const sidebarCollapsedWidth = macNative ? 76 : 56;
 const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, config.value));
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
@@ -315,7 +315,7 @@ onBeforeUnmount(() => {
             :aria-current="route === item.id ? 'page' : undefined"
             @click="route = item.id"
           >
-            <component :is="item.icon" :size="18" /><span>{{ item.title }}</span>
+            <component :is="item.icon" :size="20" /><span>{{ item.title }}</span>
           </button>
         </div>
         <div v-if="sidebarPlugins.length" class="nav-section">
@@ -331,9 +331,9 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="18" /><Compass
+            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Compass
               v-else
-              :size="18"
+              :size="20"
             /><span>{{ plugin.name }}</span>
           </button>
         </div>
@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'market' ? 'page' : undefined"
             @click="route = 'market'"
           >
-            <LayoutGrid :size="18" /><span>插件市场</span>
+            <LayoutGrid :size="20" /><span>插件市场</span>
           </button>
           <button
             class="desktop-nav-item"
@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'settings' ? 'page' : undefined"
             @click="openSettings()"
           >
-            <Settings :size="18" /><span>应用设置</span>
+            <Settings :size="20" /><span>应用设置</span>
           </button>
         </div>
       </nav>

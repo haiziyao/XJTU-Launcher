@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { SlidersHorizontal, Home, Server, Package, Download } from 'lucide-vue-next';
 import type { AppConfig } from '../types';
+import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
 import PluginSourceSettings from './PluginSourceSettings.vue';
 import AppUpdateSettings from './AppUpdateSettings.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
@@ -50,8 +51,8 @@ const sections = [
                 <span class="setting-value">{{ config.sidebarWidth }} px</span>
                 <button
                   class="btn small"
-                  :disabled="saving || config.sidebarWidth === 196"
-                  @click="emit('update', { ...config, sidebarWidth: 196 })"
+                  :disabled="saving || config.sidebarWidth === DEFAULT_SIDEBAR_WIDTH"
+                  @click="emit('update', { ...config, sidebarWidth: DEFAULT_SIDEBAR_WIDTH })"
                 >
                   恢复默认
                 </button>
