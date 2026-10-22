@@ -73,6 +73,11 @@ function edit(provider?: ModelProvider) {
   // Existing providers already have a stored key, so read the catalogue right away.
   if (provider) void fetchModels();
 }
+function pickModel(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  if (select.value) draft.value.model = select.value;
+  select.value = '';
+}
 function cancel() {
   editing.value = false;
   draft.value = empty();
@@ -302,9 +307,15 @@ onBeforeUnmount(() => {
                   maxlength="256"
                   spellcheck="false"
                 />
-                <datalist id="provider-model-options">
-                  <option v-for="model in models" :key="model" :value="model" />
-                </datalist>
+                <select
+                  v-if="models.length"
+                  class="text-field model-select"
+                  aria-label="选择模型"
+                  @change="pickModel"
+                >
+                  <option value="" selected>选择模型…</option>
+                  <option v-for="model in models" :key="model" :value="model">{{ model }}</option>
+                </select>
                 <button type="button" class="btn small" :disabled="fetching" @click="fetchModels">
                   <LoaderCircle v-if="fetching" :size="14" class="spinning" />
                   <RefreshCw v-else :size="14" />

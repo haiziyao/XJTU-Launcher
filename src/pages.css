@@ -291,6 +291,10 @@
   flex: 1;
   min-width: 0;
 }
+.provider-form .model-select {
+  flex-shrink: 0;
+  width: 128px;
+}
 .provider-form .model-field .btn {
   flex-shrink: 0;
   white-space: nowrap;
