@@ -5,7 +5,6 @@ import {
   Pencil,
   Trash2,
   Check,
-  ChevronDown,
   Server,
   Eye,
   EyeOff,
@@ -45,6 +44,21 @@ const draft = ref<ProviderInput>(empty());
 const models = ref<string[]>([]);
 const modelStatus = ref('');
 const fetching = ref(false);
+const manualModel = ref(false);
+const modelOptions = computed(() => {
+  const list = models.value.map((model) => ({ value: model, label: model }));
+  if (draft.value.model && !models.value.includes(draft.value.model))
+    list.unshift({ value: draft.value.model, label: draft.value.model });
+  list.push({ value: '__manual__', label: '手动输入…' });
+  return list;
+});
+function setModel(value: string) {
+  if (value === '__manual__') {
+    manualModel.value = true;
+    return;
+  }
+  draft.value.model = value;
+}
 let disposed = false;
 function empty(): ProviderInput {
   return {
@@ -80,23 +94,10 @@ function edit(provider?: ModelProvider) {
   status.value = '';
   models.value = [];
   modelStatus.value = '';
-  pickerOpen.value = false;
+  manualModel.value = false;
   // Existing providers already have a stored key, so read the catalogue right away.
   if (provider) void fetchModels();
 }
-const pickerOpen = ref(false);
-const picker = ref<HTMLElement | null>(null);
-function chooseModel(model: string) {
-  draft.value.model = model;
-  pickerOpen.value = false;
-}
-function onPickerOutside(event: PointerEvent) {
-  if (picker.value && !picker.value.contains(event.target as Node)) pickerOpen.value = false;
-}
-watch(pickerOpen, (open) => {
-  if (open) document.addEventListener('pointerdown', onPickerOutside, true);
-  else document.removeEventListener('pointerdown', onPickerOutside, true);
-});
 function cancel() {
   editing.value = false;
   draft.value = empty();
@@ -104,7 +105,7 @@ function cancel() {
   clearKey.value = false;
   models.value = [];
   modelStatus.value = '';
-  pickerOpen.value = false;
+  manualModel.value = false;
 }
 watch(
   () => [draft.value.baseUrl, draft.value.protocol],
@@ -130,6 +131,7 @@ async function fetchModels() {
       useLegacyKey: draft.value.useLegacyKey,
     });
     modelStatus.value = models.value.length ? `已读取 ${models.value.length} 个模型` : '';
+    manualModel.value = false;
   } catch (e) {
     models.value = [];
     modelStatus.value = String(e);
@@ -194,7 +196,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true;
   draft.value.apiKey = '';
-  document.removeEventListener('pointerdown', onPickerOutside, true);
 });
 </script>
 <template>
@@ -313,47 +314,25 @@ onBeforeUnmount(() => {
             <SettingRow title="模型名称">
               <template #description>{{ modelStatus || '可从厂商读取模型列表' }}</template>
               <div class="model-field">
-                <div ref="picker" class="model-pick menu-field" @keydown.esc="pickerOpen = false">
-                  <div class="field-shell">
-                    <input
-                      id="provider-model"
-                      v-model="draft.model"
-                      placeholder="填写厂商提供的模型 ID"
-                      aria-label="模型名称"
-                      required
-                      maxlength="256"
-                      spellcheck="false"
-                    />
-                    <button
-                      v-if="models.length"
-                      type="button"
-                      class="btn ghost icon small"
-                      :aria-label="pickerOpen ? '收起模型列表' : '展开模型列表'"
-                      :aria-expanded="pickerOpen"
-                      @click="pickerOpen = !pickerOpen"
-                    >
-                      <ChevronDown :size="14" />
-                    </button>
-                  </div>
-                  <ul
-                    v-if="pickerOpen && models.length"
-                    class="menu-field-menu"
-                    role="listbox"
-                    aria-label="模型列表"
-                  >
-                    <li v-for="model in models" :key="model">
-                      <button
-                        type="button"
-                        role="option"
-                        :aria-selected="model === draft.model"
-                        :class="{ active: model === draft.model }"
-                        @click="chooseModel(model)"
-                      >
-                        {{ model }}
-                      </button>
-                    </li>
-                  </ul>
-                </div>
+                <MenuSelect
+                  v-if="models.length && !manualModel"
+                  class="model-pick"
+                  :model-value="draft.model"
+                  :options="modelOptions"
+                  label="模型名称"
+                  @update:model-value="setModel"
+                />
+                <input
+                  v-else
+                  id="provider-model"
+                  v-model="draft.model"
+                  class="text-field"
+                  placeholder="填写厂商提供的模型 ID"
+                  aria-label="模型名称"
+                  required
+                  maxlength="256"
+                  spellcheck="false"
+                />
                 <button type="button" class="btn small" :disabled="fetching" @click="fetchModels">
                   <LoaderCircle v-if="fetching" :size="14" class="spinning" />
                   <RefreshCw v-else :size="14" />
