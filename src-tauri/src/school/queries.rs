@@ -52,6 +52,10 @@ pub enum Query {
         end: String,
         page: u32,
     },
+    Fitness,
+    FitnessScore {
+        year: String,
+    },
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -64,6 +68,7 @@ impl Query {
             Self::Calendar => "calendar",
             Self::AttendanceStreams { .. } | Self::AttendanceRecords { .. } => "attendance",
             Self::Card | Self::CardTransactions { .. } => "card",
+            Self::Fitness | Self::FitnessScore { .. } => "fitness",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -114,6 +119,11 @@ impl Query {
                     || start > end =>
             {
                 return Err("请选择有效的日期范围和页码".into());
+            }
+            Self::FitnessScore { year }
+                if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) =>
+            {
+                return Err("请选择有效的体测学年".into());
             }
             _ => {}
         }
@@ -189,6 +199,16 @@ pub async fn query(
             Query::AttendanceRecords { start, end, page } => {
                 client.records(&start, &end, page).await?
             }
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
+    }
+    if matches!(query, Query::Fitness | Query::FitnessScore { .. }) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::fitness::Client::connect(&account).await?;
+        let value = match query {
+            Query::Fitness => json!({"rows": client.years().await?}),
+            Query::FitnessScore { year } => client.score(&year).await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -319,6 +339,7 @@ pub async fn query(
         Query::Calendar => unreachable!(),
         Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
         Query::Card | Query::CardTransactions { .. } => unreachable!(),
+        Query::Fitness | Query::FitnessScore { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }

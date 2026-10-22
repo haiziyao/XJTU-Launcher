@@ -24,6 +24,7 @@ import EmptyState from './ui/EmptyState.vue';
 import CampusRooms from './campus/CampusRooms.vue';
 import CampusCourses from './campus/CampusCourses.vue';
 import CampusEvaluations from './campus/CampusEvaluations.vue';
+import CampusFitness from './campus/CampusFitness.vue';
 import { bridge } from '../bridge';
 import type {
   AttendanceStreams,
@@ -420,6 +421,7 @@ onMounted(async () => {
       <CampusRooms v-else-if="tool === 'rooms'" />
       <CampusCourses v-else-if="tool === 'courses'" />
       <CampusEvaluations v-else-if="tool === 'evaluations'" />
+      <CampusFitness v-else-if="tool === 'fitness'" />
 
       <template v-else-if="tool === 'calendar'">
         <SettingGroup title="校历">

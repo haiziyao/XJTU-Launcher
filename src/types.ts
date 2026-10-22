@@ -175,7 +175,9 @@ export type SchoolQuery =
   | { type: 'rooms'; campus: string; building: string; date: string; start: number; end: number }
   | { type: 'terms' }
   | { type: 'courses'; term: string | null; name: string; campus: string }
-  | { type: 'evaluations'; finished: boolean };
+  | { type: 'evaluations'; finished: boolean }
+  | { type: 'fitness' }
+  | { type: 'fitnessScore'; year: string };
 export interface GradeRow {
   id: string;
   name: string;
@@ -287,6 +289,31 @@ export interface EvaluationPreview {
   accountId: string;
   expiresInSeconds: number;
   courses: PreviewCourse[];
+}
+export interface FitnessYear {
+  year: string;
+  name: string;
+  checked: boolean;
+}
+export interface FitnessItem {
+  key: string;
+  name: string;
+  score: string;
+  grade: string;
+}
+export interface FitnessScore {
+  studentNumber: string;
+  studentName: string;
+  totalScore: string;
+  totalGrade: string;
+  reportType: string;
+  reportStatus: string;
+  sex: string;
+  grade: string;
+  items: FitnessItem[];
+}
+export interface FitnessYears {
+  rows: FitnessYear[];
 }
 export interface EvaluationOutcome {
   questionnaireId: string;

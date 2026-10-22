@@ -3,6 +3,7 @@
 mod attendance;
 mod card;
 pub mod evaluation;
+mod fitness;
 mod queries;
 mod transport;
 
@@ -97,7 +98,7 @@ pub fn catalog() -> Vec<Feature> {
             "fitness",
             "体测成绩",
             "校园生活",
-            "pending",
+            "undergraduate",
             "fitness/score.py",
         ),
         (
