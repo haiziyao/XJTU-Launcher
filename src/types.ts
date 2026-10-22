@@ -48,6 +48,7 @@ export interface AccountStatus {
   avatar?: string | null;
   degree: 'undergraduate' | 'postgraduate' | null;
   apiKeySet: boolean;
+  accessMode?: 'direct' | 'webvpn' | null;
 }
 /** Result of the sidebar network self-check. */
 export interface NetworkCheck {

@@ -619,6 +619,7 @@ onBeforeUnmount(() => {
                 :key="activePlugin.id"
                 :name="activePlugin.name"
                 :pinned="config.campusPinned"
+                :access-mode="account.accessMode ?? null"
                 @update-pinned="setPinnedTools"
               />
               <LinksView

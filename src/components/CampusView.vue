@@ -38,7 +38,11 @@ import type {
   SchoolFeature,
 } from '../types';
 
-const props = defineProps<{ name: string; pinned: string[] }>();
+const props = defineProps<{
+  name: string;
+  pinned: string[];
+  accessMode: 'direct' | 'webvpn' | null;
+}>();
 const emit = defineEmits<{ 'update-pinned': [ids: string[]] }>();
 
 type Tone = 'blue' | 'green' | 'orange' | 'violet' | 'teal' | 'gray';
@@ -183,8 +187,12 @@ const calendar = ref<CalendarList | null>(null);
 const page = ref(1);
 
 const backend = (id: string) => features.value.find((feature) => feature.id === id)?.backend;
-const available = (id: string) => READY.includes(id);
+// These services have no WebVPN route; the app marks them instead of hiding them.
+const DIRECT_ONLY = ['card', 'fitness', 'profile'];
+const vpnBlocked = (id: string) => props.accessMode === 'webvpn' && DIRECT_ONLY.includes(id);
+const available = (id: string) => READY.includes(id) && !vpnBlocked(id);
 const badge = (id: string) => {
+  if (vpnBlocked(id)) return 'VPN 下不可用';
   if (available(id)) return '可用';
   const state = backend(id);
   if (!state) return '…';

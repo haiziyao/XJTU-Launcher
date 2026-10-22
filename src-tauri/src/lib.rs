@@ -201,6 +201,8 @@ struct AccountStatus {
     student_id: Option<String>,
     avatar: Option<String>,
     api_key_set: bool,
+    /// Current access mode: some services are only reachable directly.
+    access_mode: Option<network::AccessMode>,
 }
 
 #[tauri::command]
@@ -219,6 +221,9 @@ async fn account_status(
     } else {
         None
     };
+    let access_mode = active
+        .map(|account| account.mode)
+        .or_else(|| legacy.as_ref().map(|session| session.mode));
     Ok(AccountStatus {
         connected: active.is_some() || legacy.is_some(),
         degree: active
@@ -228,6 +233,7 @@ async fn account_status(
         student_id: active.and_then(|a| a.student_id.clone()),
         avatar: active.and_then(|a| a.avatar.clone()),
         api_key_set: vault::api_key_set()?,
+        access_mode,
     })
 }
 
