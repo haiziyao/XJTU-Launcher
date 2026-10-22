@@ -35,7 +35,7 @@ pub struct AppConfig {
 }
 
 fn default_sidebar_width() -> u32 {
-    168
+    140
 }
 
 fn default_show_seconds() -> bool {
@@ -68,7 +68,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if !(144..=320).contains(&self.sidebar_width)
+        if !(130..=320).contains(&self.sidebar_width)
             || self.nickname.chars().count() > 40
             || [&self.avatar, &self.wallpaper].iter().any(|v| {
                 v.as_ref().is_some_and(|s| {
@@ -151,7 +151,7 @@ mod tests {
         let config: AppConfig = serde_json::from_str(old).unwrap();
         config.validate().unwrap();
         assert!(config.sidebar_collapsed);
-        assert_eq!(config.sidebar_width, 168);
+        assert_eq!(config.sidebar_width, 140);
         assert_eq!(config.disabled_plugins, vec!["cn.xjtu.timetable"]);
         assert!(config.avatar.is_none());
         assert!(config.wallpaper.is_none());

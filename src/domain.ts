@@ -1,6 +1,6 @@
 import type { AppConfig, Course, Plugin, Timetable } from './types';
 
-export const DEFAULT_SIDEBAR_WIDTH = 168;
+export const DEFAULT_SIDEBAR_WIDTH = 140;
 
 export const defaultConfig = (): AppConfig => ({
   version: 1,

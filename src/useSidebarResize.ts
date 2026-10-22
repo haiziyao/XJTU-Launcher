@@ -1,9 +1,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue';
+import { DEFAULT_SIDEBAR_WIDTH } from './domain';
 import type { AppConfig } from './types';
 
-const MIN_WIDTH = 176;
+const MIN_WIDTH = 130;
 const MAX_WIDTH = 320;
-const DEFAULT_WIDTH = 196;
+const DEFAULT_WIDTH = DEFAULT_SIDEBAR_WIDTH;
 const DEFAULT_COLLAPSED_WIDTH = 56;
 const clamp = (width: number) => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.round(width)));
 
@@ -16,7 +17,7 @@ export function useSidebarResize(
   const preview = ref<number | null>(null);
   const resizing = ref(false);
   // Dragging below the minimum expanded width previews the collapsed rail, so a
-  // single inward drag reaches the rail instead of stopping at 176px.
+  // single inward drag reaches the rail instead of stopping at the minimum.
   const collapsed = computed(() =>
     preview.value === null ? config.value.sidebarCollapsed : preview.value < MIN_WIDTH,
   );

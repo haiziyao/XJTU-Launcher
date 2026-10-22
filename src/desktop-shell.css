@@ -1,6 +1,6 @@
 /* Window structure follows the reviewed desktop references. */
 .desktop-shell {
-  --sidebar-width: 168px;
+  --sidebar-width: 140px;
   --sidebar-collapsed-width: 56px;
   --sidebar-motion: 280ms var(--ease-standard);
   display: grid;
@@ -305,7 +305,10 @@
   opacity: 0.5;
   transition-delay: 120ms;
 }
-.sidebar-resizer:focus-visible {
+/* Keyboard focus already shows as the accent line above. The global
+   [role='separator']:focus-visible rule loads later, so outrank it here or a
+   second outline draws two blue lines around the divider. */
+.desktop-shell .sidebar-resizer:focus-visible {
   outline: none;
 }
 .sidebar-resizing,
