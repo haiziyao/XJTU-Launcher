@@ -586,8 +586,24 @@ async fn refresh_saved_session(
             captcha: String::new(),
         })
         .await?;
+    // The campus CAS can return an intermediate confirmation page with no input;
+    // submitting "continue" is what the login dialog's second click does.
+    for _ in 0..2 {
+        if login.completed.is_some() {
+            break;
+        }
+        let view = login.view();
+        if view.phase != auth::Phase::Credentials || !view.can_continue {
+            break;
+        }
+        login
+            .act(auth::Action::Continue {
+                captcha: String::new(),
+            })
+            .await?;
+    }
     let Some(account) = login.completed.take() else {
-        // The school login page asked for a captcha (or another verification step).
+        // A captcha, MFA or identity step still needs the login dialog.
         return Ok(SessionRefresh::NeedsManual);
     };
     let _guard = state.auth_lock.lock().await;

@@ -331,6 +331,8 @@ onMounted(async () => {
     error.value = errorText(e);
   }
   ready.value = true;
+  // Run the same self-check as the sidebar pet once per launch.
+  setTimeout(() => void checkNetwork(), 1500);
   void initializeUpdates(config.value.checkAppUpdates).catch((e) => (error.value = errorText(e)));
   void initializeMarket(reloadPlugins).catch((e) => (error.value = errorText(e)));
 });

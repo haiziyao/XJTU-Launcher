@@ -47,6 +47,7 @@ const canSubmit = computed(
           ? !!identity.value
           : flow.value.phase === 'success'),
 );
+const autoContinued = ref('');
 watch(flow, (next, previous) => {
   now.value = Date.now();
   resendAt.value = Date.now() + (next?.retryAfterSeconds || 0) * 1000;
@@ -54,6 +55,13 @@ watch(flow, (next, previous) => {
   if (next?.phase !== 'credentials' && next?.phase !== 'captcha') {
     password.value = '';
     showPassword.value = false;
+  }
+  // After accepting the password the campus page can return a confirmation step
+  // with no fields. Submit it once so the dialog does not need a second click;
+  // captcha, MFA and identity phases still wait for the user.
+  if (next?.phase === 'credentials' && next.canContinue && autoContinued.value !== next.flowId) {
+    autoContinued.value = next.flowId;
+    void login.submit({ type: 'continue' });
   }
 });
 async function restart() {
