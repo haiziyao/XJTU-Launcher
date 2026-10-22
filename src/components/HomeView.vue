@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import {
+  BookMarked,
   BookOpen,
+  Building2,
   CalendarDays,
   CalendarCheck,
   Compass,
   GraduationCap,
-  Landmark,
-  Library,
   LoaderCircle,
   MapPin,
   RefreshCw,
@@ -65,11 +65,11 @@ const greeting = computed(() => {
             : '晚上好';
   return props.displayName ? `${part}，${props.displayName}` : part;
 });
-const shortcutStyle: { icon: typeof Landmark; tone: Tone }[] = [
-  { icon: Landmark, tone: 'blue' },
-  { icon: GraduationCap, tone: 'red' },
-  { icon: BookOpen, tone: 'violet' },
-  { icon: Library, tone: 'green' },
+const shortcutStyle: { icon: typeof Building2; tone: Tone }[] = [
+  { icon: Building2, tone: 'blue' },
+  { icon: GraduationCap, tone: 'violet' },
+  { icon: BookOpen, tone: 'teal' },
+  { icon: BookMarked, tone: 'green' },
 ];
 const showCourses = computed(
   () => props.config.widgets.includes('timetable') && props.timetableEnabled,

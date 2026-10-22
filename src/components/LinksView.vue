@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { BookOpen, ExternalLink, GraduationCap, Landmark, Link2, Search } from 'lucide-vue-next';
+import {
+  BookMarked,
+  BookOpen,
+  Building2,
+  ExternalLink,
+  GraduationCap,
+  Link2,
+  Search,
+} from 'lucide-vue-next';
 import type { Link } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
@@ -16,9 +24,10 @@ const matches = computed(() =>
   ),
 );
 function style(title: string): { icon: typeof Link2; tone: Tone } {
-  if (title.includes('教务')) return { icon: GraduationCap, tone: 'red' };
-  if (title.includes('图书')) return { icon: Landmark, tone: 'green' };
-  if (title.includes('学堂')) return { icon: BookOpen, tone: 'violet' };
+  if (title.includes('一网通办')) return { icon: Building2, tone: 'blue' };
+  if (title.includes('教务')) return { icon: GraduationCap, tone: 'violet' };
+  if (title.includes('图书')) return { icon: BookMarked, tone: 'green' };
+  if (title.includes('学堂')) return { icon: BookOpen, tone: 'teal' };
   return { icon: Link2, tone: 'blue' };
 }
 </script>
