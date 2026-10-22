@@ -797,14 +797,12 @@ onBeforeUnmount(() => {
 }
 .agent-composer {
   position: relative;
-  border: 1px solid var(--border-strong);
   border-radius: 14px;
   background: var(--surface);
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
   padding: 10px 10px 8px 14px;
 }
 .agent-composer:focus-within {
-  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .agent-composer textarea {
@@ -1000,7 +998,6 @@ onBeforeUnmount(() => {
   background: linear-gradient(transparent, var(--panel) 45%);
 }
 .desktop-shell.has-wallpaper .agent-composer {
-  border-color: var(--panel-border);
   background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
