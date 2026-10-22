@@ -601,6 +601,7 @@ onBeforeUnmount(() => {
           v-if="renaming"
           v-model="renameTitle"
           class="agent-title-input"
+          :size="Math.max(renameTitle.length, 4)"
           maxlength="60"
           aria-label="对话名称"
           @keydown.enter.prevent="commitTitle"
@@ -1030,14 +1031,13 @@ onBeforeUnmount(() => {
   background: var(--accent-wash);
 }
 .agent-title-input {
-  min-width: 120px;
   max-width: 260px;
-  height: 28px;
-  padding: 0 6px;
-  border: 1px solid var(--accent);
+  padding: 2px 5px;
+  border: 0;
   border-radius: 6px;
-  background: var(--surface);
+  background: transparent;
   color: var(--text);
+  caret-color: var(--accent);
   font: inherit;
   font-size: 17px;
   font-weight: 600;
