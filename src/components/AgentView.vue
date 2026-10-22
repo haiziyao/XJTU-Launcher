@@ -219,7 +219,6 @@ function pickSkill(skill: AgentSkill) {
   attachSkill(skill);
 }
 function closeMenus() {
-  showHistory.value = false;
   showPlus.value = false;
   showAt.value = false;
 }
@@ -536,7 +535,7 @@ onBeforeUnmount(() => {
       <p v-if="error" class="notice agent-notice" role="alert">{{ error }}</p>
     </Transition>
 
-    <div v-if="showHistory || showPlus || showAt" class="agent-backdrop" @click="closeMenus"></div>
+    <div v-if="showPlus || showAt" class="agent-backdrop" @click="closeMenus"></div>
     <Transition name="drop">
       <AgentHistory
         v-if="showHistory"

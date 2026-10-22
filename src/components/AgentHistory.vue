@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { Check, ChevronRight, Pencil, Pin, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Check, Folder, Pencil, Pin, Plus, Search, Trash2, X } from 'lucide-vue-next';
 import type { AgentSummary, AgentWorkspace } from '../types';
 
 const props = defineProps<{
@@ -147,9 +147,16 @@ function commitCreating() {
     </form>
     <p v-if="empty" class="history-empty">还没有对话</p>
     <p v-else-if="!total && !workspaces.length" class="history-empty">没有匹配的对话</p>
-    <div v-for="section in sections" :key="section.key" class="history-group">
+    <div
+      v-for="section in sections"
+      :key="section.key"
+      class="history-group"
+      :class="{ 'is-workspace': section.workspaceId }"
+    >
       <div class="history-group-head">
-        <p class="history-group-title">{{ section.title }}</p>
+        <p class="history-group-title">
+          <Folder v-if="section.workspaceId" :size="12" />{{ section.title }}
+        </p>
         <button
           v-if="section.workspaceId"
           class="history-new small"
@@ -220,18 +227,21 @@ function commitCreating() {
   position: absolute;
   top: 44px;
   left: 0;
-  bottom: 0;
+  bottom: 132px;
   z-index: 21;
   display: flex;
   flex-direction: column;
-  width: 300px;
+  width: 320px;
   max-width: 82vw;
-  padding: 6px 6px 10px;
+  padding: 6px 6px 90px;
   border: 1px solid var(--border);
   border-radius: 0 12px 12px 0;
   background: var(--surface);
   box-shadow: 10px 0 30px rgba(15, 23, 42, 0.12);
   overflow-y: auto;
+  /* Ends above the composer and dissolves instead of cutting off. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent 100%);
 }
 .history-head {
   display: flex;
@@ -312,6 +322,28 @@ function commitCreating() {
 }
 .history-empty.small {
   padding: 4px 8px;
+}
+.history-group.is-workspace {
+  margin: 4px 4px 6px;
+  padding: 2px 0 4px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+}
+.history-group.is-workspace .history-group-head {
+  margin: 4px 8px 2px;
+}
+.history-group.is-workspace .history-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.history-group.is-workspace .history-row {
+  margin-left: 12px;
+}
+.history-group.is-workspace .history-open {
+  font-size: 12.5px;
 }
 .history-group-head {
   display: flex;
