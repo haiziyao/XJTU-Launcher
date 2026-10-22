@@ -79,8 +79,19 @@ pub struct Conversation {
     pub role_id: Option<String>,
     #[serde(default)]
     pub pinned: bool,
+    /// Workspace this conversation belongs to, if any.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub messages: Vec<Message>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Workspace {
+    pub id: String,
+    pub name: String,
+    pub created_at: i64,
 }
 
 #[derive(Serialize)]
@@ -92,6 +103,7 @@ pub struct Summary {
     pub updated_at: i64,
     pub pinned: bool,
     pub role_id: Option<String>,
+    pub workspace_id: Option<String>,
     pub messages: usize,
 }
 
@@ -102,6 +114,8 @@ pub struct Store {
     pub version: u32,
     #[serde(default)]
     pub conversations: Vec<Conversation>,
+    #[serde(default)]
+    pub workspaces: Vec<Workspace>,
 }
 
 fn version() -> u32 {
@@ -113,6 +127,7 @@ impl Default for Store {
         Self {
             version: 1,
             conversations: Vec::new(),
+            workspaces: Vec::new(),
         }
     }
 }
@@ -145,7 +160,9 @@ pub fn save(path: &Path, store: &Store) -> Result<(), String> {
 }
 
 /// Adds a conversation and returns a copy; callers should keep using `find_mut`.
-pub fn create(store: &mut Store) -> Conversation {
+pub fn create(store: &mut Store, workspace_id: Option<String>) -> Conversation {
+    let workspace_id =
+        workspace_id.filter(|id| store.workspaces.iter().any(|workspace| &workspace.id == id));
     let conversation = Conversation {
         id: uuid::Uuid::new_v4().to_string(),
         title: "新对话".into(),
@@ -153,6 +170,7 @@ pub fn create(store: &mut Store) -> Conversation {
         updated_at: now(),
         role_id: None,
         pinned: false,
+        workspace_id,
         messages: Vec::new(),
     };
     store.conversations.push(conversation.clone());
@@ -177,6 +195,7 @@ pub fn summaries(store: &Store) -> Vec<Summary> {
             updated_at: conversation.updated_at,
             pinned: conversation.pinned,
             role_id: conversation.role_id.clone(),
+            workspace_id: conversation.workspace_id.clone(),
             messages: conversation.messages.len(),
         })
         .collect();
@@ -186,6 +205,30 @@ pub fn summaries(store: &Store) -> Vec<Summary> {
             std::cmp::Reverse(summary.updated_at),
         )
     });
+    list
+}
+
+/// Workspaces are just named groups of conversations, stored beside them.
+pub fn create_workspace(store: &mut Store, name: &str) -> Result<Workspace, String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 40 {
+        return Err("工作区名称需要 1–40 个字符".into());
+    }
+    if store.workspaces.len() >= 32 {
+        return Err("工作区数量已达上限".into());
+    }
+    let workspace = Workspace {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        created_at: now(),
+    };
+    store.workspaces.push(workspace.clone());
+    Ok(workspace)
+}
+
+pub fn workspaces(store: &Store) -> Vec<Workspace> {
+    let mut list = store.workspaces.clone();
+    list.sort_by_key(|workspace| workspace.created_at);
     list
 }
 
@@ -246,7 +289,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("conversations.json");
         let mut store = load(&path).unwrap();
-        let created = create(&mut store);
+        let created = create(&mut store, None);
         let conversation = find_mut(&mut store, &created.id).unwrap();
         append(conversation, Message::user("帮我看看明天的课"));
         assert_eq!(conversation.title, "帮我看看明天的课");

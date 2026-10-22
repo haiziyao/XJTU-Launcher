@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import type {
   ImageCrop,
   AgentConversation,
+  AgentWorkspace,
   AgentEvent,
   AgentMemory,
   AgentPresetInput,
@@ -266,9 +267,17 @@ export const bridge = {
     requireNative();
     return invoke('agent_get', { id });
   },
-  async agentNew(): Promise<AgentConversation> {
+  async agentNew(workspaceId: string | null = null): Promise<AgentConversation> {
     requireNative();
-    return invoke('agent_new');
+    return invoke('agent_new', { workspaceId });
+  },
+  async agentWorkspaces(): Promise<AgentWorkspace[]> {
+    requireNative();
+    return invoke('agent_workspaces');
+  },
+  async agentCreateWorkspace(name: string): Promise<AgentWorkspace> {
+    requireNative();
+    return invoke('agent_create_workspace', { name });
   },
   async agentDelete(id: string): Promise<void> {
     requireNative();

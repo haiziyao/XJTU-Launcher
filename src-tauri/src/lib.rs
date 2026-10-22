@@ -1357,13 +1357,37 @@ fn agent_get(
 fn agent_new(
     app: tauri::AppHandle,
     window: WebviewWindow,
+    workspace_id: Option<String>,
 ) -> Result<agent::store::Conversation, String> {
     main_only(&window)?;
     let path = agent::path(&app)?;
     let mut book = agent::store::load(&path)?;
-    let conversation = agent::store::create(&mut book);
+    let conversation = agent::store::create(&mut book, workspace_id);
     agent::store::save(&path, &book)?;
     Ok(conversation)
+}
+#[tauri::command]
+fn agent_workspaces(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::store::Workspace>, String> {
+    main_only(&window)?;
+    Ok(agent::store::workspaces(&agent::store::load(
+        &agent::path(&app)?,
+    )?))
+}
+#[tauri::command]
+fn agent_create_workspace(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    name: String,
+) -> Result<agent::store::Workspace, String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let workspace = agent::store::create_workspace(&mut book, &name)?;
+    agent::store::save(&path, &book)?;
+    Ok(workspace)
 }
 #[tauri::command]
 fn agent_delete(app: tauri::AppHandle, window: WebviewWindow, id: String) -> Result<(), String> {
@@ -1585,6 +1609,8 @@ pub fn run() {
             mcp_catalog,
             install_mcp_entry,
             agent_list,
+            agent_workspaces,
+            agent_create_workspace,
             agent_get,
             agent_new,
             agent_delete,

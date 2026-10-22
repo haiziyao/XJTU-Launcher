@@ -6,8 +6,8 @@ import {
   AtSign,
   Check,
   ChevronRight,
-  History,
   LoaderCircle,
+  PanelLeft,
   Plus,
   Settings2,
   Square,
@@ -20,6 +20,7 @@ import type {
   AgentPresets,
   AgentSkill,
   AgentSummary,
+  AgentWorkspace,
   AgentTask,
   AgentToolCall,
   AgentConversation,
@@ -72,6 +73,9 @@ const roleId = ref('');
 const selectedSkills = ref<AgentSkill[]>([]);
 const conversation = ref<AgentConversation | null>(null);
 const summaries = ref<AgentSummary[]>([]);
+const workspaces = ref<AgentWorkspace[]>([]);
+/** Workspace for the next new conversation, chosen from the drawer. */
+const workspaceId = ref('');
 const messages = ref<AgentMessage[]>([]);
 const showHistory = ref(false);
 const draft = ref('');
@@ -263,6 +267,13 @@ async function pinConversation(id: string, pinned: boolean) {
     error.value = errorText(e);
   }
 }
+async function loadWorkspaces() {
+  try {
+    workspaces.value = await bridge.agentWorkspaces();
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
 async function loadSummaries() {
   try {
     summaries.value = await bridge.agentList();
@@ -277,6 +288,7 @@ async function openConversation(id: string) {
     conversation.value = next;
     messages.value = next.messages.slice();
     roleId.value = next.roleId || '';
+    workspaceId.value = next.workspaceId || '';
     selectedSkills.value = [];
     liveText.value = '';
     liveSteps.value = [];
@@ -291,6 +303,7 @@ async function openConversation(id: string) {
 }
 function newChat() {
   if (running.value) void stop();
+  workspaceId.value = '';
   conversation.value = null;
   messages.value = [];
   roleId.value = '';
@@ -302,6 +315,19 @@ function newChat() {
   draft.value = '';
   error.value = '';
   showHistory.value = false;
+}
+function startInWorkspace(id: string | null) {
+  newChat();
+  workspaceId.value = id || '';
+  showHistory.value = false;
+}
+async function createWorkspace(name: string) {
+  try {
+    await bridge.agentCreateWorkspace(name);
+    await loadWorkspaces();
+  } catch (e) {
+    error.value = errorText(e);
+  }
 }
 async function removeConversation(summary: AgentSummary) {
   if (
@@ -386,7 +412,7 @@ async function send() {
   error.value = '';
   if (!conversation.value) {
     try {
-      conversation.value = await bridge.agentNew();
+      conversation.value = await bridge.agentNew(workspaceId.value || null);
     } catch (e) {
       error.value = errorText(e);
       return;
@@ -464,7 +490,7 @@ function shortContent(text: string, limit = 6000) {
 }
 watch(liveText, () => void scrollDown());
 onMounted(async () => {
-  await Promise.all([loadProviders(), loadSummaries(), loadPresets()]);
+  await Promise.all([loadProviders(), loadSummaries(), loadPresets(), loadWorkspaces()]);
   try {
     unlisten = await bridge.onAgent(onEvent);
   } catch (e) {
@@ -479,19 +505,19 @@ onBeforeUnmount(() => {
   <section class="desktop-page agent-page">
     <header class="agent-bar">
       <div class="agent-bar-title">
-        <span class="agent-name">{{ currentTitle }}</span>
-      </div>
-      <div class="agent-bar-actions">
         <button
           class="agent-icon-button"
           :class="{ active: showHistory }"
-          title="历史记录"
-          aria-label="历史记录"
+          title="对话管理"
+          aria-label="对话管理"
           :aria-expanded="showHistory"
           @click="showHistory = !showHistory"
         >
-          <History :size="15" />
+          <PanelLeft :size="16" />
         </button>
+        <span class="agent-name">{{ currentTitle }}</span>
+      </div>
+      <div class="agent-bar-actions">
         <button class="agent-icon-button" title="新对话" aria-label="新对话" @click="newChat">
           <Plus :size="15" />
         </button>
@@ -515,6 +541,7 @@ onBeforeUnmount(() => {
       <AgentHistory
         v-if="showHistory"
         :summaries="summaries"
+        :workspaces="workspaces"
         :current-id="conversation?.id"
         :disabled="running"
         @open="openConversation"
@@ -522,6 +549,8 @@ onBeforeUnmount(() => {
         @rename="renameConversation"
         @pin="pinConversation"
         @close="showHistory = false"
+        @create="startInWorkspace"
+        @create-workspace="createWorkspace"
       />
     </Transition>
 
@@ -806,6 +835,9 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .agent-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .agent-name {

@@ -451,6 +451,7 @@ export interface AgentConversation {
   updatedAt: number;
   roleId: string | null;
   pinned: boolean;
+  workspaceId?: string | null;
   messages: AgentMessage[];
 }
 export interface AgentSummary {
@@ -460,7 +461,14 @@ export interface AgentSummary {
   updatedAt: number;
   pinned: boolean;
   roleId: string | null;
+  workspaceId?: string | null;
   messages: number;
+}
+/** Named group of conversations, stored beside them. */
+export interface AgentWorkspace {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 export interface AgentRole {
   id: string;
