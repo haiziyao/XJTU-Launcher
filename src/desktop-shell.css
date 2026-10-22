@@ -24,7 +24,7 @@
 }
 /* Reserve the upper sidebar for future app-level content. */
 .sidebar-top-space {
-  height: 56px;
+  height: 40px;
   flex-shrink: 0;
 }
 .desktop-navigation {

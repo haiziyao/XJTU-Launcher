@@ -20,6 +20,8 @@ pub struct AppConfig {
     #[serde(default = "default_show_seconds")]
     pub show_seconds: bool,
     pub accent: String,
+    #[serde(default = "default_pet")]
+    pub pet: String,
     pub greeting: String,
     pub widgets: Vec<String>,
     pub plugin_order: Vec<String>,
@@ -42,6 +44,10 @@ fn default_show_seconds() -> bool {
     true
 }
 
+fn default_pet() -> String {
+    "xixi".into()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -54,6 +60,7 @@ impl Default for AppConfig {
             reduce_motion: false,
             show_seconds: true,
             accent: "#1f6fe5".into(),
+            pet: default_pet(),
             greeting: "把校园，放在手边。".into(),
             widgets: vec!["timetable".into(), "links".into(), "plugins".into()],
             plugin_order: vec![],
@@ -87,6 +94,8 @@ impl AppConfig {
             })
             || self.version != 1
             || bad_accent(&self.accent)
+            || !["xixi", "anan", "jiaojiao", "tongtong", "dada", "xuexue"]
+                .contains(&self.pet.as_str())
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
             || self

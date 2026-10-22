@@ -19,12 +19,42 @@
   line-height: 1.4;
   transform: translateX(-50%);
   pointer-events: none;
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
 }
-.pet-toast.is-ok svg {
-  color: var(--success);
+/* Each environment gets a translucent tint: sky for campus, green for VPN,
+   red when both are unreachable. */
+.pet-toast.is-campus {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(56, 189, 248, 0.16);
+  color: #0b5a75;
 }
-.pet-toast.is-warn svg {
-  color: var(--danger);
+.pet-toast.is-campus svg {
+  color: #0284c7;
+}
+.pet-toast.is-vpn {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.15);
+  color: #14663c;
+}
+.pet-toast.is-vpn svg {
+  color: #16a34a;
+}
+.pet-toast.is-offline {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.14);
+  color: #8c2323;
+}
+.pet-toast.is-offline svg {
+  color: #dc2626;
+}
+.pet-toast.is-unbound {
+  border-color: rgba(100, 116, 139, 0.34);
+  background: rgba(100, 116, 139, 0.14);
+  color: var(--text-secondary);
+}
+.pet-toast.is-unbound svg {
+  color: #64748b;
 }
 
 .pet-toast-enter-active {

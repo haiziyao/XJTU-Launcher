@@ -1,0 +1,217 @@
+/* Shared pet illustrations (sidebar and settings picker) and the sidebar
+   pet's state animations. Colours follow the theme accent. */
+.pet-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.pet-shadow {
+  fill: rgba(15, 23, 42, 0.1);
+}
+.pet-shape,
+.pet-arm,
+.pet-ear {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-opacity: 0.38;
+  stroke-width: 1.3;
+}
+.pet-ear-inner {
+  fill: var(--accent);
+  fill-opacity: 0.22;
+  stroke: none;
+}
+.pet-sprout-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-opacity: 0.55;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.pet-sprout-leaf {
+  fill: var(--accent);
+  fill-opacity: 0.7;
+}
+.pet-tuft path,
+.pet-snow path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-opacity: 0.6;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.pet-muzzle {
+  fill: rgba(255, 255, 255, 0.62);
+  stroke: var(--accent);
+  stroke-opacity: 0.22;
+  stroke-width: 1.2;
+}
+.pet-beak {
+  fill: var(--accent);
+  fill-opacity: 0.72;
+}
+.pet-whisker path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-opacity: 0.35;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+.pet-ink {
+  fill: var(--text);
+}
+.pet-eyes-sad,
+.pet-mouth-sad {
+  opacity: 0;
+}
+.pet-eyes-sad path {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.pet-mouth,
+.pet-mouth-sad {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.pet-mouth-open {
+  fill: var(--text);
+  stroke: none;
+}
+.pet-blush {
+  fill: var(--accent);
+  fill-opacity: 0.26;
+}
+.pet-spark {
+  fill: var(--accent);
+  opacity: 0;
+}
+
+.sidebar-pet .pet-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.sidebar-pet .pet-shadow,
+.sidebar-pet .pet-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.sidebar-pet .pet-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pet-blink 5.6s ease-in-out infinite;
+}
+
+.sidebar-pet.is-idle .pet-body {
+  animation: pet-breathe 3.6s ease-in-out infinite;
+}
+.sidebar-pet.is-checking .pet-body {
+  animation: pet-tilt 1.2s ease-in-out infinite;
+}
+.sidebar-pet.is-checking .pet-think {
+  opacity: 1;
+}
+.sidebar-pet.is-ok .pet-body {
+  animation: pet-jump 760ms var(--ease-out) both;
+}
+.sidebar-pet.is-warn .pet-body {
+  animation: pet-wobble 620ms ease-in-out both;
+}
+.sidebar-pet.is-warn .pet-eyes,
+.sidebar-pet.is-warn .pet-mouth {
+  opacity: 0;
+}
+.sidebar-pet.is-warn .pet-eyes-sad,
+.sidebar-pet.is-warn .pet-mouth-sad {
+  opacity: 1;
+}
+.sidebar-pet.is-ok .pet-spark {
+  animation: pet-spark 900ms ease-out 120ms both;
+}
+.sidebar-pet.is-ok .pet-spark-b {
+  animation-delay: 260ms;
+}
+
+@keyframes pet-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.015, 1.03);
+  }
+}
+@keyframes pet-tilt {
+  0%,
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-1px);
+  }
+}
+@keyframes pet-jump {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  20% {
+    transform: translateY(1.5px) scale(1.05, 0.93);
+  }
+  48% {
+    transform: translateY(-9px) scale(0.97, 1.04);
+  }
+  70% {
+    transform: translateY(0) scale(1.04, 0.95);
+  }
+  85% {
+    transform: translateY(-2px) scale(0.99, 1.01);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+@keyframes pet-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-6deg);
+  }
+  40% {
+    transform: rotate(5deg);
+  }
+  60% {
+    transform: rotate(-3deg);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
+}
+@keyframes pet-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.12);
+  }
+}
+@keyframes pet-spark {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}

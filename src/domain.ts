@@ -1,5 +1,6 @@
 import type { AppConfig, Course, Plugin, Timetable } from './types';
 import { DEFAULT_ACCENT } from './theme';
+import { DEFAULT_PET } from './pets';
 
 export const DEFAULT_SIDEBAR_WIDTH = 140;
 
@@ -13,6 +14,7 @@ export const defaultConfig = (): AppConfig => ({
   reduceMotion: false,
   showSeconds: true,
   accent: DEFAULT_ACCENT,
+  pet: DEFAULT_PET,
   greeting: '把校园，放在手边。',
   widgets: ['timetable', 'links', 'plugins'],
   pluginOrder: [],

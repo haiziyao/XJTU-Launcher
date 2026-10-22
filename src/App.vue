@@ -20,8 +20,16 @@ import { initializeMarket } from './market';
 import { initializeUpdates } from './updates';
 import { bridge, native } from './bridge';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
-import type { AccountStatus, AppConfig, PetState, PluginList, Timetable } from './types';
+import type {
+  AccountStatus,
+  AppConfig,
+  NetworkCheck,
+  PetState,
+  PluginList,
+  Timetable,
+} from './types';
 import SidebarPet from './components/SidebarPet.vue';
+import { normalizePet } from './pets';
 import HomeView from './components/HomeView.vue';
 import AccountsView from './components/AccountsView.vue';
 import PersonalView from './components/PersonalView.vue';
@@ -40,6 +48,7 @@ import './ui.css';
 import './pages.css';
 import './desktop-shell.css';
 import './pet-toast.css';
+import './pet-art.css';
 
 const route = ref('home');
 const navigation = ref<HTMLElement | null>(null);
@@ -63,6 +72,7 @@ function openSettings(
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
+const petVariant = computed(() => normalizePet(config.value.pet));
 // Accent tokens live on the document root so teleported dialogs inherit them too.
 watch(() => config.value.accent, applyAccent, { immediate: true });
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
@@ -76,11 +86,12 @@ const saving = ref(false);
 const now = ref(new Date());
 const petState = ref<PetState>('idle');
 const petMessage = ref('');
-const toast = ref<{ id: number; message: string; tone: 'ok' | 'warn' } | null>(null);
+const toast = ref<{ id: number; message: string; tone: ToastTone } | null>(null);
 let petTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let toastId = 0;
-function showToast(message: string, tone: 'ok' | 'warn') {
+type ToastTone = NetworkCheck['environment'];
+function showToast(message: string, tone: ToastTone) {
   if (toastTimer) clearTimeout(toastTimer);
   toastId += 1;
   toast.value = { id: toastId, message, tone };
@@ -213,10 +224,12 @@ async function checkNetwork() {
   petMessage.value = '';
   const started = performance.now();
   let next: PetState = 'warn';
+  let tone: ToastTone = 'offline';
   let message = '';
   try {
     const result = await bridge.checkNetwork();
     message = result.message;
+    tone = result.environment;
     next = result.environment === 'campus' || result.environment === 'vpn' ? 'ok' : 'warn';
   } catch (e) {
     message = errorText(e);
@@ -228,11 +241,11 @@ async function checkNetwork() {
   if (disposed) return;
   petMessage.value = message;
   petState.value = next;
-  showToast(message, next === 'ok' ? 'ok' : 'warn');
+  showToast(message, tone);
   petTimer = setTimeout(() => {
     petState.value = 'idle';
     petMessage.value = '';
-  }, 2600);
+  }, 3000);
 }
 async function openLink(url: string) {
   try {
@@ -290,7 +303,11 @@ onMounted(async () => {
   const results = await Promise.allSettled([bridge.config(), bridge.plugins(), bridge.account()]);
   if (disposed) return;
   if (results[0].status === 'fulfilled') {
-    config.value = { ...results[0].value, accent: normalizeAccent(results[0].value.accent) };
+    config.value = {
+      ...results[0].value,
+      accent: normalizeAccent(results[0].value.accent),
+      pet: normalizePet(results[0].value.pet),
+    };
     configLoaded.value = true;
   } else error.value = errorText(results[0].reason);
   if (results[1].status === 'fulfilled') pluginList.value = results[1].value;
@@ -350,7 +367,12 @@ onBeforeUnmount(() => {
   >
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
       <div class="sidebar-top-space" aria-hidden="true"></div>
-      <SidebarPet :state="petState" :message="petMessage" @check="checkNetwork" />
+      <SidebarPet
+        :state="petState"
+        :message="petMessage"
+        :variant="petVariant"
+        @check="checkNetwork"
+      />
       <nav ref="navigation" class="desktop-navigation" aria-label="主导航">
         <span
           class="nav-indicator"
@@ -427,7 +449,7 @@ onBeforeUnmount(() => {
           :class="{ selected: route === 'personal' || route === 'accounts' }"
           @click="route = 'personal'"
         >
-          <UiAvatar :src="displayAvatar" :size="28" />
+          <UiAvatar :src="displayAvatar" :size="32" />
           <span class="desktop-identity-text">
             <strong>{{ displayName }}</strong>
             <small>{{
@@ -481,7 +503,11 @@ onBeforeUnmount(() => {
           :class="`is-${toast.tone}`"
           role="status"
         >
-          <Wifi v-if="toast.tone === 'ok'" :size="14" aria-hidden="true" />
+          <Wifi
+            v-if="toast.tone === 'campus' || toast.tone === 'vpn'"
+            :size="14"
+            aria-hidden="true"
+          />
           <WifiOff v-else :size="14" aria-hidden="true" />
           <span>{{ toast.message }}</span>
         </div>

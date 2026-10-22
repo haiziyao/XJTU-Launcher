@@ -8,6 +8,7 @@ export interface AppConfig {
   reduceMotion: boolean;
   showSeconds: boolean;
   accent: string;
+  pet: string;
   greeting: string;
   widgets: string[];
   pluginOrder: string[];

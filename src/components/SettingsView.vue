@@ -12,6 +12,8 @@ import {
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
 import { ACCENT_PRESETS, normalizeAccent } from '../theme';
+import { PETS, normalizePet, type PetId } from '../pets';
+import PetArt from './PetArt.vue';
 import PluginSourceSettings from './PluginSourceSettings.vue';
 import AppUpdateSettings from './AppUpdateSettings.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
@@ -31,6 +33,10 @@ const emit = defineEmits<{ update: [config: AppConfig] }>();
 const tab = ref<string>(props.initialSection || 'appearance');
 const accent = computed(() => normalizeAccent(props.config.accent));
 const customAccent = computed(() => !ACCENT_PRESETS.some((p) => p.value === accent.value));
+const currentPet = computed(() => normalizePet(props.config.pet));
+function setPet(id: PetId) {
+  if (id !== currentPet.value) emit('update', { ...props.config, pet: id });
+}
 function setAccent(value: string) {
   const next = normalizeAccent(value);
   if (next !== accent.value) emit('update', { ...props.config, accent: next });
@@ -87,6 +93,24 @@ const sections = [
                   </label>
                 </div>
               </SettingRow>
+            </SettingGroup>
+            <SettingGroup title="侧边栏宠物">
+              <div class="pet-picker" role="radiogroup" aria-label="侧边栏宠物">
+                <button
+                  v-for="pet in PETS"
+                  :key="pet.id"
+                  type="button"
+                  class="pet-option"
+                  :class="{ active: currentPet === pet.id }"
+                  role="radio"
+                  :aria-checked="currentPet === pet.id"
+                  :disabled="saving"
+                  @click="setPet(pet.id)"
+                >
+                  <span class="pet-option-art"><PetArt :variant="pet.id" /></span>
+                  <span>{{ pet.name }}</span>
+                </button>
+              </div>
             </SettingGroup>
             <SettingGroup title="动态效果">
               <SettingRow title="减少动态效果" description="关闭导航、侧栏和页面的过渡动画">
@@ -204,6 +228,42 @@ const sections = [
 }
 .accent-swatch.custom input:disabled {
   cursor: default;
+}
+.pet-picker {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px;
+}
+.pet-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration) ease,
+    color var(--duration) ease;
+}
+.pet-option:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+.pet-option.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.pet-option-art {
+  display: block;
+  width: 40px;
+  height: 40px;
 }
 .settings-layout {
   display: block;
