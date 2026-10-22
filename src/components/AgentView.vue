@@ -793,7 +793,6 @@ onBeforeUnmount(() => {
 }
 .agent-composer-wrap {
   padding: 8px 0 0;
-  background: linear-gradient(transparent, var(--surface) 40%);
 }
 .agent-composer {
   position: relative;
@@ -994,9 +993,6 @@ onBeforeUnmount(() => {
 }
 
 /* With a wallpaper the page stays translucent so the photo is not blocked. */
-.desktop-shell.has-wallpaper .agent-composer-wrap {
-  background: linear-gradient(transparent, var(--panel) 45%);
-}
 .desktop-shell.has-wallpaper .agent-composer {
   background: var(--panel);
 }
