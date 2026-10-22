@@ -46,6 +46,12 @@ pub enum Query {
         end: String,
         page: u32,
     },
+    Card,
+    CardTransactions {
+        start: String,
+        end: String,
+        page: u32,
+    },
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -57,6 +63,7 @@ impl Query {
             Self::RoomOptions | Self::Rooms { .. } => "rooms",
             Self::Calendar => "calendar",
             Self::AttendanceStreams { .. } | Self::AttendanceRecords { .. } => "attendance",
+            Self::Card | Self::CardTransactions { .. } => "card",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -94,6 +101,14 @@ impl Query {
             }
             Self::AttendanceRecords { start, end, page }
                 if !(1..=500).contains(page)
+                    || !valid_date(start)
+                    || !valid_date(end)
+                    || start > end =>
+            {
+                return Err("请选择有效的日期范围和页码".into());
+            }
+            Self::CardTransactions { start, end, page }
+                if !(1..=200).contains(page)
                     || !valid_date(start)
                     || !valid_date(end)
                     || start > end =>
@@ -173,6 +188,18 @@ pub async fn query(
             }
             Query::AttendanceRecords { start, end, page } => {
                 client.records(&start, &end, page).await?
+            }
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
+    }
+    if matches!(query, Query::Card | Query::CardTransactions { .. }) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::card::Client::connect(&account).await?;
+        let value = match query {
+            Query::Card => client.info().await?,
+            Query::CardTransactions { start, end, page } => {
+                client.transactions(&start, &end, page).await?
             }
             _ => unreachable!(),
         };
@@ -291,6 +318,7 @@ pub async fn query(
         }
         Query::Calendar => unreachable!(),
         Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
+        Query::Card | Query::CardTransactions { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }

@@ -25,7 +25,7 @@
 | 考勤统计与流水 | `attendance/attendance.py` | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收 |
 | 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 待适配 |
 | 通知订阅与推送 | `app/threads/NoticeThread.py` | 待适配 |
-| 校园卡余额与流水 | `card/campus_card.py` | 待适配 |
+| 校园卡余额与流水 | `card/campus_card.py` | Rust 查询适配：CAS Cookie 换 ncard 令牌，余额与流水分页；未实机验收 |
 | 图书馆座位与预约 | `library/seats.py` | 待适配 |
 | 体测成绩 | `fitness/score.py` | 待适配 |
 | 场馆查询与预约 | `app/sessions/venue_session.py` | 待适配 |
@@ -35,12 +35,12 @@
 
 ## 当前后端接口
 
-2026-10-23 补充：考勤流水与课程考勤查询已接入 `school_query`（`attendanceStreams` / `attendanceRecords`），复用账号保存的本科/研究生考勤业务 token，按账号当前直连或 WebVPN 模式访问；页面尚未实现，未实机验收。
+2026-10-23 补充：考勤流水与课程考勤查询已接入 `school_query`（`attendanceStreams` / `attendanceRecords`），复用账号保存的本科/研究生考勤业务 token，按账号当前直连或 WebVPN 模式访问。校园卡查询（`card` / `cardTransactions`）用已保存的 CAS Cookie 向 ncard 换临时令牌，支持余额与流水。两者页面尚未实现，未实机验收。
 
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 
 - `school_catalog`：校园能力清单及后端进度，现已接入插件市场校园列表，尚无新业务页面的项目显示待接入；`pending` 项不是可用功能。
-- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历。
+- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历、考勤、校园卡。
 - `school_prepare_evaluations`：按当前账号重新读取开放问卷及真实选项，生成精确的待提交答案。模板等级 1–5 对应选项顺序；文字意见由用户提供，必填文字题为空时返回错误。支持逐题覆盖答案。预览不会发送评价。
 - `school_submit_evaluations`：消费一次性预览 ID 后逐份提交；账号、会话代次与 15 分钟有效期必须匹配。返回每份 `submitted/failed/skipped/cancelled/unknown` 结果，并发送 `school-evaluation-progress` 事件。网络结果不明时不自动重发，停止余下提交，提示刷新学校状态。
 - `school_cancel_evaluations`：丢弃尚未执行的预览，或在当前请求返回后停止后续提交。已经发送的请求不会宣称撤回成功。
