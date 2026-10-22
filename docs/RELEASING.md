@@ -11,6 +11,8 @@
 - 签名密钥已在本机生成（`~/.tauri/xjtu-launcher.key`，无密码）；私钥不入仓库，需自行备份并填入 GitHub Secret。丢失私钥后无法再为已发布客户端签名更新。
 - 仓库 Variables 与 Secret 已于 2026-10-22 配置完毕，签名构建可跑通。
 
+系统代码签名（Gatekeeper / SmartScreen）尚未配置，步骤见 [SIGNING.md](SIGNING.md)。未签名不影响自动更新的 minisign 校验，但首次安装会触发系统警告。
+
 ## 首次部署
 
 1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
