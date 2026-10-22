@@ -10,6 +10,9 @@ jobs:
   release:
     strategy:
       fail-fast: false
+      # tauri-action 无法按 tag 查询草稿发布，只能取列表里第一个同名草稿；
+      # 并行 job 会各自建草稿并分散上传，串行执行保证三个平台合并到同一个草稿。
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest

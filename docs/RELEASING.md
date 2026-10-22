@@ -9,7 +9,7 @@
 - 更新端点：`https://github.com/haiziyao/XJTU-Launcher/releases/latest/download/latest.json`（仓库为公开仓库，使用 Release 资产中的 latest.json）。
 - 更新公钥：`dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCRDUwMjM1QzIzRTVBRkIKUldUN1dqN0NOUUxWYTQ0WlRpUGZWeVg1V21OVDZna1BsdW9kSExSWitYaUNHay9TL2JZU0hkSnIK`
 - 签名密钥已在本机生成（`~/.tauri/xjtu-launcher.key`，无密码）；私钥不入仓库，需自行备份并填入 GitHub Secret。丢失私钥后无法再为已发布客户端签名更新。
-- 仓库 Variables 与 Secret 仍需在 GitHub 上填写后才能运行发布工作流。
+- 仓库 Variables 与 Secret 已于 2026-10-22 配置完毕，签名构建可跑通。
 
 ## 首次部署
 
@@ -19,9 +19,11 @@
 4. 保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
 5. 手动运行 `Signed desktop release` 工作流，构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与草稿 Release。检查安装包和更新清单后再正式发布；公钥配置必须已包含在用户当前安装的客户端中。
 
+工作流把三个平台串行执行（`max-parallel: 1`）。`tauri-action` 无法按 tag 查询草稿，只能取发布列表里第一个同名草稿，并行 job 会各自新建草稿并把资产分散上传，导致每个草稿都缺平台、`latest.json` 只有部分 `platforms`。发布前确认**只有一个**同名草稿且三个平台的安装包、更新包和 `.sig` 齐全，否则先删除残缺草稿再重跑。每次构建都会先读出已有 `latest.json` 再合并平台，挂到同一个草稿上即可得到完整清单。
+
 工作流调用 `tools/prepare-release.mjs`，生成开启 `bundle.createUpdaterArtifacts` 的临时 Tauri 配置。普通 `npm run app:build` 保持可本地构建，无需发布密钥。更新相关环境变量也通过 Rust 编译进入客户端，不允许用户更改插件源时连带修改。
 
-GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest.json；若仓库私有，应使用用户无需 GitHub 凭据即可访问的自有公开更新托管。更新清单中的平台名称、下载 URL 和 `.sig` 内容由官方 Tauri Action 生成。当前没有部署正式端点，也没有创建或使用发布私钥。
+GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest.json；若仓库私有，应使用用户无需 GitHub 凭据即可访问的自有公开更新托管。更新清单中的平台名称、下载 URL 和 `.sig` 内容由官方 Tauri Action 生成。清单里的下载 URL 是 `api.github.com/.../releases/assets/{id}` 形式，客户端下载时会带 `Accept: application/octet-stream`，公开仓库正式发布后可匿名下载。签名构建已于 2026-10-22 跑通，但尚无正式发布的版本，跨版本更新仍未实测。
 
 ## 运行行为
 
