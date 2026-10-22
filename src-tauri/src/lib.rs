@@ -1366,22 +1366,10 @@ fn agent_rename(
 async fn agent_send(
     app: tauri::AppHandle,
     window: WebviewWindow,
-    conversation_id: String,
-    request_id: String,
-    content: String,
-    provider_id: Option<String>,
-    skill_ids: Vec<String>,
+    input: agent::Send,
 ) -> Result<(), String> {
     main_only(&window)?;
-    agent::send(
-        app,
-        conversation_id,
-        request_id,
-        content,
-        provider_id,
-        skill_ids,
-    )
-    .await
+    agent::send(app, input).await
 }
 #[tauri::command]
 fn agent_cancel(

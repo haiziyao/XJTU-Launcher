@@ -279,16 +279,11 @@ export const bridge = {
     requestId: string;
     content: string;
     providerId: string | null;
+    model: string | null;
     skillIds: string[];
   }): Promise<void> {
     requireNative();
-    return invoke('agent_send', {
-      conversationId: input.conversationId,
-      requestId: input.requestId,
-      content: input.content,
-      providerId: input.providerId,
-      skillIds: input.skillIds,
-    });
+    return invoke('agent_send', { input });
   },
   async agentPresets(): Promise<AgentPresets> {
     requireNative();

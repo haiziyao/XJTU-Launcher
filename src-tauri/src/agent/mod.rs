@@ -114,7 +114,11 @@ impl Manager {
     }
 }
 
-fn provider_for(app: &AppHandle, provider_id: Option<&str>) -> Result<chat::Provider, String> {
+fn provider_for(
+    app: &AppHandle,
+    provider_id: Option<&str>,
+    model: Option<&str>,
+) -> Result<chat::Provider, String> {
     let book = providers::load(&crate::providers_path(app)?)?;
     let id = provider_id
         .map(str::to_string)
@@ -130,28 +134,48 @@ fn provider_for(app: &AppHandle, provider_id: Option<&str>) -> Result<chat::Prov
     } else {
         provider.api_key.clone()
     };
+    // The chat page sends the model it currently shows; fall back to the
+    // provider's stored choice when the request does not carry one.
+    let model = model
+        .map(str::trim)
+        .filter(|model| !model.is_empty() && model.len() <= 200)
+        .map(str::to_string)
+        .unwrap_or_else(|| provider.model.clone());
     Ok(chat::Provider {
         protocol: provider.protocol.clone(),
         base_url: provider.base_url.clone(),
-        model: provider.model.clone(),
+        model,
         api_key,
     })
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Send {
+    pub conversation_id: String,
+    pub request_id: String,
+    pub content: String,
+    pub provider_id: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    pub skill_ids: Vec<String>,
+}
+
 /// Appends the user turn, then streams the answer on a background task.
-pub async fn send(
-    app: AppHandle,
-    conversation_id: String,
-    request_id: String,
-    content: String,
-    provider_id: Option<String>,
-    skill_ids: Vec<String>,
-) -> Result<(), String> {
+pub async fn send(app: AppHandle, input: Send) -> Result<(), String> {
+    let Send {
+        conversation_id,
+        request_id,
+        content,
+        provider_id,
+        model,
+        skill_ids,
+    } = input;
     let content = content.trim().to_string();
     if content.is_empty() {
         return Err("请输入内容".into());
     }
-    let provider = provider_for(&app, provider_id.as_deref())?;
+    let provider = provider_for(&app, provider_id.as_deref(), model.as_deref())?;
     let path = path(&app)?;
     let state = app.state::<crate::AppState>();
     let _guard = state.agent.store_lock.lock().map_err(|_| "对话状态繁忙")?;

@@ -91,7 +91,7 @@ const modelOptions = computed(() =>
     const list = provider.models.length ? provider.models : provider.model ? [provider.model] : [];
     return list.map((model) => ({
       value: `${provider.id}|${model}`,
-      label: `${provider.name} · ${model}`,
+      label: model,
     }));
   }),
 );
@@ -162,10 +162,9 @@ async function loadProviders() {
     providerId.value = providers.value.defaultId || providers.value.providers[0]?.id || '';
     const provider = providers.value.providers.find((item) => item.id === providerId.value);
     if (provider) {
+      const models = provider.models ?? [];
       modelId.value =
-        provider.models.includes(provider.model) || !provider.models.length
-          ? provider.model
-          : provider.models[0];
+        models.includes(provider.model) || !models.length ? provider.model : models[0];
     }
     void loadBalance();
   } catch (e) {
@@ -197,8 +196,8 @@ async function changeModel(value: string) {
   if (!provider || !model) return;
   providerId.value = provider;
   modelId.value = model;
-  modelSave = bridge.setProviderModel(provider, model).catch((e) => {
-    error.value = errorText(e);
+  modelSave = bridge.setProviderModel(provider, model).catch(() => {
+    // The selection still travels with the next request.
   });
   await modelSave;
   void loadBalance();
@@ -416,6 +415,7 @@ async function send() {
       requestId,
       content: text,
       providerId: providerId.value || null,
+      model: modelId.value || null,
       skillIds,
     });
   } catch (e) {
