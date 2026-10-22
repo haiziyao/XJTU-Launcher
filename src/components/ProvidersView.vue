@@ -45,20 +45,6 @@ const models = ref<string[]>([]);
 const modelStatus = ref('');
 const fetching = ref(false);
 const manualModel = ref(false);
-const modelOptions = computed(() => {
-  const list = models.value.map((model) => ({ value: model, label: model }));
-  if (draft.value.model && !models.value.includes(draft.value.model))
-    list.unshift({ value: draft.value.model, label: draft.value.model });
-  list.push({ value: '__manual__', label: '手动输入…' });
-  return list;
-});
-function setModel(value: string) {
-  if (value === '__manual__') {
-    manualModel.value = true;
-    return;
-  }
-  draft.value.model = value;
-}
 let disposed = false;
 function empty(): ProviderInput {
   return {
@@ -67,6 +53,7 @@ function empty(): ProviderInput {
     baseUrl: '',
     protocol: 'openai-compatible',
     model: '',
+    models: [],
     apiKey: '',
     useLegacyKey: false,
   };
@@ -83,6 +70,7 @@ function edit(provider?: ModelProvider) {
         baseUrl: provider.baseUrl,
         protocol: provider.protocol,
         model: provider.model,
+        models: provider.models,
         apiKey: '',
         useLegacyKey: false,
       }
@@ -92,10 +80,10 @@ function edit(provider?: ModelProvider) {
   clearKey.value = false;
   error.value = '';
   status.value = '';
-  models.value = [];
+  models.value = provider?.models.slice() ?? [];
   modelStatus.value = '';
   manualModel.value = false;
-  // Existing providers already have a stored key, so read the catalogue right away.
+  // Existing providers already have a stored key, so refresh the catalogue right away.
   if (provider) void fetchModels();
 }
 function cancel() {
@@ -130,8 +118,12 @@ async function fetchModels() {
       apiKey: clearKey.value ? '' : draft.value.apiKey?.trim() || null,
       useLegacyKey: draft.value.useLegacyKey,
     });
-    modelStatus.value = models.value.length ? `已读取 ${models.value.length} 个模型` : '';
-    manualModel.value = false;
+    modelStatus.value = models.value.length ? `已获取 ${models.value.length} 个模型` : '';
+    draft.value.models = models.value;
+    // A saved provider shares the catalogue with the chat page immediately.
+    if (draft.value.id) await bridge.saveProviderModels(draft.value.id, models.value);
+    // The chat page owns the real choice; this only supplies a starting point.
+    if (!draft.value.model && models.value.length) draft.value.model = models.value[0];
   } catch (e) {
     models.value = [];
     modelStatus.value = String(e);
@@ -162,7 +154,7 @@ async function save() {
   if (!valid.value) return;
   await run(async () => {
     const apiKey = clearKey.value ? '' : draft.value.apiKey?.trim() || null;
-    await bridge.saveProvider({ ...draft.value, apiKey });
+    await bridge.saveProvider({ ...draft.value, models: models.value, apiKey });
     cancel();
   }, '配置已保存');
 }
@@ -311,35 +303,55 @@ onBeforeUnmount(() => {
                 spellcheck="false"
               />
             </SettingRow>
-            <SettingRow title="模型名称">
-              <template #description>{{ modelStatus || '可从厂商读取模型列表' }}</template>
-              <div class="model-field">
-                <MenuSelect
-                  v-if="models.length && !manualModel"
-                  class="model-pick"
-                  :model-value="draft.model"
-                  :options="modelOptions"
-                  label="模型名称"
-                  placeholder="选择模型…"
-                  @update:model-value="setModel"
-                />
-                <input
-                  v-else
-                  id="provider-model"
-                  v-model="draft.model"
-                  class="text-field"
-                  placeholder="填写厂商提供的模型 ID"
-                  aria-label="模型名称"
-                  required
-                  maxlength="256"
-                  spellcheck="false"
-                />
-                <button type="button" class="btn small" :disabled="fetching" @click="fetchModels">
-                  <LoaderCircle v-if="fetching" :size="14" class="spinning" />
-                  <RefreshCw v-else :size="14" />
-                  获取列表
-                </button>
+            <SettingRow title="模型列表">
+              <template #description>
+                {{
+                  modelStatus ||
+                  '获取厂商提供的模型，用于展示；具体使用哪个模型在 Agent 对话框里选择'
+                }}
+              </template>
+              <button
+                type="button"
+                class="btn small"
+                :disabled="fetching || busy"
+                @click="fetchModels"
+              >
+                <LoaderCircle v-if="fetching" :size="14" class="spinning" />
+                <RefreshCw v-else :size="14" />
+                获取模型列表
+              </button>
+              <button
+                v-if="!models.length && !manualModel"
+                type="button"
+                class="btn ghost small"
+                @click="manualModel = true"
+              >
+                手动填写
+              </button>
+            </SettingRow>
+            <SettingRow v-if="models.length" title="已获取的模型">
+              <div class="model-cloud">
+                <span v-for="model in models" :key="model" class="badge">{{ model }}</span>
               </div>
+            </SettingRow>
+            <SettingRow v-if="manualModel" title="当前模型">
+              <template #description>厂商没有模型列表时手动填写</template>
+              <input
+                id="provider-model"
+                v-model="draft.model"
+                class="text-field"
+                placeholder="填写厂商提供的模型 ID"
+                aria-label="当前模型"
+                maxlength="256"
+                spellcheck="false"
+              />
+            </SettingRow>
+            <SettingRow v-else-if="draft.model" title="当前模型">
+              <template #description>可在 Agent 对话框里随时切换</template>
+              <span class="setting-value">{{ draft.model }}</span>
+              <button type="button" class="btn ghost small" @click="manualModel = true">
+                手动修改
+              </button>
             </SettingRow>
             <SettingRow title="API Key">
               <template #description>
@@ -396,3 +408,12 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+<style scoped>
+.model-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  max-width: 60%;
+}
+</style>

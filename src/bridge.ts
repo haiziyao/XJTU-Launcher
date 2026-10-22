@@ -25,6 +25,7 @@ import type {
   EvaluationOutcome,
   UpdateStatus,
   ModelProviders,
+  ProviderBalance,
   ProviderInput,
   CampusAccount,
   CampusAccountList,
@@ -75,6 +76,18 @@ export const bridge = {
   async selectProvider(id: string): Promise<void> {
     requireNative();
     return invoke('select_model_provider', { id });
+  },
+  async saveProviderModels(id: string, models: string[]): Promise<void> {
+    requireNative();
+    return invoke('save_provider_models', { id, models });
+  },
+  async setProviderModel(id: string, model: string): Promise<void> {
+    requireNative();
+    return invoke('set_provider_model', { id, model });
+  },
+  async providerBalance(id: string): Promise<ProviderBalance | null> {
+    requireNative();
+    return invoke('provider_balance', { id });
   },
   async listProviderModels(input: ModelListInput): Promise<string[]> {
     requireNative();

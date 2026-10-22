@@ -131,6 +131,8 @@ export interface ModelProvider {
   baseUrl: string;
   protocol: ModelProtocol;
   model: string;
+  /** Cached catalogue from the vendor, shown when picking a model in chat. */
+  models: string[];
   keySet: boolean;
 }
 export interface ModelProviders {
@@ -144,8 +146,14 @@ export interface ProviderInput {
   baseUrl: string;
   protocol: ModelProtocol;
   model: string;
+  models: string[];
   apiKey: string | null;
   useLegacyKey: boolean;
+}
+/** Account balance for vendors that expose one; other vendors report null. */
+export interface ProviderBalance {
+  amount: string;
+  currency: string;
 }
 /** Enough context to read a provider's model catalogue before saving it. */
 export interface ModelListInput {
@@ -508,6 +516,7 @@ export type AgentEvent =
       arguments: string;
     }
   | { type: 'toolEnd'; requestId: string; callId: string; ok: boolean; content: string }
+  | { type: 'usage'; requestId: string; inputTokens: number; outputTokens: number }
   | { type: 'done'; requestId: string; conversationId: string }
   | { type: 'error'; requestId: string; message: string }
   | { type: 'cancelled'; requestId: string };

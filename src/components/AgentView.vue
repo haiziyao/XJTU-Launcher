@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
   ArrowUp,
+  AtSign,
   Check,
   ChevronRight,
   History,
@@ -23,6 +24,7 @@ import type {
   AgentToolCall,
   AgentConversation,
   ModelProviders,
+  ProviderBalance,
 } from '../types';
 import MenuSelect from './ui/MenuSelect.vue';
 import AgentHistory from './AgentHistory.vue';
@@ -60,6 +62,11 @@ const providers = ref<ModelProviders>({
   legacyKeyAvailable: false,
 });
 const providerId = ref('');
+const modelId = ref('');
+const usage = ref<{ input: number; output: number } | null>(null);
+const balance = ref<ProviderBalance | null>(null);
+const showPlus = ref(false);
+const showAt = ref(false);
 const presets = ref<AgentPresets>({ version: 1, roles: [], skills: [], tasks: [] });
 const roleId = ref('');
 const selectedSkills = ref<AgentSkill[]>([]);
@@ -75,14 +82,48 @@ const expanded = ref(new Set<string>());
 const error = ref('');
 const scroller = ref<HTMLElement | null>(null);
 let requestId = '';
+let modelSave: Promise<void> = Promise.resolve();
 let unlisten: (() => void) | undefined;
 
-const providerOptions = computed(() =>
-  providers.value.providers.map((provider) => ({
-    value: provider.id,
-    label: provider.model || provider.name,
-  })),
+/** One flat list: every cached model of every provider. */
+const modelOptions = computed(() =>
+  providers.value.providers.flatMap((provider) => {
+    const list = provider.models.length ? provider.models : provider.model ? [provider.model] : [];
+    return list.map((model) => ({
+      value: `${provider.id}|${model}`,
+      label: `${provider.name} · ${model}`,
+    }));
+  }),
 );
+const modelChoice = computed(() =>
+  providerId.value && modelId.value ? `${providerId.value}|${modelId.value}` : '',
+);
+const activeProvider = computed(
+  () => providers.value.providers.find((provider) => provider.id === providerId.value) ?? null,
+);
+const usedTokens = computed(() => (usage.value ? usage.value.input + usage.value.output : 0));
+const contextWindow = computed(() => contextWindowFor(modelId.value));
+const ringRatio = computed(() => Math.min(1, usedTokens.value / contextWindow.value));
+const ringOffset = computed(() => 2 * Math.PI * 8 * (1 - ringRatio.value));
+const balanceText = computed(() => {
+  if (!balance.value) return '';
+  const symbol =
+    balance.value.currency === 'CNY' ? '¥' : balance.value.currency === 'USD' ? '$' : '';
+  const amount = Number(balance.value.amount);
+  return symbol + (Number.isFinite(amount) ? amount.toFixed(2) : balance.value.amount);
+});
+
+/** Approximate context windows; vendors do not expose them through /models. */
+function contextWindowFor(model: string): number {
+  const name = model.toLowerCase();
+  if (name.includes('gemini')) return 1_000_000;
+  if (name.includes('claude')) return 200_000;
+  if (name.includes('deepseek')) return 64_000;
+  return 128_000;
+}
+function formatTokens(value: number): string {
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+}
 const roleOptions = computed(() => [
   { value: '', label: '通用角色' },
   ...presets.value.roles.map((role) => ({ value: role.id, label: role.name })),
@@ -104,10 +145,7 @@ const slashMatches = computed(() => {
 const currentTitle = computed(() => conversation.value?.title || '新对话');
 const canSend = computed(
   () =>
-    !!draft.value.trim() &&
-    !running.value &&
-    !!providerId.value &&
-    providerOptions.value.length > 0,
+    !!draft.value.trim() && !running.value && !!providerId.value && modelOptions.value.length > 0,
 );
 
 function errorText(value: unknown) {
@@ -122,6 +160,14 @@ async function loadProviders() {
   try {
     providers.value = await bridge.modelProviders();
     providerId.value = providers.value.defaultId || providers.value.providers[0]?.id || '';
+    const provider = providers.value.providers.find((item) => item.id === providerId.value);
+    if (provider) {
+      modelId.value =
+        provider.models.includes(provider.model) || !provider.models.length
+          ? provider.model
+          : provider.models[0];
+    }
+    void loadBalance();
   } catch (e) {
     error.value = errorText(e);
   }
@@ -132,6 +178,47 @@ async function loadPresets() {
   } catch (e) {
     error.value = errorText(e);
   }
+}
+async function loadBalance() {
+  balance.value = null;
+  if (!providerId.value) return;
+  try {
+    balance.value = await bridge.providerBalance(providerId.value);
+  } catch {
+    balance.value = null;
+  }
+}
+/** The chat page owns the real model choice; it is persisted before sending. */
+async function changeModel(value: string) {
+  const index = value.indexOf('|');
+  if (index < 0) return;
+  const provider = value.slice(0, index);
+  const model = value.slice(index + 1);
+  if (!provider || !model) return;
+  providerId.value = provider;
+  modelId.value = model;
+  modelSave = bridge.setProviderModel(provider, model).catch((e) => {
+    error.value = errorText(e);
+  });
+  await modelSave;
+  void loadBalance();
+}
+function pickRole(value: string) {
+  showPlus.value = false;
+  void changeRole(value);
+}
+function pickTask(task: AgentTask) {
+  showPlus.value = false;
+  applyTask(task);
+}
+function pickSkill(skill: AgentSkill) {
+  showAt.value = false;
+  attachSkill(skill);
+}
+function closeMenus() {
+  showHistory.value = false;
+  showPlus.value = false;
+  showAt.value = false;
 }
 async function changeRole(value: string) {
   roleId.value = value;
@@ -194,6 +281,7 @@ async function openConversation(id: string) {
     selectedSkills.value = [];
     liveText.value = '';
     liveSteps.value = [];
+    usage.value = null;
     expanded.value = new Set();
     error.value = '';
     showHistory.value = false;
@@ -210,6 +298,7 @@ function newChat() {
   selectedSkills.value = [];
   liveText.value = '';
   liveSteps.value = [];
+  usage.value = null;
   expanded.value = new Set();
   draft.value = '';
   error.value = '';
@@ -250,6 +339,9 @@ function onEvent(event: AgentEvent) {
       });
       void scrollDown();
       break;
+    case 'usage':
+      usage.value = { input: event.inputTokens, output: event.outputTokens };
+      break;
     case 'toolEnd': {
       const step = liveSteps.value.find((item) => item.callId === event.callId);
       if (step) {
@@ -272,6 +364,7 @@ async function settle() {
   running.value = false;
   liveText.value = '';
   liveSteps.value = [];
+  void loadBalance();
   if (conversation.value) {
     try {
       const fresh = await bridge.agentGet(conversation.value.id);
@@ -312,6 +405,7 @@ async function send() {
   const skillIds = selectedSkills.value.map((skill) => skill.id);
   selectedSkills.value = [];
   await scrollDown();
+  await modelSave;
   try {
     if (roleId.value !== (conversation.value.roleId || '')) {
       await bridge.agentSetRole(conversation.value.id, roleId.value || null);
@@ -416,7 +510,7 @@ onBeforeUnmount(() => {
       <p v-if="error" class="notice agent-notice" role="alert">{{ error }}</p>
     </Transition>
 
-    <div v-if="showHistory" class="agent-backdrop" @click="showHistory = false"></div>
+    <div v-if="showHistory || showPlus || showAt" class="agent-backdrop" @click="closeMenus"></div>
     <Transition name="drop">
       <AgentHistory
         v-if="showHistory"
@@ -435,11 +529,11 @@ onBeforeUnmount(() => {
       <div class="agent-column">
         <div v-if="!messages.length && !running" class="agent-empty">
           <h2>有什么可以帮你？</h2>
-          <p v-if="providerOptions.length">
+          <p v-if="modelOptions.length">
             可以查询课表、成绩、考试、考勤、校园卡，也会调用已启用的 MCP 工具。
           </p>
           <p v-else>还没有可用的模型服务，先到 Agent 设置里添加。</p>
-          <button v-if="!providerOptions.length" class="btn" @click="emit('settings')">
+          <button v-if="!modelOptions.length" class="btn" @click="emit('settings')">
             打开 Agent 设置
           </button>
           <div v-if="presets.tasks.length" class="agent-tasks">
@@ -557,29 +651,76 @@ onBeforeUnmount(() => {
           <textarea
             v-model="draft"
             rows="1"
-            :placeholder="providerOptions.length ? '问点什么…' : '请先配置模型服务'"
-            :disabled="!providerOptions.length"
+            :placeholder="modelOptions.length ? '问点什么…' : '请先配置模型服务'"
+            :disabled="!modelOptions.length"
             aria-label="消息"
             @keydown.enter.exact.prevent="send"
           ></textarea>
           <div class="agent-composer-bar">
             <MenuSelect
-              v-if="roleOptions.length > 1"
-              :model-value="roleId"
-              :options="roleOptions"
-              label="选择角色"
-              class="agent-model-select"
-              @update:model-value="changeRole"
-            />
-            <MenuSelect
-              v-if="providerOptions.length"
-              v-model="providerId"
-              :options="providerOptions"
+              v-if="modelOptions.length"
+              :model-value="modelChoice"
+              :options="modelOptions"
               label="选择模型"
               class="agent-model-select"
+              @update:model-value="changeModel"
             />
+            <span
+              v-if="usage"
+              class="agent-usage"
+              :title="`上下文 ${formatTokens(usedTokens)} / ${formatTokens(contextWindow)}`"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <circle class="usage-track" cx="10" cy="10" r="8" />
+                <circle
+                  class="usage-value"
+                  :class="{ full: ringRatio > 0.9 }"
+                  cx="10"
+                  cy="10"
+                  r="8"
+                  :style="{
+                    strokeDasharray: `${2 * Math.PI * 8}`,
+                    strokeDashoffset: `${ringOffset}`,
+                  }"
+                />
+              </svg>
+            </span>
+            <span
+              v-if="balanceText"
+              class="agent-balance"
+              :title="`${activeProvider?.name ?? ''} 余额`"
+              >{{ balanceText }}</span
+            >
             <span v-if="running" class="agent-running"><Check :size="12" />生成中</span>
             <span v-else></span>
+            <button
+              type="button"
+              class="agent-icon-button"
+              :class="{ active: showPlus }"
+              title="预设与角色"
+              aria-label="预设与角色"
+              :aria-expanded="showPlus"
+              @click="
+                showPlus = !showPlus;
+                showAt = false;
+              "
+            >
+              <Plus :size="15" />
+            </button>
+            <button
+              type="button"
+              class="agent-icon-button"
+              :class="{ active: showAt }"
+              title="使用 Skill"
+              aria-label="使用 Skill"
+              :aria-expanded="showAt"
+              @click="
+                showAt = !showAt;
+                showPlus = false;
+              "
+            >
+              <AtSign :size="15" />
+            </button>
             <button
               v-if="running"
               type="button"
@@ -597,6 +738,46 @@ onBeforeUnmount(() => {
               :disabled="!canSend"
             >
               <ArrowUp :size="15" />
+            </button>
+          </div>
+          <div v-if="showPlus" class="agent-menu agent-plus-menu" role="menu">
+            <p class="agent-menu-label">角色</p>
+            <button
+              v-for="option in roleOptions"
+              :key="option.value"
+              type="button"
+              role="menuitem"
+              @click="pickRole(option.value)"
+            >
+              <strong>{{ option.label }}</strong>
+              <span v-if="option.value === roleId">当前</span>
+            </button>
+            <template v-if="presets.tasks.length">
+              <p class="agent-menu-label">预设任务</p>
+              <button
+                v-for="task in presets.tasks"
+                :key="task.id"
+                type="button"
+                role="menuitem"
+                @click="pickTask(task)"
+              >
+                <strong>{{ task.name }}</strong>
+                <span>{{ task.description || task.prompt }}</span>
+              </button>
+            </template>
+          </div>
+          <div v-if="showAt" class="agent-menu agent-at-menu" role="menu">
+            <p class="agent-menu-label">Skill</p>
+            <p v-if="!presets.skills.length" class="agent-menu-empty">还没有创建 Skill</p>
+            <button
+              v-for="skill in presets.skills"
+              :key="skill.id"
+              type="button"
+              role="menuitem"
+              @click="pickSkill(skill)"
+            >
+              <strong>{{ skill.name }}</strong>
+              <span>{{ skill.description }}</span>
             </button>
           </div>
         </form>
@@ -979,6 +1160,91 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 .agent-slash span {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-usage {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+.agent-usage svg {
+  width: 16px;
+  height: 16px;
+  transform: rotate(-90deg);
+}
+.agent-usage circle {
+  fill: none;
+  stroke-width: 2.4;
+}
+.usage-track {
+  stroke: var(--border);
+}
+.usage-value {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--duration) var(--ease-out);
+}
+.usage-value.full {
+  stroke: var(--danger);
+}
+.agent-balance {
+  margin-left: 4px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.agent-menu {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  z-index: 6;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+.agent-menu-label {
+  margin: 4px 6px 2px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.agent-menu-empty {
+  margin: 2px 6px 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.agent-menu button {
+  display: grid;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 7px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.agent-menu button:hover {
+  background: var(--surface-hover);
+}
+.agent-menu strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-menu span {
   font-size: 11.5px;
   color: var(--text-tertiary);
   overflow: hidden;

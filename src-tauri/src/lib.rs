@@ -1084,6 +1084,66 @@ fn select_model_provider(
     book.select(&id)?;
     providers::save(&path, &book)
 }
+#[tauri::command]
+fn save_provider_models(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    models: Vec<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let path = providers_path(&app)?;
+    let mut book = providers::load(&path)?;
+    book.set_models(&id, models)?;
+    providers::save(&path, &book)
+}
+#[tauri::command]
+fn set_provider_model(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    model: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let path = providers_path(&app)?;
+    let mut book = providers::load(&path)?;
+    book.set_model(&id, &model)?;
+    providers::save(&path, &book)
+}
+/// The balance endpoint is vendor specific; unknown vendors report nothing.
+#[tauri::command]
+async fn provider_balance(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Option<providers::Balance>, String> {
+    main_only(&window)?;
+    let (base_url, key) = {
+        let _guard = state
+            .providers_lock
+            .lock()
+            .map_err(|_| "模型配置服务繁忙")?;
+        let book = providers::load(&providers_path(&app)?)?;
+        let provider = book
+            .providers
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("模型配置不存在")?;
+        (provider.base_url.clone(), provider.api_key.clone())
+    };
+    providers::balance(&base_url, &key).await
+}
 fn mcp_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
@@ -1495,6 +1555,9 @@ pub fn run() {
             save_model_provider,
             remove_model_provider,
             select_model_provider,
+            save_provider_models,
+            set_provider_model,
+            provider_balance,
             list_mcp_servers,
             save_mcp_server,
             remove_mcp_server,

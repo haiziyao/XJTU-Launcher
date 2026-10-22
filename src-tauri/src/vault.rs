@@ -243,6 +243,7 @@ mod tests {
                     base_url: "https://example.com".into(),
                     protocol: "openai-compatible".into(),
                     model: "test-model".into(),
+                    models: vec!["test-model".into()],
                     api_key: Some("test-api-key".into()),
                     use_legacy_key: false,
                 },

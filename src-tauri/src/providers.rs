@@ -21,6 +21,9 @@ pub struct Provider {
     pub base_url: String,
     pub protocol: String,
     pub model: String,
+    /// Cached catalogue from the vendor; the chat page picks from it.
+    #[serde(default)]
+    pub models: Vec<String>,
     pub api_key: String,
 }
 #[derive(Default, Deserialize, Serialize)]
@@ -39,6 +42,7 @@ pub struct PublicProvider {
     base_url: String,
     protocol: String,
     model: String,
+    models: Vec<String>,
     key_set: bool,
 }
 #[derive(Serialize)]
@@ -56,6 +60,8 @@ pub struct Input {
     pub base_url: String,
     pub protocol: String,
     pub model: String,
+    #[serde(default)]
+    pub models: Vec<String>,
     // None preserves the stored key; an empty string explicitly removes it.
     pub api_key: Option<String>,
     pub use_legacy_key: bool,
@@ -92,6 +98,7 @@ impl Book {
                 base_url: "https://api.deepseek.com".into(),
                 protocol: "openai-compatible".into(),
                 model: "deepseek-flash".into(),
+                models: Vec::new(),
                 api_key: String::new(),
             });
         }
@@ -110,6 +117,7 @@ impl Book {
                     base_url: p.base_url.clone(),
                     protocol: p.protocol.clone(),
                     model: p.model.clone(),
+                    models: p.models.clone(),
                     key_set: !p.api_key.is_empty(),
                 })
                 .collect(),
@@ -132,6 +140,10 @@ impl Book {
                 || p.name.chars().count() > 60
                 || p.model.trim().is_empty()
                 || p.model.len() > 256
+                || p.models.len() > 200
+                || p.models
+                    .iter()
+                    .any(|m| m.trim().is_empty() || m.len() > 200)
                 || p.base_url.len() > 2048
                 || !valid_url(&p.base_url)
                 || !["openai-compatible", "anthropic", "gemini"].contains(&p.protocol.as_str())
@@ -174,6 +186,7 @@ impl Book {
             base_url: input.base_url.trim().trim_end_matches('/').into(),
             protocol: input.protocol,
             model: input.model.trim().into(),
+            models: clean_models(input.models)?,
             api_key,
         };
         // Validate a candidate before mutating the in-memory book.
@@ -204,6 +217,31 @@ impl Book {
         }
         Ok(())
     }
+    /// Store the catalogue the vendor returned so the chat page can list it.
+    pub fn set_models(&mut self, id: &str, models: Vec<String>) -> Result<(), String> {
+        let models = clean_models(models)?;
+        let provider = self
+            .providers
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or("模型配置不存在")?;
+        provider.models = models;
+        Ok(())
+    }
+    /// The chat page picks a concrete model; it becomes the provider's current one.
+    pub fn set_model(&mut self, id: &str, model: &str) -> Result<(), String> {
+        let model = model.trim();
+        if model.is_empty() || model.len() > 200 {
+            return Err("模型名称无效".into());
+        }
+        let provider = self
+            .providers
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or("模型配置不存在")?;
+        provider.model = model.to_string();
+        Ok(())
+    }
     pub fn select(&mut self, id: &str) -> Result<(), String> {
         if !self.providers.iter().any(|p| p.id == id) {
             return Err("模型配置不存在".into());
@@ -231,6 +269,23 @@ pub struct ListInput {
     pub api_key: Option<String>,
     #[serde(default)]
     pub use_legacy_key: bool,
+}
+
+fn clean_models(models: Vec<String>) -> Result<Vec<String>, String> {
+    let mut cleaned: Vec<String> = Vec::new();
+    for model in models {
+        let model = model.trim();
+        if model.is_empty() || model.len() > 200 {
+            return Err("模型列表格式不受支持".into());
+        }
+        if !cleaned.iter().any(|existing| existing == model) {
+            cleaned.push(model.to_string());
+        }
+    }
+    if cleaned.len() > 200 {
+        return Err("模型数量超过上限".into());
+    }
+    Ok(cleaned)
 }
 
 /// Reads the provider's model catalogue. The key only goes to the configured
@@ -326,6 +381,65 @@ pub async fn list_models(base_url: &str, protocol: &str, key: &str) -> Result<Ve
         return Err("厂商没有返回可用的模型".into());
     }
     Ok(models)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Balance {
+    pub amount: String,
+    pub currency: String,
+}
+
+/// Reads the account balance where the vendor exposes one. Vendors without a
+/// balance endpoint report nothing, and the UI simply hides the figure.
+pub async fn balance(base_url: &str, key: &str) -> Result<Option<Balance>, String> {
+    let base = url::Url::parse(base_url).map_err(|_| "接口地址无效")?;
+    if base.host_str() != Some("api.deepseek.com") {
+        return Ok(None);
+    }
+    if key.trim().is_empty() {
+        return Ok(None);
+    }
+    let origin = format!(
+        "{}://{}",
+        base.scheme(),
+        base.host_str().unwrap_or_default()
+    );
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| "无法创建余额查询连接")?;
+    let response = client
+        .get(format!("{origin}/user/balance"))
+        .bearer_auth(key)
+        .send()
+        .await
+        .map_err(|_| "无法连接模型厂商查询余额")?;
+    if !response.status().is_success() {
+        return Ok(None);
+    }
+    let value: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| "余额接口返回了非预期数据")?;
+    let info = value
+        .get("balance_infos")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|list| list.first());
+    let Some(info) = info else {
+        return Ok(None);
+    };
+    let amount = info
+        .get("total_balance")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let currency = info
+        .get("currency")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    Ok(amount.map(|amount| Balance { amount, currency }))
 }
 
 #[cfg(test)]
@@ -424,6 +538,7 @@ mod tests {
             base_url: "https://example.com/v1".into(),
             protocol: "openai-compatible".into(),
             model: "my-model".into(),
+            models: vec!["my-model".into()],
             api_key: Some("private-test-key".into()),
             use_legacy_key: false,
         }

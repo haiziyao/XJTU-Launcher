@@ -23,6 +23,12 @@ const SYSTEM_PROMPT: &str = "你是西安交通大学校园启动器里的 Agent
 
 const MAX_ROUNDS: usize = 8;
 
+#[derive(Clone, Copy, Default)]
+struct Usage {
+    input: u64,
+    output: u64,
+}
+
 #[derive(Clone, Debug)]
 pub struct Provider {
     pub protocol: String,
@@ -49,6 +55,12 @@ pub enum Event {
         call_id: String,
         ok: bool,
         content: String,
+    },
+    /// Token counts reported by the provider for one model call.
+    Usage {
+        request_id: String,
+        input_tokens: u64,
+        output_tokens: u64,
     },
     Done {
         request_id: String,
@@ -87,7 +99,7 @@ impl Chat<'_> {
             if self.cancelled() {
                 return Ok(());
             }
-            let (text, calls) = self.complete(&system, &conversation.messages).await?;
+            let (text, calls, _usage) = self.complete(&system, &conversation.messages).await?;
             let message = Message::assistant(text, calls.clone());
             conversation.messages.push(message);
             (self.persist)(conversation);
@@ -248,23 +260,31 @@ impl Chat<'_> {
         &mut self,
         system: &str,
         messages: &[Message],
-    ) -> Result<(String, Vec<ToolCall>), String> {
+    ) -> Result<(String, Vec<ToolCall>, Option<Usage>), String> {
         if self.provider.base_url.trim().is_empty() {
             return Err("模型服务地址为空".into());
         }
-        match self.provider.protocol.as_str() {
-            "openai-compatible" => self.openai(system, messages).await,
-            "anthropic" => self.anthropic(system, messages).await,
-            "gemini" => self.gemini(system, messages).await,
-            _ => Err("不支持的模型协议".into()),
+        let (text, calls, usage) = match self.provider.protocol.as_str() {
+            "openai-compatible" => self.openai(system, messages).await?,
+            "anthropic" => self.anthropic(system, messages).await?,
+            "gemini" => self.gemini(system, messages).await?,
+            _ => return Err("不支持的模型协议".into()),
+        };
+        if let Some(usage) = usage {
+            (self.emit)(Event::Usage {
+                request_id: self.request_id.clone(),
+                input_tokens: usage.input,
+                output_tokens: usage.output,
+            });
         }
+        Ok((text, calls, usage))
     }
 
     async fn openai(
         &mut self,
         system: &str,
         messages: &[Message],
-    ) -> Result<(String, Vec<ToolCall>), String> {
+    ) -> Result<(String, Vec<ToolCall>, Option<Usage>), String> {
         let mut wire = vec![json!({ "role": "system", "content": system })];
         for message in messages {
             wire.push(match message.role.as_str() {
@@ -297,6 +317,7 @@ impl Chat<'_> {
         let mut body = json!({
             "model": self.provider.model,
             "stream": true,
+            "stream_options": { "include_usage": true },
             "messages": wire,
         });
         let schemas = self.tool_schemas();
@@ -319,6 +340,7 @@ impl Chat<'_> {
         let response = check(response).await?;
         let mut text = String::new();
         let mut calls: BTreeMap<usize, (String, String, String)> = BTreeMap::new();
+        let mut usage: Option<Usage> = None;
         let request_id = self.request_id.clone();
         let cancel = self.cancel.clone();
         let emit = &mut *self.emit;
@@ -329,6 +351,18 @@ impl Chat<'_> {
             let Ok(value) = serde_json::from_str::<Value>(data) else {
                 return Ok(());
             };
+            if let Some(item) = value.get("usage").filter(|item| !item.is_null()) {
+                usage = Some(Usage {
+                    input: item
+                        .get("prompt_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0),
+                    output: item
+                        .get("completion_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0),
+                });
+            }
             let Some(delta) = value
                 .get("choices")
                 .and_then(Value::as_array)
@@ -384,14 +418,14 @@ impl Chat<'_> {
                 },
             })
             .collect();
-        Ok((text, calls))
+        Ok((text, calls, usage))
     }
 
     async fn anthropic(
         &mut self,
         system: &str,
         messages: &[Message],
-    ) -> Result<(String, Vec<ToolCall>), String> {
+    ) -> Result<(String, Vec<ToolCall>, Option<Usage>), String> {
         let mut wire: Vec<Value> = Vec::new();
         let mut pending_tools: Vec<Value> = Vec::new();
         for message in messages {
@@ -466,6 +500,7 @@ impl Chat<'_> {
         let response = check(response).await?;
         let mut text = String::new();
         let mut calls: BTreeMap<usize, (String, String, String)> = BTreeMap::new();
+        let mut usage: Option<Usage> = None;
         let request_id = self.request_id.clone();
         let cancel = self.cancel.clone();
         let emit = &mut *self.emit;
@@ -475,6 +510,16 @@ impl Chat<'_> {
             };
             let event = value.get("type").and_then(Value::as_str).unwrap_or(kind);
             match event {
+                "message_start" => {
+                    if let Some(input) = value["message"]["usage"]["input_tokens"].as_u64() {
+                        usage.get_or_insert_with(Usage::default).input = input;
+                    }
+                }
+                "message_delta" => {
+                    if let Some(output) = value["usage"]["output_tokens"].as_u64() {
+                        usage.get_or_insert_with(Usage::default).output = output;
+                    }
+                }
                 "content_block_start" => {
                     if value["content_block"]["type"] == "tool_use" {
                         let index = value["index"].as_u64().unwrap_or(0) as usize;
@@ -539,14 +584,14 @@ impl Chat<'_> {
                 },
             })
             .collect();
-        Ok((text, calls))
+        Ok((text, calls, usage))
     }
 
     async fn gemini(
         &mut self,
         system: &str,
         messages: &[Message],
-    ) -> Result<(String, Vec<ToolCall>), String> {
+    ) -> Result<(String, Vec<ToolCall>, Option<Usage>), String> {
         let mut contents: Vec<Value> = Vec::new();
         let mut pending_tools: Vec<Value> = Vec::new();
         for message in messages {
@@ -621,6 +666,7 @@ impl Chat<'_> {
         let response = check(response).await?;
         let mut text = String::new();
         let mut calls: Vec<ToolCall> = Vec::new();
+        let mut usage: Option<Usage> = None;
         let request_id = self.request_id.clone();
         let cancel = self.cancel.clone();
         let emit = &mut *self.emit;
@@ -628,6 +674,19 @@ impl Chat<'_> {
             let Ok(value) = serde_json::from_str::<Value>(data) else {
                 return Ok(());
             };
+            if let Some(meta) = value.get("usageMetadata") {
+                let input = meta
+                    .get("promptTokenCount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                let output = meta
+                    .get("candidatesTokenCount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                if input > 0 || output > 0 {
+                    usage = Some(Usage { input, output });
+                }
+            }
             let Some(parts) = value
                 .get("candidates")
                 .and_then(Value::as_array)
@@ -668,7 +727,7 @@ impl Chat<'_> {
             Ok(())
         })
         .await?;
-        Ok((text, calls))
+        Ok((text, calls, usage))
     }
 }
 
