@@ -31,7 +31,11 @@ export interface Plugin {
   version: string;
   description: string;
   icon: string;
-  page: { type: 'timetable' } | { type: 'links'; links: Link[] } | { type: 'campus' };
+  page:
+    | { type: 'timetable' }
+    | { type: 'links'; links: Link[] }
+    | { type: 'campus' }
+    | { type: 'agentSettings' };
   widget: boolean;
 }
 export interface PluginList {
@@ -415,3 +419,47 @@ export interface McpCatalog {
   defaultSource: string | null;
   servers: McpEntry[];
 }
+export interface AgentToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+export interface AgentMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCalls?: AgentToolCall[];
+  toolCallId?: string;
+  name?: string;
+  error?: boolean;
+}
+export interface AgentConversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: AgentMessage[];
+}
+export interface AgentSummary {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messages: number;
+}
+export interface AgentToolInfo {
+  name: string;
+  description: string;
+  source: 'campus' | 'mcp';
+}
+export type AgentEvent =
+  | { type: 'delta'; requestId: string; text: string }
+  | {
+      type: 'toolStart';
+      requestId: string;
+      callId: string;
+      name: string;
+      arguments: string;
+    }
+  | { type: 'toolEnd'; requestId: string; callId: string; ok: boolean; content: string }
+  | { type: 'done'; requestId: string; conversationId: string }
+  | { type: 'error'; requestId: string; message: string }
+  | { type: 'cancelled'; requestId: string };

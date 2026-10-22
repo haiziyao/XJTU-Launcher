@@ -10,7 +10,7 @@ import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 
-const props = defineProps<{ search: string }>();
+const props = defineProps<{ search: string; section?: 'servers' | 'market' }>();
 const emit = defineEmits<{ settings: [] }>();
 
 interface Draft {
@@ -39,6 +39,8 @@ const installing = ref<{ entry: McpEntry; values: Record<string, string> } | nul
 let disposed = false;
 
 const needle = computed(() => props.search.trim().toLowerCase());
+const showServers = computed(() => !props.section || props.section === 'servers');
+const showMarket = computed(() => !props.section || props.section === 'market');
 const filteredServers = computed(() =>
   servers.value.filter((server) =>
     (server.name + server.target).toLowerCase().includes(needle.value),
@@ -249,7 +251,7 @@ onBeforeUnmount(() => {
     </Transition>
 
     <SettingGroup
-      v-if="!draft"
+      v-if="!draft && showServers"
       title="MCP 服务"
       footnote="启用的 MCP 服务会作为工具提供给 Agent。凭据保存在本机 mcp.json，不会回显。"
     >
@@ -315,7 +317,7 @@ onBeforeUnmount(() => {
       </div>
     </SettingGroup>
 
-    <form v-else class="mcp-form" @submit.prevent="save">
+    <form v-else-if="draft && showServers" class="mcp-form" @submit.prevent="save">
       <h3>{{ draft.id ? '编辑 MCP 服务' : '添加 MCP 服务' }}</h3>
       <label class="mcp-field"
         ><span>名称</span
@@ -389,6 +391,7 @@ onBeforeUnmount(() => {
     </form>
 
     <SettingGroup
+      v-if="showMarket"
       title="MCP 市场"
       footnote="目录由插件服务端提供；未配置插件服务时只能手动添加。安装前请确认命令与来源可信，本地 MCP 会启动对应进程。"
     >

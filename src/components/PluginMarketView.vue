@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Route,
   Search,
+  Settings2,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type { AppConfig, Plugin, MarketCatalog, MarketEntry } from '../types';
@@ -23,14 +24,12 @@ import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
-import McpSettings from './McpSettings.vue';
 const props = defineProps<{
   plugins: Plugin[];
   config: AppConfig;
   saving: boolean;
   warnings: string[];
   sources: Record<string, string>;
-  initialTab?: string;
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
@@ -43,11 +42,8 @@ const tabs = [
   { id: 'campus', title: '校园功能' },
   { id: 'remote', title: '远端市场' },
   { id: 'installed', title: '已安装' },
-  { id: 'mcp', title: 'MCP 管理' },
 ];
-const tab = ref(
-  props.initialTab && tabs.some((t) => t.id === props.initialTab) ? props.initialTab : 'campus',
-);
+const tab = ref('campus');
 const search = ref('');
 const loading = ref(false);
 const loaded = ref(false);
@@ -135,16 +131,6 @@ watch(tab, (value) => {
   search.value = '';
   if (value === 'remote' && !loaded.value) void refresh();
 });
-// Opening the market from another page (for example the Agent shortcut) can change the tab.
-watch(
-  () => props.initialTab,
-  (value) => {
-    if (value && tabs.some((entry) => entry.id === value) && value !== tab.value) tab.value = value;
-  },
-);
-onMounted(() => {
-  if (props.config.checkPluginUpdates && !disposed) void refresh();
-});
 onBeforeUnmount(() => {
   disposed = true;
 });
@@ -156,14 +142,14 @@ onBeforeUnmount(() => {
         <label class="field-shell search"
           ><Search :size="14" /><input
             v-model="search"
-            :placeholder="tab === 'mcp' ? '搜索 MCP' : '搜索插件'"
-            :aria-label="tab === 'mcp' ? '搜索 MCP' : '搜索插件'"
+            placeholder="搜索插件"
+            aria-label="搜索插件"
         /></label>
         <button v-if="tab === 'installed'" class="btn" :disabled="!!busy" @click="importPlugin">
           <Download :size="14" />导入本地插件
         </button>
         <button
-          v-if="tab === 'remote' || tab === 'installed'"
+          v-if="tab !== 'campus'"
           class="btn ghost icon"
           title="刷新"
           aria-label="刷新插件"
@@ -257,7 +243,7 @@ onBeforeUnmount(() => {
         />
       </SettingGroup>
     </div>
-    <div v-else-if="tab === 'installed'" role="tabpanel">
+    <div v-else role="tabpanel">
       <div class="installed-heading"><span>插件</span><span>启用</span><span></span></div>
       <div v-for="plugin in filtered" :key="plugin.id" class="installed-item">
         <div class="installed-row">
@@ -265,6 +251,8 @@ onBeforeUnmount(() => {
             <IconTile :size="34"
               ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
                 v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Settings2
+                v-else-if="plugin.page.type === 'agentSettings'"
                 :size="19" /><Compass v-else :size="19"
             /></IconTile>
             <div>
@@ -273,9 +261,11 @@ onBeforeUnmount(() => {
                 >{{
                   sources[plugin.id]
                     ? '远端插件'
-                    : plugin.id.startsWith('cn.xjtu.')
-                      ? '校园功能'
-                      : '本地插件'
+                    : plugin.page.type === 'agentSettings'
+                      ? 'Agent 配置'
+                      : plugin.id.startsWith('cn.xjtu.')
+                        ? '校园功能'
+                        : '本地插件'
                 }}
                 · {{ plugin.version }}</small
               >
@@ -345,7 +335,6 @@ onBeforeUnmount(() => {
       </div>
       <EmptyState v-if="!filtered.length" compact :icon="Search" title="没有匹配的插件" />
     </div>
-    <McpSettings v-else :search="search" @settings="emit('settings')" />
   </section>
 </template>
 <style scoped>
