@@ -139,6 +139,14 @@ export interface ProviderInput {
   apiKey: string | null;
   useLegacyKey: boolean;
 }
+/** Enough context to read a provider's model catalogue before saving it. */
+export interface ModelListInput {
+  id: string | null;
+  baseUrl: string;
+  protocol: ModelProtocol;
+  apiKey: string | null;
+  useLegacyKey: boolean;
+}
 
 export interface MarketEntry {
   id: string;

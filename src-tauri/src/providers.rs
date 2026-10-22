@@ -220,6 +220,119 @@ fn legacy_key() -> Result<Zeroizing<Vec<u8>>, String> {
     }
     Ok(bytes)
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListInput {
+    pub id: Option<String>,
+    pub base_url: String,
+    pub protocol: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub use_legacy_key: bool,
+}
+
+/// Reads the provider's model catalogue. The key only goes to the configured
+/// host, and redirects are refused so it cannot be forwarded elsewhere.
+pub async fn list_models(
+    base_url: &str,
+    protocol: &str,
+    key: &str,
+) -> Result<Vec<String>, String> {
+    if !valid_url(base_url) {
+        return Err("接口地址无效；仅本机地址支持 HTTP".into());
+    }
+    let base = base_url.trim().trim_end_matches('/');
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent("XJTU-Launcher/0.1")
+        .build()
+        .map_err(|_| "无法创建网络连接")?;
+    let request = match protocol {
+        "openai-compatible" => {
+            let mut request = client.get(format!("{base}/models"));
+            if !key.is_empty() {
+                request = request.bearer_auth(key);
+            }
+            request
+        }
+        "anthropic" => {
+            let mut request = client
+                .get(format!("{base}/models"))
+                .header("anthropic-version", "2023-06-01");
+            if !key.is_empty() {
+                request = request.header("x-api-key", key);
+            }
+            request
+        }
+        "gemini" => {
+            let mut url = url::Url::parse(&format!("{base}/models"))
+                .map_err(|_| "接口地址无效")?;
+            if !key.is_empty() {
+                url.query_pairs_mut().append_pair("key", key);
+            }
+            client.get(url)
+        }
+        _ => return Err("不支持的接口协议".into()),
+    };
+    let response = request
+        .send()
+        .await
+        .map_err(|_| "无法连接模型服务，请检查接口地址和网络")?;
+    let status = response.status();
+    if matches!(status.as_u16(), 401 | 403) {
+        return Err("API Key 无效，或没有读取模型的权限".into());
+    }
+    if status.as_u16() == 404 {
+        return Err("该接口地址不提供模型列表".into());
+    }
+    if !status.is_success() {
+        return Err(format!("模型服务返回 HTTP {}", status.as_u16()));
+    }
+    let bytes = crate::network::limited_bytes(response, 2 * 1024 * 1024).await?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|_| "模型服务返回了非预期数据")?;
+    let mut models: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut add = |id: &str| {
+        let id = id.trim().trim_start_matches("models/").trim();
+        if !id.is_empty() && seen.insert(id.to_string()) {
+            models.push(id.to_string());
+        }
+    };
+    if protocol == "gemini" {
+        for item in value
+            .get("models")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if let Some(name) = item.get("name").and_then(serde_json::Value::as_str) {
+                add(name);
+            }
+        }
+    } else {
+        for item in value
+            .get("data")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if let Some(id) = item.get("id").and_then(serde_json::Value::as_str) {
+                add(id);
+            }
+        }
+    }
+    models.truncate(200);
+    if models.is_empty() {
+        return Err("厂商没有返回可用的模型".into());
+    }
+    Ok(models)
+}
+
 #[cfg(test)]
 pub(crate) fn seal(book: &Book, key: &[u8]) -> Result<Vec<u8>, String> {
     book.validate()?;

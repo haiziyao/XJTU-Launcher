@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
   MarketCatalog,
+  ModelListInput,
   SchoolFeature,
   UpdateStatus,
   ModelProviders,
@@ -49,6 +50,10 @@ export const bridge = {
   async selectProvider(id: string): Promise<void> {
     requireNative();
     return invoke('select_model_provider', { id });
+  },
+  async listProviderModels(input: ModelListInput): Promise<string[]> {
+    requireNative();
+    return invoke('list_provider_models', { input });
   },
   async personalImage(kind: 'avatar' | 'wallpaper'): Promise<string | null> {
     requireNative();

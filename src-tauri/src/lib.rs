@@ -877,6 +877,42 @@ fn list_model_providers(
     Ok(providers::load(&providers_path(&app)?)?.view(vault::api_key_set()?))
 }
 #[tauri::command]
+async fn list_provider_models(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    input: providers::ListInput,
+) -> Result<Vec<String>, String> {
+    main_only(&window)?;
+    // Resolve the key while holding the config lock, then release it before I/O.
+    let key = {
+        let _guard = state
+            .providers_lock
+            .lock()
+            .map_err(|_| "模型配置服务繁忙")?;
+        if input.use_legacy_key {
+            vault::get("model-api-key")?.unwrap_or_default()
+        } else if let Some(key) = input
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+        {
+            key.to_string()
+        } else if let Some(id) = input.id.as_deref() {
+            providers::load(&providers_path(&app)?)?
+                .providers
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.api_key.clone())
+                .ok_or("模型配置不存在")?
+        } else {
+            String::new()
+        }
+    };
+    providers::list_models(&input.base_url, &input.protocol, &key).await
+}
+#[tauri::command]
 fn save_model_provider(
     app: tauri::AppHandle,
     window: WebviewWindow,
@@ -1016,6 +1052,7 @@ pub fn run() {
             school_submit_evaluations,
             school_cancel_evaluations,
             list_model_providers,
+            list_provider_models,
             save_model_provider,
             remove_model_provider,
             select_model_provider,
