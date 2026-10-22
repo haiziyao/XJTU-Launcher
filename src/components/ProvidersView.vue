@@ -5,6 +5,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  ChevronDown,
   Server,
   Eye,
   EyeOff,
@@ -70,14 +71,23 @@ function edit(provider?: ModelProvider) {
   status.value = '';
   models.value = [];
   modelStatus.value = '';
+  pickerOpen.value = false;
   // Existing providers already have a stored key, so read the catalogue right away.
   if (provider) void fetchModels();
 }
-function pickModel(event: Event) {
-  const select = event.target as HTMLSelectElement;
-  if (select.value) draft.value.model = select.value;
-  select.value = '';
+const pickerOpen = ref(false);
+const picker = ref<HTMLElement | null>(null);
+function chooseModel(model: string) {
+  draft.value.model = model;
+  pickerOpen.value = false;
 }
+function onPickerOutside(event: PointerEvent) {
+  if (picker.value && !picker.value.contains(event.target as Node)) pickerOpen.value = false;
+}
+watch(pickerOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onPickerOutside, true);
+  else document.removeEventListener('pointerdown', onPickerOutside, true);
+});
 function cancel() {
   editing.value = false;
   draft.value = empty();
@@ -85,6 +95,7 @@ function cancel() {
   clearKey.value = false;
   models.value = [];
   modelStatus.value = '';
+  pickerOpen.value = false;
 }
 watch(
   () => [draft.value.baseUrl, draft.value.protocol],
@@ -174,6 +185,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true;
   draft.value.apiKey = '';
+  document.removeEventListener('pointerdown', onPickerOutside, true);
 });
 </script>
 <template>
@@ -296,26 +308,47 @@ onBeforeUnmount(() => {
             <SettingRow title="模型名称">
               <template #description>{{ modelStatus || '可从厂商读取模型列表' }}</template>
               <div class="model-field">
-                <input
-                  id="provider-model"
-                  v-model="draft.model"
-                  class="text-field"
-                  list="provider-model-options"
-                  placeholder="填写厂商提供的模型 ID"
-                  aria-label="模型名称"
-                  required
-                  maxlength="256"
-                  spellcheck="false"
-                />
-                <select
-                  v-if="models.length"
-                  class="text-field model-select"
-                  aria-label="选择模型"
-                  @change="pickModel"
-                >
-                  <option value="" selected>选择模型…</option>
-                  <option v-for="model in models" :key="model" :value="model">{{ model }}</option>
-                </select>
+                <div ref="picker" class="model-pick" @keydown.esc="pickerOpen = false">
+                  <div class="field-shell">
+                    <input
+                      id="provider-model"
+                      v-model="draft.model"
+                      placeholder="填写厂商提供的模型 ID"
+                      aria-label="模型名称"
+                      required
+                      maxlength="256"
+                      spellcheck="false"
+                    />
+                    <button
+                      v-if="models.length"
+                      type="button"
+                      class="btn ghost icon small"
+                      :aria-label="pickerOpen ? '收起模型列表' : '展开模型列表'"
+                      :aria-expanded="pickerOpen"
+                      @click="pickerOpen = !pickerOpen"
+                    >
+                      <ChevronDown :size="14" />
+                    </button>
+                  </div>
+                  <ul
+                    v-if="pickerOpen && models.length"
+                    class="model-menu"
+                    role="listbox"
+                    aria-label="模型列表"
+                  >
+                    <li v-for="model in models" :key="model">
+                      <button
+                        type="button"
+                        role="option"
+                        :aria-selected="model === draft.model"
+                        :class="{ active: model === draft.model }"
+                        @click="chooseModel(model)"
+                      >
+                        {{ model }}
+                      </button>
+                    </li>
+                  </ul>
+                </div>
                 <button type="button" class="btn small" :disabled="fetching" @click="fetchModels">
                   <LoaderCircle v-if="fetching" :size="14" class="spinning" />
                   <RefreshCw v-else :size="14" />
