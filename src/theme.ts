@@ -108,6 +108,7 @@ export function accentTokens(value: unknown): Record<string, string> {
     '--accent-text': text,
     '--accent-contrast': onAccent(accent),
     '--accent-tint': rgba(accent, 0.13),
+    '--accent-outline': rgba(accent, 0.35),
     '--nav-active': highlight,
     '--nav-active-text': text,
     '--text-secondary': ensureContrast(mix(MUTED_BASE, accent, 0.18), '#ffffff', 7),

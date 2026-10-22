@@ -252,12 +252,12 @@ const sections = [
     border-color var(--duration) ease,
     color var(--duration) ease;
 }
-.pet-option:hover:not(:disabled) {
+.pet-option:hover:not(:disabled):not(.active) {
   background: var(--surface-subtle);
 }
 .pet-option.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--accent-outline);
+  background: var(--accent-tint);
   color: var(--accent-text);
 }
 .pet-option-art {
