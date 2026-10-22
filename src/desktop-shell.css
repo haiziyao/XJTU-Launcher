@@ -128,39 +128,38 @@
 }
 .sidebar-group-label {
   position: relative;
-  height: 30px;
-  padding: 12px 11px 0;
+  display: flex;
+  align-items: center;
+  height: 14px;
+  padding: 0 11px;
   color: var(--text-tertiary);
   font-size: 11px;
+  line-height: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
 }
-/* In the compact rail the label becomes a short divider at the same height.
-   top 13px balances the 6px section gap above against the 2px item gap plus
-   the label's remaining height below. */
+/* The group block keeps one height in both states, so the plugin icons never
+   shift vertically when the sidebar toggles. The divider sits 8px from the
+   icons above and below once the item gap is counted. */
 .sidebar-group-label::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 13px;
+  top: 8px;
   width: 28px;
   margin-left: -14px;
   border-top: 1px solid var(--border-strong);
   opacity: 0;
   transition: opacity var(--duration) ease;
 }
-/* Collapsed: the label collapses to the divider, adding 14px between the icon
-   groups (14px box + 2px gap against the usual 2px gap). */
-.sidebar-collapsed .nav-section:has(.sidebar-group-label) {
+.nav-section:has(.sidebar-group-label) {
   margin-top: 0;
 }
 .sidebar-collapsed .sidebar-group-label {
-  height: 14px;
   padding: 0;
 }
 .sidebar-collapsed .sidebar-group-label::after {
-  top: 8px;
   opacity: 1;
   transition-delay: 120ms;
 }
