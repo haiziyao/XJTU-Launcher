@@ -81,6 +81,8 @@ const workspaceId = ref('');
 const messages = ref<AgentMessage[]>([]);
 const showHistory = ref(false);
 const showWorkspaces = ref(false);
+const renaming = ref(false);
+const renameTitle = ref('');
 const draft = ref('');
 const running = ref(false);
 const liveText = ref('');
@@ -335,6 +337,32 @@ async function chooseWorkspace(id: string) {
     error.value = errorText(e);
   }
 }
+/** The header title renames the open conversation in place. */
+function startRenameTitle() {
+  if (!conversation.value || running.value) return;
+  renameTitle.value = conversation.value.title;
+  renaming.value = true;
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('.agent-title-input');
+    input?.focus();
+    input?.select();
+  });
+}
+async function commitTitle() {
+  if (!renaming.value) return;
+  renaming.value = false;
+  const title = renameTitle.value.trim();
+  const target = conversation.value;
+  if (!target || !title || title === target.title) return;
+  try {
+    await bridge.agentRename(target.id, title);
+    target.title = title;
+    await loadSummaries();
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
+
 function startInWorkspace(id: string | null) {
   newChat();
   workspaceId.value = id || '';
@@ -568,7 +596,25 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <span class="agent-name">{{ currentTitle }}</span>
+        <input
+          v-if="renaming"
+          v-model="renameTitle"
+          class="agent-title-input"
+          maxlength="60"
+          aria-label="对话名称"
+          @keydown.enter.prevent="commitTitle"
+          @keydown.esc="renaming = false"
+          @blur="commitTitle"
+        />
+        <button
+          v-else-if="conversation"
+          class="agent-name clickable"
+          title="点击重命名对话"
+          @click="startRenameTitle"
+        >
+          {{ currentTitle }}
+        </button>
+        <span v-else class="agent-name">{{ currentTitle }}</span>
       </div>
       <div class="agent-bar-actions">
         <button class="agent-icon-button" title="新对话" aria-label="新对话" @click="newChat">
@@ -967,6 +1013,34 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.agent-name.clickable {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 2px 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: text;
+}
+.agent-name.clickable:hover {
+  background: var(--accent-wash);
+}
+.agent-title-input {
+  min-width: 120px;
+  max-width: 260px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
 }
 .agent-bar-actions {
   display: flex;
