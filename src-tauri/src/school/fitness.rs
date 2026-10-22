@@ -126,7 +126,7 @@ impl Client {
                         ""
                     };
                 let score = if score_key.is_empty() {
-                    text(data.get(&format!("{key}_score")))
+                    text(data.get(format!("{key}_score")))
                 } else {
                     text(data.get(score_key))
                 };
@@ -134,7 +134,7 @@ impl Client {
                     "key": key,
                     "name": name,
                     "score": score.unwrap_or_default(),
-                    "grade": text(data.get(&format!("{key}_grade"))).unwrap_or_default(),
+                    "grade": text(data.get(format!("{key}_grade"))).unwrap_or_default(),
                 })
             })
             .collect::<Vec<_>>();
