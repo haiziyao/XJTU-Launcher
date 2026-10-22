@@ -4,17 +4,27 @@ import type { AppConfig } from './types';
 const MIN_WIDTH = 176;
 const MAX_WIDTH = 320;
 const DEFAULT_WIDTH = 196;
+const DEFAULT_COLLAPSED_WIDTH = 56;
 const clamp = (width: number) => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.round(width)));
 
 export function useSidebarResize(
   config: Ref<AppConfig>,
   loaded: Ref<boolean>,
   persist: (config: AppConfig) => Promise<void>,
+  collapsedWidth = DEFAULT_COLLAPSED_WIDTH,
 ) {
   const preview = ref<number | null>(null);
   const resizing = ref(false);
-  const collapsed = computed(() => preview.value === null && config.value.sidebarCollapsed);
-  const width = computed(() => preview.value ?? (collapsed.value ? 56 : config.value.sidebarWidth));
+  // Dragging below the minimum expanded width previews the collapsed rail, so a
+  // single inward drag reaches the rail instead of stopping at 176px.
+  const collapsed = computed(() =>
+    preview.value === null ? config.value.sidebarCollapsed : preview.value < MIN_WIDTH,
+  );
+  const width = computed(
+    () => preview.value ?? (collapsed.value ? collapsedWidth : config.value.sidebarWidth),
+  );
+  const clampDrag = (value: number) =>
+    Math.max(collapsedWidth, Math.min(MAX_WIDTH, Math.round(value)));
   let target: HTMLElement | null = null;
   let pointer: number | null = null;
   let startX = 0;
@@ -47,14 +57,19 @@ export function useSidebarResize(
       preview.value = null;
       return;
     }
-    preview.value = clamp(startWidth + event.clientX - startX);
+    preview.value = clampDrag(startWidth + event.clientX - startX);
   }
   function finish(event: PointerEvent) {
     if (event.pointerId !== pointer) return;
     const next = preview.value;
     cancel();
-    if (next !== null)
-      void persist({ ...config.value, sidebarWidth: next, sidebarCollapsed: false });
+    if (next === null) return;
+    if (next < MIN_WIDTH) {
+      // Releasing inside the rail zone collapses; the stored expanded width is kept.
+      if (!config.value.sidebarCollapsed) void persist({ ...config.value, sidebarCollapsed: true });
+      return;
+    }
+    void persist({ ...config.value, sidebarWidth: next, sidebarCollapsed: false });
   }
   function reset() {
     if (!loaded.value) return;
@@ -69,17 +84,30 @@ export function useSidebarResize(
     }
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(event.key)) return;
     event.preventDefault();
+    const expanded = config.value.sidebarCollapsed ? MIN_WIDTH : width.value;
+    if (event.key === 'Home') {
+      if (!config.value.sidebarCollapsed) void persist({ ...config.value, sidebarCollapsed: true });
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      if (config.value.sidebarCollapsed) return;
+      if (expanded - 16 < MIN_WIDTH) {
+        void persist({ ...config.value, sidebarCollapsed: true });
+        return;
+      }
+    }
     const next =
-      event.key === 'Home'
-        ? MIN_WIDTH
-        : event.key === 'End'
-          ? MAX_WIDTH
-          : event.key === 'Enter'
-            ? DEFAULT_WIDTH
-            : clamp(
-                (collapsed.value ? MIN_WIDTH : config.value.sidebarWidth) +
-                  (event.key === 'ArrowLeft' ? -16 : 16),
-              );
+      event.key === 'End'
+        ? MAX_WIDTH
+        : event.key === 'Enter'
+          ? DEFAULT_WIDTH
+          : clamp(
+              event.key === 'ArrowLeft'
+                ? expanded - 16
+                : config.value.sidebarCollapsed
+                  ? MIN_WIDTH
+                  : expanded + 16,
+            );
     void persist({ ...config.value, sidebarWidth: next, sidebarCollapsed: false });
   }
   onMounted(() => window.addEventListener('blur', cancel));
@@ -87,5 +115,16 @@ export function useSidebarResize(
     cancel();
     window.removeEventListener('blur', cancel);
   });
-  return { width, collapsed, resizing, start, move, finish, cancel, reset, key };
+  return {
+    width,
+    collapsed,
+    collapsedWidth,
+    resizing,
+    start,
+    move,
+    finish,
+    cancel,
+    reset,
+    key,
+  };
 }

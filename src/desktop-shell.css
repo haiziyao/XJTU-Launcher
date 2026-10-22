@@ -1,6 +1,7 @@
 /* Window structure follows the reviewed desktop references. */
 .desktop-shell {
   --sidebar-width: 196px;
+  --sidebar-collapsed-width: 56px;
   --sidebar-motion: 280ms var(--ease-standard);
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -89,6 +90,7 @@
   transition:
     background var(--duration-fast) ease,
     color var(--duration) ease,
+    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-nav-item svg {
@@ -171,6 +173,7 @@
   overflow: hidden;
   transition:
     background var(--duration-fast) ease,
+    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-identity:hover {
@@ -223,6 +226,16 @@
   transition:
     opacity 100ms ease,
     transform var(--sidebar-motion);
+}
+
+/* The rail is wider on macOS to clear the window buttons, so icons centre in it.
+   The offset uses the settled rail width, not the dragged width, so icons do not
+   drift across the divider while the sidebar is being resized. */
+.sidebar-collapsed .desktop-nav-item {
+  padding-left: calc((var(--sidebar-collapsed-width) - 34px) / 2);
+}
+.sidebar-collapsed .desktop-identity {
+  padding-left: calc((var(--sidebar-collapsed-width) - 44px) / 2);
 }
 
 /* Collapse toggle sits on the divider's vertical middle. */

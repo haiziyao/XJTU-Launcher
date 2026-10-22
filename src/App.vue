@@ -68,6 +68,8 @@ const error = ref('');
 const saving = ref(false);
 const now = ref(new Date());
 const macNative = native && /Mac/.test(navigator.userAgent);
+// The embedded macOS title bar paints the window buttons over the rail's top-left.
+const sidebarCollapsedWidth = macNative ? 88 : 56;
 const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, config.value));
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
@@ -166,9 +168,10 @@ async function persist(next: AppConfig) {
 const {
   width: sidebarWidth,
   collapsed: sidebarCollapsed,
+  collapsedWidth,
   resizing,
   ...resize
-} = useSidebarResize(config, configLoaded, persist);
+} = useSidebarResize(config, configLoaded, persist, sidebarCollapsedWidth);
 function toggleSidebar() {
   resize.cancel();
   void persist({ ...config.value, sidebarCollapsed: !config.value.sidebarCollapsed });
@@ -286,7 +289,10 @@ onBeforeUnmount(() => {
       'motion-ready': ready,
       'reduce-motion': config.reduceMotion,
     }"
-    :style="{ '--sidebar-width': sidebarWidth + 'px' }"
+    :style="{
+      '--sidebar-width': sidebarWidth + 'px',
+      '--sidebar-collapsed-width': collapsedWidth + 'px',
+    }"
   >
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
       <div class="sidebar-top-space" aria-hidden="true"></div>
@@ -382,13 +388,13 @@ onBeforeUnmount(() => {
       aria-label="调整侧栏宽度"
       aria-orientation="vertical"
       aria-controls="app-sidebar"
-      :aria-valuemin="56"
+      :aria-valuemin="collapsedWidth"
       :aria-valuemax="320"
       :aria-valuenow="sidebarWidth"
       :aria-valuetext="sidebarCollapsed ? '已收起，向右拖动展开' : sidebarWidth + ' 像素'"
       :aria-disabled="!configLoaded"
       :tabindex="configLoaded ? 0 : -1"
-      title="拖动调整宽度，双击恢复默认"
+      title="拖动调整宽度，拖到底自动收起，双击恢复默认"
       @pointerdown="resize.start"
       @pointermove="resize.move"
       @pointerup="resize.finish"
