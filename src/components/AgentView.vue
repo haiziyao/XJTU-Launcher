@@ -83,6 +83,7 @@ const showHistory = ref(false);
 const showWorkspaces = ref(false);
 const renaming = ref(false);
 const renameTitle = ref('');
+const titleInput = ref<HTMLInputElement | null>(null);
 const draft = ref('');
 const running = ref(false);
 const liveText = ref('');
@@ -344,9 +345,10 @@ function startRenameTitle() {
   renameTitle.value = conversation.value.title;
   renaming.value = true;
   void nextTick(() => {
-    const input = document.querySelector<HTMLInputElement>('.agent-title-input');
-    input?.focus();
-    input?.select();
+    const input = titleInput.value;
+    if (!input) return;
+    input.focus();
+    input.select();
   });
 }
 async function commitTitle() {
@@ -599,10 +601,12 @@ onBeforeUnmount(() => {
         </div>
         <input
           v-if="renaming"
+          ref="titleInput"
           v-model="renameTitle"
           class="agent-title-input"
-          :size="Math.max(renameTitle.length, 4)"
+          :style="{ width: `${Math.min(16, Math.max(4, renameTitle.length + 1))}em` }"
           maxlength="60"
+          autofocus
           aria-label="对话名称"
           @keydown.enter.prevent="commitTitle"
           @keydown.esc="renaming = false"
@@ -1031,13 +1035,14 @@ onBeforeUnmount(() => {
   background: var(--accent-wash);
 }
 .agent-title-input {
-  max-width: 260px;
+  max-width: 280px;
   padding: 2px 5px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
   caret-color: var(--accent);
+  cursor: text;
   font: inherit;
   font-size: 17px;
   font-weight: 600;
