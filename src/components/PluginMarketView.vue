@@ -10,6 +10,7 @@ import {
   Download,
   MoreHorizontal,
   Package,
+  Palette,
   RefreshCw,
   Route,
   Search,
@@ -193,6 +194,8 @@ onBeforeUnmount(() => {
             ><IconTile :size="34"
               ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
                 v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Palette
+                v-else-if="plugin.page.type === 'homeTheme'"
                 :size="19" /><Compass v-else :size="19" /></IconTile
           ></template>
           <button
@@ -264,6 +267,8 @@ onBeforeUnmount(() => {
             <IconTile :size="34"
               ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
                 v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Palette
+                v-else-if="plugin.page.type === 'homeTheme'"
                 :size="19" /><Settings2
                 v-else-if="plugin.page.type === 'agentSettings'"
                 :size="19" /><Compass v-else :size="19"

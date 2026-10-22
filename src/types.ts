@@ -18,6 +18,10 @@ export interface AppConfig {
   checkPluginUpdates: boolean;
   checkAppUpdates: boolean;
   campusPinned: string[];
+  /** Clock style on the home page (plain | bold | mono | card). */
+  homeClock: string;
+  /** Home sections kept visible. */
+  homeSections: string[];
 }
 
 export interface Link {
@@ -36,7 +40,8 @@ export interface Plugin {
     | { type: 'timetable' }
     | { type: 'links'; links: Link[] }
     | { type: 'campus' }
-    | { type: 'agentSettings' };
+    | { type: 'agentSettings' }
+    | { type: 'homeTheme' };
   widget: boolean;
 }
 export interface PluginList {

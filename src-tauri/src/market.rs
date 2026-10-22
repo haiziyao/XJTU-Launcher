@@ -364,7 +364,7 @@ mod tests {
         let (entry, bytes) = fixture("1.0.0");
         let package = validate_package("https://server.test", &entry, &bytes).unwrap();
         install(dir.path(), package.clone()).unwrap();
-        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 4);
+        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 5);
         assert!(install(dir.path(), package).is_err());
         let (entry2, bytes2) = fixture("1.1.0");
         assert!(validate_package("https://server.test", &entry2, &bytes).is_err());
@@ -395,6 +395,6 @@ mod tests {
         assert!(remove(dir.path(), "../escape").is_err());
         assert!(remove(dir.path(), plugins::CAMPUS_ID).is_err());
         remove(dir.path(), &entry.id).unwrap();
-        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 3);
+        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 4);
     }
 }

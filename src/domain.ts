@@ -24,6 +24,8 @@ export const defaultConfig = (): AppConfig => ({
   checkPluginUpdates: true,
   checkAppUpdates: true,
   campusPinned: [],
+  homeClock: 'plain',
+  homeSections: ['greeting', 'clock', 'timetable', 'links', 'plugins'],
 });
 
 export const campusLinks = [

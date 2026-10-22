@@ -41,6 +41,10 @@
 
 文件最多 64 KiB。错误插件会被跳过并显示错误，不影响其他有效插件。对应用插件目录中的外部符号链接会进行限制。
 
+## 内置主页主题插件
+
+`plugins/cn.xjtu.home-theme/plugin.json` 声明 `page.type = homeTheme`，页面提供主页时钟风格（简约 / 醒目 / 等宽 / 卡片）和主页元素开关（问候与日期、时钟、今日课程、校园快捷入口、我的插件）。设置保存在 `config.json` 的 `homeClock` 与 `homeSections`，主页据此渲染；旧配置缺省为简约时钟和全部元素显示。
+
 ## 内置课表插件
 
 `plugins/cn.xjtu.timetable/plugin.json` 声明 `page.type = timetable`，由编译进应用的 Rust provider 查询课表。内置插件同样可以启停和调整顺序，但不能由外部清单覆盖。自定义插件目前不能声明 timetable 页面或访问校园 token。

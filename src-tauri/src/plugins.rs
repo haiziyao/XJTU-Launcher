@@ -5,6 +5,7 @@ use url::Url;
 pub const TIMETABLE_ID: &str = "cn.xjtu.timetable";
 pub const CAMPUS_ID: &str = "cn.xjtu.campus";
 pub const AGENT_ID: &str = "cn.xjtu.agent-settings";
+pub const HOME_THEME_ID: &str = "cn.xjtu.home-theme";
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -29,6 +30,8 @@ pub enum Page {
     Campus,
     #[serde(rename = "agentSettings")]
     AgentSettings,
+    #[serde(rename = "homeTheme")]
+    HomeTheme,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -140,8 +143,12 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
     ))
     .map_err(|_| "内置 Agent 设置插件损坏")?;
     agent.validate(true)?;
+    let theme: Plugin =
+        serde_json::from_str(include_str!("../../plugins/cn.xjtu.home-theme/plugin.json"))
+            .map_err(|_| "内置主页主题插件损坏")?;
+    theme.validate(true)?;
     let mut result = PluginList {
-        plugins: vec![builtin, campus, agent],
+        plugins: vec![builtin, campus, agent, theme],
         sources: Default::default(),
         warnings: vec![],
         directory: directory.display().to_string(),
@@ -156,6 +163,7 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
         TIMETABLE_ID.to_string(),
         CAMPUS_ID.to_string(),
         AGENT_ID.to_string(),
+        HOME_THEME_ID.to_string(),
     ]);
     for path in paths.into_iter().take(256) {
         if !path.is_dir()
@@ -230,7 +238,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         import(Path::new("../examples/campus-links"), directory.path()).unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 4);
+        assert_eq!(result.plugins.len(), 5);
         assert!(result.warnings.is_empty());
         assert!(import(Path::new("../examples/campus-links"), directory.path()).is_err());
     }
@@ -259,7 +267,7 @@ mod tests {
         fs::create_dir(directory.path().join("bad")).unwrap();
         fs::write(directory.path().join("bad/plugin.json"), "{}").unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 3);
+        assert_eq!(result.plugins.len(), 4);
         assert_eq!(result.warnings.len(), 1);
     }
 }

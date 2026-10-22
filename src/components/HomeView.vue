@@ -71,11 +71,13 @@ const shortcutStyle: { icon: typeof Building2; tone: Tone }[] = [
   { icon: BookOpen, tone: 'teal' },
   { icon: BookMarked, tone: 'green' },
 ];
-const showCourses = computed(
-  () => props.config.widgets.includes('timetable') && props.timetableEnabled,
-);
-const showLinks = computed(() => props.config.widgets.includes('links'));
-const showPlugins = computed(() => props.config.widgets.includes('plugins'));
+const sections = computed(() => new Set(props.config.homeSections));
+const showGreeting = computed(() => sections.value.has('greeting'));
+const showClock = computed(() => sections.value.has('clock'));
+const showHero = computed(() => showGreeting.value || showClock.value);
+const showCourses = computed(() => sections.value.has('timetable') && props.timetableEnabled);
+const showLinks = computed(() => sections.value.has('links'));
+const showPlugins = computed(() => sections.value.has('plugins'));
 // Each widget keeps its configured order; course and links share a row when both are shown.
 const order = (widget: string) => props.config.widgets.indexOf(widget);
 const paired = computed(() => showCourses.value && showLinks.value);
@@ -83,12 +85,18 @@ const paired = computed(() => showCourses.value && showLinks.value);
 
 <template>
   <div class="home">
-    <header class="home-hero">
-      <div>
+    <header v-if="showHero" class="home-hero">
+      <div v-if="showGreeting">
         <p class="home-date">{{ date }}</p>
         <h1>{{ greeting }}</h1>
       </div>
-      <time class="home-clock" :datetime="now.toISOString()">{{ time }}</time>
+      <time
+        v-if="showClock"
+        class="home-clock"
+        :class="config.homeClock"
+        :datetime="now.toISOString()"
+        >{{ time }}</time
+      >
     </header>
 
     <div class="home-grid" :class="{ paired }">
@@ -235,7 +243,7 @@ const paired = computed(() => showCourses.value && showLinks.value);
       v-if="!showCourses && !showLinks && !showPlugins"
       :icon="Compass"
       title="主页暂无组件"
-      description="可在后续的自定义主页中添加组件。"
+      description="在“主页主题”插件中打开需要的元素。"
     />
   </div>
 </template>
@@ -261,12 +269,33 @@ const paired = computed(() => showCourses.value && showLinks.value);
   line-height: 1.3;
 }
 .home-clock {
+  margin-left: auto;
   color: var(--text-secondary);
   font-size: 22px;
   font-weight: 300;
   letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
+}
+.home-clock.bold {
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.home-clock.mono {
+  font-family: var(--font-mono);
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.home-clock.card {
+  padding: 6px 14px;
+  border: 1px solid var(--panel-border, var(--border));
+  border-radius: 12px;
+  background: var(--panel, var(--surface-subtle));
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
 }
 
 .home-grid {

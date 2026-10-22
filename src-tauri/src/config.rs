@@ -37,6 +37,22 @@ pub struct AppConfig {
     /// Tool ids pinned to the top of the 畅行校园 page, in display order.
     #[serde(default)]
     pub campus_pinned: Vec<String>,
+    /// Clock style on the home page, managed by the 主页主题 plugin.
+    #[serde(default = "default_home_clock")]
+    pub home_clock: String,
+    /// Home sections the user keeps visible; order comes from `widgets`.
+    #[serde(default = "default_home_sections")]
+    pub home_sections: Vec<String>,
+}
+
+fn default_home_clock() -> String {
+    "plain".into()
+}
+
+pub const HOME_SECTIONS: [&str; 5] = ["greeting", "clock", "timetable", "links", "plugins"];
+
+fn default_home_sections() -> Vec<String> {
+    HOME_SECTIONS.iter().map(|id| id.to_string()).collect()
 }
 
 fn default_sidebar_width() -> u32 {
@@ -73,6 +89,8 @@ impl Default for AppConfig {
             check_plugin_updates: true,
             check_app_updates: true,
             campus_pinned: Vec::new(),
+            home_clock: default_home_clock(),
+            home_sections: default_home_sections(),
         }
     }
 }
@@ -115,6 +133,16 @@ impl AppConfig {
                         .bytes()
                         .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
             })
+            || !["plain", "bold", "mono", "card"].contains(&self.home_clock.as_str())
+            || self.home_sections.len() > HOME_SECTIONS.len()
+            || self
+                .home_sections
+                .iter()
+                .any(|id| !HOME_SECTIONS.contains(&id.as_str()))
+            || {
+                let unique: std::collections::HashSet<_> = self.home_sections.iter().collect();
+                unique.len() != self.home_sections.len()
+            }
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
             || self

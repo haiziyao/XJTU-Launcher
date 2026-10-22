@@ -13,6 +13,7 @@ import {
   MessagesSquare,
   Route,
   Settings,
+  Palette,
   Settings2,
   Wifi,
   WifiOff,
@@ -39,6 +40,7 @@ import SettingsView from './components/SettingsView.vue';
 import CommunityView from './components/CommunityView.vue';
 import AgentView from './components/AgentView.vue';
 import AgentSettingsView from './components/AgentSettingsView.vue';
+import HomeThemeView from './components/HomeThemeView.vue';
 import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
@@ -432,10 +434,10 @@ onBeforeUnmount(() => {
             <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
               v-else-if="plugin.page.type === 'campus'"
               :size="20"
-            /><Settings2 v-else-if="plugin.page.type === 'agentSettings'" :size="20" /><Compass
-              v-else
+            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Settings2
+              v-else-if="plugin.page.type === 'agentSettings'"
               :size="20"
-            /><span>{{ plugin.name }}</span>
+            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -595,6 +597,13 @@ onBeforeUnmount(() => {
                 v-else-if="activePlugin?.page.type === 'agentSettings'"
                 :key="activePlugin.id"
                 @agent="route = 'agent'"
+              />
+              <HomeThemeView
+                v-else-if="activePlugin?.page.type === 'homeTheme'"
+                :key="activePlugin.id"
+                :config="config"
+                :saving="saving || !configLoaded"
+                @update="persist"
               />
               <div v-else-if="route === 'accounts'" class="subpage">
                 <button class="back-button" @click="route = 'personal'">

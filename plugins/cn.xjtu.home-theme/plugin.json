@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.home-theme",
+  "name": "主页主题",
+  "version": "0.1.0",
+  "description": "时钟风格与主页元素开关",
+  "icon": "palette",
+  "page": { "type": "homeTheme" },
+  "widget": false
+}
