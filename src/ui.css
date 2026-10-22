@@ -388,6 +388,13 @@ select.text-field {
 .setting-row.clickable:active:not(:disabled) {
   background: var(--surface-sunken);
 }
+/* Rows that open on double-click use the same hover cue as clickable rows. */
+.setting-row.actionable {
+  transition: background var(--duration-fast) ease;
+}
+.setting-row.actionable:hover {
+  background: var(--surface-subtle);
+}
 .setting-row-leading {
   display: flex;
   flex-shrink: 0;

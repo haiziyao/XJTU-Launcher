@@ -357,6 +357,7 @@ onMounted(async () => {
           :key="item.id"
           :title="item.name"
           :description="item.description"
+          :class="{ actionable: available(item.id) }"
           @dblclick="rowDblClick($event, () => open(item.id))"
         >
           <template #leading
@@ -383,6 +384,7 @@ onMounted(async () => {
           :key="item.id"
           :title="item.name"
           :description="item.description"
+          :class="{ actionable: available(item.id) }"
           @dblclick="rowDblClick($event, () => open(item.id))"
         >
           <template #leading
@@ -566,6 +568,7 @@ onMounted(async () => {
           <SettingRow
             v-for="(row, index) in calendar?.rows ?? []"
             :key="index"
+            class="actionable"
             :title="row.year || '未标注学年'"
             description="在校园窗口中打开校历图片"
             @dblclick="rowDblClick($event, () => openCalendar(row.url))"

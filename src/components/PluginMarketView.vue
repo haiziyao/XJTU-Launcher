@@ -184,6 +184,7 @@ onBeforeUnmount(() => {
         <SettingRow
           v-for="plugin in builtins"
           :key="plugin.id"
+          class="actionable"
           :title="plugin.name"
           :description="plugin.description"
           @dblclick="rowDblClick($event, () => openPlugin(plugin))"
@@ -378,6 +379,10 @@ onBeforeUnmount(() => {
 }
 .installed-row {
   min-height: 86px;
+  transition: background var(--duration-fast) ease;
+}
+.installed-row:hover {
+  background: var(--surface-subtle);
 }
 .installed-item {
   border-bottom: 1px solid var(--border);
