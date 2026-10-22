@@ -165,33 +165,29 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
         .collect()
 }
 
-/// Whether the campus host answers at all in the given access mode. Any HTTP
-/// status counts: the sidebar self-check reports network reachability, not auth.
+/// Whether the campus host answers in the given access mode. The probe uses the
+/// attendance login page without cookies or the business token: a stale session
+/// must not make a working campus network look unreachable. As in the reference
+/// toolbox, any status below 500 counts as reachable.
 pub async fn reachable(session: &crate::vault::Session, mode: crate::network::AccessMode) -> bool {
     let Ok(host) = domain(&session.degree) else {
         return false;
     };
-    let Ok(transport) = crate::network::Transport::with_timeout(
-        session.cookies.as_deref(),
-        std::time::Duration::from_secs(6),
-    ) else {
+    let Ok(transport) =
+        crate::network::Transport::with_timeout(None, std::time::Duration::from_secs(10))
+    else {
         return false;
     };
-    let Ok(url) = Url::parse(&format!(
-        "https://{host}/sa/student/service/timetable/semesters"
-    )) else {
+    let Ok(url) = Url::parse(&format!("https://{host}/sa/auth/cas/login/student-pc")) else {
         return false;
     };
     let Ok(target) = crate::network::Transport::address(&url, mode) else {
         return false;
     };
-    transport
-        .client
-        .get(target)
-        .header("X-Business-Token", &session.token)
-        .send()
-        .await
-        .is_ok()
+    match transport.client.get(target).send().await {
+        Ok(response) => response.status().as_u16() < 500,
+        Err(_) => false,
+    }
 }
 
 /// Whether the saved session can still fetch authenticated campus data.
