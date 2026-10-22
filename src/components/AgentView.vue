@@ -929,11 +929,11 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
+  height: calc(100vh - 70px);
   min-height: 420px;
 }
 .mac-native .agent-page {
-  height: calc(100vh - 150px);
+  height: calc(100vh - 100px);
 }
 .agent-bar {
   display: flex;
@@ -1494,6 +1494,13 @@ onBeforeUnmount(() => {
 
 /* With a wallpaper the page stays translucent so the photo is not blocked. */
 .desktop-shell.has-wallpaper .agent-composer {
+  background: var(--panel);
+}
+/* Popovers keep the wallpaper visible instead of covering it with white. */
+.desktop-shell.has-wallpaper .agent-menu,
+.desktop-shell.has-wallpaper .agent-slash,
+.desktop-shell.has-wallpaper .agent-workspace-menu {
+  border-color: var(--panel-border);
   background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
