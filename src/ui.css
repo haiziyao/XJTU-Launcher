@@ -406,7 +406,7 @@ select.text-field {
   transition: background var(--duration-fast) ease;
 }
 .setting-row.actionable:hover {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .setting-row-leading {
   display: flex;

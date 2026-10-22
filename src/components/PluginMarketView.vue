@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
   transition: background var(--duration-fast) ease;
 }
 .installed-row:hover {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .installed-item {
   border-bottom: 1px solid var(--border);

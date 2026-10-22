@@ -26,6 +26,7 @@
   --accent-contrast: #ffffff;
   --accent-tint: rgba(31, 111, 229, 0.13);
   --accent-outline: rgba(31, 111, 229, 0.35);
+  --accent-wash: rgba(31, 111, 229, 0.07);
   --danger: #c23a2f;
   --danger-soft: #fdefed;
   --success: #2c8653;

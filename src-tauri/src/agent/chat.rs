@@ -38,7 +38,11 @@ pub struct Provider {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum Event {
     Delta {
         request_id: String,

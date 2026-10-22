@@ -918,7 +918,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .agent-tool-row:hover {
-  background: var(--surface-hover);
+  background: var(--accent-wash);
 }
 .agent-tool-icon {
   color: var(--text-tertiary);
@@ -1263,7 +1263,12 @@ onBeforeUnmount(() => {
   background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.92);
+}
+.desktop-shell.has-wallpaper .agent-assistant {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
 }
 .desktop-shell.has-wallpaper .agent-task {
   border-color: var(--panel-border);
