@@ -227,6 +227,7 @@ function pickSkill(skill: AgentSkill) {
   attachSkill(skill);
 }
 function closeMenus() {
+  showHistory.value = false;
   showPlus.value = false;
   showAt.value = false;
   showWorkspaces.value = false;
@@ -636,7 +637,7 @@ onBeforeUnmount(() => {
     </Transition>
 
     <div
-      v-if="showPlus || showAt || showWorkspaces"
+      v-if="showHistory || showPlus || showAt || showWorkspaces"
       class="agent-backdrop"
       @click="closeMenus"
     ></div>
@@ -1110,14 +1111,14 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: var(--accent-soft);
   color: var(--text);
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 .agent-assistant {
   margin: 16px 0 0;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.7;
   color: var(--text);
 }
