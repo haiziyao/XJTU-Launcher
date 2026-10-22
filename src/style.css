@@ -1,3 +1,13 @@
+/* Bundled UI font for Windows, where the default Chinese face looks heavy.
+   Noto Sans SC (SIL OFL); the licence ships beside the file. */
+@font-face {
+  font-family: 'XJTU Sans SC';
+  src: url('./assets/fonts/noto-sans-sc.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /* Design tokens shared by the shell, pages and UI components. */
 :root {
   --font-sans:
