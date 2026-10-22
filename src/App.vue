@@ -12,6 +12,8 @@ import {
   LoaderCircle,
   MessagesSquare,
   Settings,
+  Wifi,
+  WifiOff,
   X,
 } from 'lucide-vue-next';
 import { initializeMarket } from './market';
@@ -37,6 +39,7 @@ import { applyAccent, normalizeAccent } from './theme';
 import './ui.css';
 import './pages.css';
 import './desktop-shell.css';
+import './pet-toast.css';
 
 const route = ref('home');
 const navigation = ref<HTMLElement | null>(null);
@@ -73,7 +76,17 @@ const saving = ref(false);
 const now = ref(new Date());
 const petState = ref<PetState>('idle');
 const petMessage = ref('');
+const toast = ref<{ id: number; message: string; tone: 'ok' | 'warn' } | null>(null);
 let petTimer: ReturnType<typeof setTimeout> | undefined;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let toastId = 0;
+function showToast(message: string, tone: 'ok' | 'warn') {
+  if (toastTimer) clearTimeout(toastTimer);
+  toastId += 1;
+  toast.value = { id: toastId, message, tone };
+  // The network result is a glance-only message; it clears itself.
+  toastTimer = setTimeout(() => (toast.value = null), 3000);
+}
 const macNative = native && /Mac/.test(navigator.userAgent);
 // The embedded macOS title bar paints the window buttons over the rail's top-left.
 const sidebarCollapsedWidth = macNative ? 76 : 56;
@@ -189,25 +202,24 @@ function onKey(event: KeyboardEvent) {
     toggleSidebar();
   }
 }
-// Clicking the sidebar pet refreshes the background state that has to stay alive
-// even though the bound account does not change — today that is the campus session.
-async function checkCampusSession() {
+// Clicking the sidebar pet checks whether the campus host answers directly and,
+// if not, through WebVPN, then reports which network the app is on.
+async function checkNetwork() {
   if (petState.value === 'checking') return;
   if (petTimer) clearTimeout(petTimer);
+  if (toastTimer) clearTimeout(toastTimer);
+  toast.value = null;
   petState.value = 'checking';
   petMessage.value = '';
   const started = performance.now();
   let next: PetState = 'warn';
   let message = '';
   try {
-    const result = await bridge.checkCampusSession();
-    next = result.online ? 'ok' : 'warn';
+    const result = await bridge.checkNetwork();
     message = result.message;
-    // A bound account that lost its session needs the page-level notice.
-    if (result.bound && !result.online) error.value = result.message;
+    next = result.environment === 'campus' || result.environment === 'vpn' ? 'ok' : 'warn';
   } catch (e) {
     message = errorText(e);
-    error.value = message;
   }
   // Keep the thinking pose on screen long enough to read.
   await new Promise((resolve) =>
@@ -216,6 +228,7 @@ async function checkCampusSession() {
   if (disposed) return;
   petMessage.value = message;
   petState.value = next;
+  showToast(message, next === 'ok' ? 'ok' : 'warn');
   petTimer = setTimeout(() => {
     petState.value = 'idle';
     petMessage.value = '';
@@ -313,6 +326,7 @@ onBeforeUnmount(() => {
   unlisten?.();
   if (timer) clearInterval(timer);
   if (petTimer) clearTimeout(petTimer);
+  if (toastTimer) clearTimeout(toastTimer);
   window.removeEventListener('keydown', onKey);
 });
 </script>
@@ -336,7 +350,7 @@ onBeforeUnmount(() => {
   >
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
       <div class="sidebar-top-space" aria-hidden="true"></div>
-      <SidebarPet :state="petState" :message="petMessage" @check="checkCampusSession" />
+      <SidebarPet :state="petState" :message="petMessage" @check="checkNetwork" />
       <nav ref="navigation" class="desktop-navigation" aria-label="主导航">
         <span
           class="nav-indicator"
@@ -459,6 +473,19 @@ onBeforeUnmount(() => {
       <ChevronLeft :size="14" class="sidebar-toggle-icon" />
     </button>
     <main class="desktop-main" :class="{ 'has-wallpaper': route === 'home' && config.wallpaper }">
+      <Transition name="pet-toast">
+        <div
+          v-if="toast"
+          :key="toast.id"
+          class="pet-toast"
+          :class="`is-${toast.tone}`"
+          role="status"
+        >
+          <Wifi v-if="toast.tone === 'ok'" :size="14" aria-hidden="true" />
+          <WifiOff v-else :size="14" aria-hidden="true" />
+          <span>{{ toast.message }}</span>
+        </div>
+      </Transition>
       <Transition name="fade">
         <div
           v-if="route === 'home' && config.wallpaper"

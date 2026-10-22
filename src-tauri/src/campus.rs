@@ -166,12 +166,36 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
         .collect()
 }
 
-/// Lightweight request behind the sidebar self-check: it reuses the timetable's
-/// first call to tell a live campus/VPN session from an expired one.
-pub async fn probe(session: &crate::vault::Session) -> Result<(), String> {
-    get(session, "/student/service/timetable/semesters", &[])
+/// Whether the campus host answers at all in the given access mode. Any HTTP
+/// status counts: the sidebar self-check reports network reachability, not auth.
+pub async fn reachable(
+    session: &crate::vault::Session,
+    mode: crate::network::AccessMode,
+) -> bool {
+    let Ok(host) = domain(&session.degree) else {
+        return false;
+    };
+    let Ok(transport) = crate::network::Transport::with_timeout(
+        session.cookies.as_deref(),
+        std::time::Duration::from_secs(6),
+    ) else {
+        return false;
+    };
+    let Ok(url) = Url::parse(&format!(
+        "https://{host}/sa/student/service/timetable/semesters"
+    )) else {
+        return false;
+    };
+    let Ok(target) = crate::network::Transport::address(&url, mode) else {
+        return false;
+    };
+    transport
+        .client
+        .get(target)
+        .header("X-Business-Token", &session.token)
+        .send()
         .await
-        .map(|_| ())
+        .is_ok()
 }
 
 pub async fn timetable(session: &crate::vault::Session) -> Result<Timetable, String> {

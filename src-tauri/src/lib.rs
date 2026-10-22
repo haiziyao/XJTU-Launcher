@@ -547,20 +547,20 @@ async fn query_timetable(
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CampusCheck {
-    bound: bool,
-    online: bool,
-    message: String,
+struct NetworkCheck {
+    /// campus | vpn | offline | unbound
+    environment: &'static str,
+    message: &'static str,
 }
 
-/// Sidebar self-check: a bound account can still lose its campus/WebVPN session,
-/// so ask the campus API once and report what the saved session can do.
+/// Sidebar self-check: try the campus host through a direct connection first,
+/// then through WebVPN, so the pet can report which network is in effect.
 #[tauri::command]
-async fn check_campus_session(
+async fn check_network(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-) -> Result<CampusCheck, String> {
+) -> Result<NetworkCheck, String> {
     main_only(&window)?;
     let generation = state.generation.load(Ordering::SeqCst);
     let session = {
@@ -581,27 +581,31 @@ async fn check_campus_session(
         }
     };
     let Some(session) = session else {
-        return Ok(CampusCheck {
-            bound: false,
-            online: false,
-            message: "未绑定校园账号".into(),
+        return Ok(NetworkCheck {
+            environment: "unbound",
+            message: "未绑定校园账号，无法检测校园网络",
         });
     };
-    let result = campus::probe(&session).await;
+    let direct = campus::reachable(&session, network::AccessMode::Direct).await;
+    let vpn = !direct && campus::reachable(&session, network::AccessMode::Webvpn).await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账户状态已变化，请重新检查".into());
     }
-    Ok(match result {
-        Ok(()) => CampusCheck {
-            bound: true,
-            online: true,
-            message: "校园会话正常".into(),
-        },
-        Err(message) => CampusCheck {
-            bound: true,
-            online: false,
-            message,
-        },
+    Ok(if direct {
+        NetworkCheck {
+            environment: "campus",
+            message: "校园网环境下，网络可正常访问",
+        }
+    } else if vpn {
+        NetworkCheck {
+            environment: "vpn",
+            message: "校园网连接失败，目前是 vpn 环境",
+        }
+    } else {
+        NetworkCheck {
+            environment: "offline",
+            message: "校园网和 vpn 均不可用",
+        }
     })
 }
 
@@ -971,7 +975,7 @@ pub fn run() {
             logout,
             save_api_key,
             query_timetable,
-            check_campus_session,
+            check_network,
             open_external
         ])
         .run(tauri::generate_context!())

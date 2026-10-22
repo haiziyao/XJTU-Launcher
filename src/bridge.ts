@@ -13,7 +13,7 @@ import type {
   CampusLogin,
   CampusLoginAction,
   AccountStatus,
-  CampusCheck,
+  NetworkCheck,
   AppConfig,
   AuthEvent,
   PluginList,
@@ -87,9 +87,9 @@ export const bridge = {
     requireNative();
     return invoke('account_status');
   },
-  async checkCampusSession(): Promise<CampusCheck> {
+  async checkNetwork(): Promise<NetworkCheck> {
     requireNative();
-    return invoke('check_campus_session');
+    return invoke('check_network');
   },
   // Native campus authentication and local account management.
   async accounts(): Promise<CampusAccountList> {

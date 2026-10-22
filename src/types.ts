@@ -47,10 +47,9 @@ export interface AccountStatus {
   degree: 'undergraduate' | 'postgraduate' | null;
   apiKeySet: boolean;
 }
-/** Result of the sidebar self-check probe against the campus API. */
-export interface CampusCheck {
-  bound: boolean;
-  online: boolean;
+/** Result of the sidebar network self-check. */
+export interface NetworkCheck {
+  environment: 'campus' | 'vpn' | 'offline' | 'unbound';
   message: string;
 }
 /** Animation state of the sidebar pet. */

@@ -1,0 +1,62 @@
+/* Sidebar self-check result toast. Kept out of the shell stylesheet so the
+   wallpaper work and the toast can change independently. */
+.pet-toast {
+  position: absolute;
+  z-index: 6;
+  top: 14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(460px, calc(100% - 32px));
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.4;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.pet-toast.is-ok svg {
+  color: var(--success);
+}
+.pet-toast.is-warn svg {
+  color: var(--danger);
+}
+
+.pet-toast-enter-active {
+  transition:
+    opacity 160ms ease,
+    transform 240ms var(--ease-out);
+}
+.pet-toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -6px);
+}
+
+/* The leave pass fades while a gradient mask sweeps rightwards, so the left
+   edge melts first and the right edge is the last part to disappear. */
+.pet-toast-leave-active {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 100%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: pet-toast-melt 620ms var(--ease-standard) forwards;
+}
+@keyframes pet-toast-melt {
+  from {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+    opacity: 1;
+  }
+  to {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+    opacity: 0;
+  }
+}
