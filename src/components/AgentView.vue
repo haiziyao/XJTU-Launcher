@@ -5,7 +5,9 @@ import {
   ArrowUp,
   AtSign,
   Check,
+  ChevronDown,
   ChevronRight,
+  Folder,
   LoaderCircle,
   PanelLeft,
   Plus,
@@ -78,6 +80,7 @@ const workspaces = ref<AgentWorkspace[]>([]);
 const workspaceId = ref('');
 const messages = ref<AgentMessage[]>([]);
 const showHistory = ref(false);
+const showWorkspaces = ref(false);
 const draft = ref('');
 const running = ref(false);
 const liveText = ref('');
@@ -147,6 +150,9 @@ const slashMatches = computed(() => {
   );
 });
 const currentTitle = computed(() => conversation.value?.title || '新对话');
+const activeWorkspaceName = computed(
+  () => workspaces.value.find((workspace) => workspace.id === workspaceId.value)?.name || '默认',
+);
 const canSend = computed(
   () =>
     !!draft.value.trim() && !running.value && !!providerId.value && modelOptions.value.length > 0,
@@ -221,6 +227,7 @@ function pickSkill(skill: AgentSkill) {
 function closeMenus() {
   showPlus.value = false;
   showAt.value = false;
+  showWorkspaces.value = false;
 }
 async function changeRole(value: string) {
   roleId.value = value;
@@ -314,6 +321,19 @@ function newChat() {
   draft.value = '';
   error.value = '';
   showHistory.value = false;
+}
+/** Moves the open conversation, or just picks the target for the next one. */
+async function chooseWorkspace(id: string) {
+  showWorkspaces.value = false;
+  workspaceId.value = id;
+  if (!conversation.value) return;
+  try {
+    await bridge.agentSetWorkspace(conversation.value.id, id || null);
+    conversation.value.workspaceId = id || null;
+    await loadSummaries();
+  } catch (e) {
+    error.value = errorText(e);
+  }
 }
 function startInWorkspace(id: string | null) {
   newChat();
@@ -514,6 +534,40 @@ onBeforeUnmount(() => {
         >
           <PanelLeft :size="16" />
         </button>
+        <div class="agent-workspace-picker">
+          <button
+            class="agent-workspace"
+            :class="{ active: showWorkspaces }"
+            :aria-expanded="showWorkspaces"
+            title="当前工作区"
+            aria-label="选择工作区"
+            @click="showWorkspaces = !showWorkspaces"
+          >
+            <Folder :size="13" />
+            <span>{{ activeWorkspaceName }}</span>
+            <ChevronDown :size="12" />
+          </button>
+          <div v-if="showWorkspaces" class="agent-workspace-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              :class="{ current: !workspaceId }"
+              @click="chooseWorkspace('')"
+            >
+              默认
+            </button>
+            <button
+              v-for="workspace in workspaces"
+              :key="workspace.id"
+              type="button"
+              role="menuitem"
+              :class="{ current: workspaceId === workspace.id }"
+              @click="chooseWorkspace(workspace.id)"
+            >
+              {{ workspace.name }}
+            </button>
+          </div>
+        </div>
         <span class="agent-name">{{ currentTitle }}</span>
       </div>
       <div class="agent-bar-actions">
@@ -535,7 +589,11 @@ onBeforeUnmount(() => {
       <p v-if="error" class="notice agent-notice" role="alert">{{ error }}</p>
     </Transition>
 
-    <div v-if="showPlus || showAt" class="agent-backdrop" @click="closeMenus"></div>
+    <div
+      v-if="showPlus || showAt || showWorkspaces"
+      class="agent-backdrop"
+      @click="closeMenus"
+    ></div>
     <Transition name="drop">
       <AgentHistory
         v-if="showHistory"
@@ -836,8 +894,71 @@ onBeforeUnmount(() => {
 .agent-bar-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+}
+.agent-workspace-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+.agent-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.agent-workspace span {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-workspace:hover,
+.agent-workspace.active {
+  background: var(--accent-wash);
+  color: var(--accent-text);
+}
+.agent-workspace-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 22;
+  min-width: 170px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+.agent-workspace-menu button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 6px 8px;
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.agent-workspace-menu button:hover {
+  background: var(--accent-wash);
+}
+.agent-workspace-menu button.current {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 .agent-name {
   font-size: 13px;

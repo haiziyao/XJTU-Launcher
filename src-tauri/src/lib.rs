@@ -1377,6 +1377,19 @@ fn agent_workspaces(
     )?))
 }
 #[tauri::command]
+fn agent_set_workspace(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    workspace_id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    agent::store::set_workspace(&mut book, &id, workspace_id)?;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
 fn agent_create_workspace(
     app: tauri::AppHandle,
     window: WebviewWindow,
@@ -1611,6 +1624,7 @@ pub fn run() {
             agent_list,
             agent_workspaces,
             agent_create_workspace,
+            agent_set_workspace,
             agent_get,
             agent_new,
             agent_delete,

@@ -275,6 +275,10 @@ export const bridge = {
     requireNative();
     return invoke('agent_workspaces');
   },
+  async agentSetWorkspace(id: string, workspaceId: string | null): Promise<void> {
+    requireNative();
+    return invoke('agent_set_workspace', { id, workspaceId });
+  },
   async agentCreateWorkspace(name: string): Promise<AgentWorkspace> {
     requireNative();
     return invoke('agent_create_workspace', { name });

@@ -227,21 +227,31 @@ function commitCreating() {
   position: absolute;
   top: 44px;
   left: 0;
-  bottom: 132px;
+  bottom: 0;
   z-index: 21;
   display: flex;
   flex-direction: column;
   width: 320px;
   max-width: 82vw;
-  padding: 6px 6px 90px;
+  padding: 6px 6px 230px;
   border: 1px solid var(--border);
   border-radius: 0 12px 12px 0;
   background: var(--surface);
   box-shadow: 10px 0 30px rgba(15, 23, 42, 0.12);
   overflow-y: auto;
-  /* Ends above the composer and dissolves instead of cutting off. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent 100%);
+  /* Fades out across the composer instead of cutting off. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 300px),
+    rgba(0, 0, 0, 0.35) calc(100% - 170px),
+    transparent calc(100% - 90px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 300px),
+    rgba(0, 0, 0, 0.35) calc(100% - 170px),
+    transparent calc(100% - 90px)
+  );
 }
 .history-head {
   display: flex;

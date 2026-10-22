@@ -226,6 +226,20 @@ pub fn create_workspace(store: &mut Store, name: &str) -> Result<Workspace, Stri
     Ok(workspace)
 }
 
+/// Moves a conversation between workspaces; `None` returns it to the default group.
+pub fn set_workspace(
+    store: &mut Store,
+    id: &str,
+    workspace_id: Option<String>,
+) -> Result<(), String> {
+    let workspace_id =
+        workspace_id.filter(|id| store.workspaces.iter().any(|workspace| &workspace.id == id));
+    let conversation = find_mut(store, id)?;
+    conversation.workspace_id = workspace_id;
+    conversation.updated_at = now();
+    Ok(())
+}
+
 pub fn workspaces(store: &Store) -> Vec<Workspace> {
     let mut list = store.workspaces.clone();
     list.sort_by_key(|workspace| workspace.created_at);
