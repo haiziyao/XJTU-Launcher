@@ -21,6 +21,9 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import IconTile from './ui/IconTile.vue';
 import EmptyState from './ui/EmptyState.vue';
+import CampusRooms from './campus/CampusRooms.vue';
+import CampusCourses from './campus/CampusCourses.vue';
+import CampusEvaluations from './campus/CampusEvaluations.vue';
 import { bridge } from '../bridge';
 import type {
   AttendanceStreams,
@@ -129,7 +132,16 @@ const SECTIONS: { title: string; tools: Tool[] }[] = [
   },
 ];
 
-const READY = ['card', 'grades', 'exams', 'attendance', 'calendar'];
+const READY = [
+  'card',
+  'grades',
+  'exams',
+  'attendance',
+  'calendar',
+  'rooms',
+  'courses',
+  'evaluations',
+];
 const features = ref<SchoolFeature[]>([]);
 const tool = ref('');
 const error = ref('');
@@ -292,21 +304,21 @@ onMounted(async () => {
             <div
               v-for="(row, index) in transactions.rows"
               :key="`${row.time}-${index}`"
-              class="record-row three"
+              class="campus-record three"
             >
-              <span class="record-main">
+              <span class="campus-record-main">
                 <strong>{{ row.merchant || row.type || '校园卡交易' }}</strong>
                 <small
                   >{{ row.time
                   }}<template v-if="row.description"> · {{ row.description }}</template></small
                 >
               </span>
-              <span class="record-amount" :class="{ income: row.amount > 0 }">
+              <span class="campus-record-amount" :class="{ income: row.amount > 0 }">
                 {{ signed(row.amount) }}
               </span>
-              <span class="record-meta">¥{{ yuan(row.balance) }}</span>
+              <span class="campus-record-meta">¥{{ yuan(row.balance) }}</span>
             </div>
-            <div class="record-pages">
+            <div class="campus-record-pages">
               <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
                 上一页
               </button>
@@ -330,17 +342,17 @@ onMounted(async () => {
             :icon="BarChart3"
             title="还没有成绩记录"
           />
-          <div v-for="row in grades?.rows ?? []" :key="row.id" class="record-row three">
-            <span class="record-main">
+          <div v-for="row in grades?.rows ?? []" :key="row.id" class="campus-record three">
+            <span class="campus-record-main">
               <strong>{{ row.name }}</strong>
               <small
                 >{{ row.term }}<template v-if="row.category"> · {{ row.category }}</template></small
               >
             </span>
-            <span class="record-amount" :class="{ failed: row.passed === false }">
+            <span class="campus-record-amount" :class="{ failed: row.passed === false }">
               {{ row.score || '—' }}
             </span>
-            <span class="record-meta"
+            <span class="campus-record-meta"
               >{{ row.credits ?? '—' }} 学分<template v-if="row.gpa != null">
                 · 绩点 {{ row.gpa }}</template
               ></span
@@ -358,12 +370,12 @@ onMounted(async () => {
             :icon="ClipboardList"
             title="还没有考试安排"
           />
-          <div v-for="(row, index) in exams?.rows ?? []" :key="index" class="record-row three">
-            <span class="record-main">
+          <div v-for="(row, index) in exams?.rows ?? []" :key="index" class="campus-record three">
+            <span class="campus-record-main">
               <strong>{{ row.course }}</strong>
               <small>{{ [row.date, row.time, row.campus].filter(Boolean).join(' · ') }}</small>
             </span>
-            <span class="record-meta"
+            <span class="campus-record-meta"
               >{{ row.location || '考场未知'
               }}<template v-if="row.seat"> · {{ row.seat }} 号</template></span
             >
@@ -381,8 +393,8 @@ onMounted(async () => {
             title="还没有考勤流水"
           />
           <template v-else>
-            <div v-for="row in streams.rows" :key="row.id" class="record-row two">
-              <span class="record-main">
+            <div v-for="row in streams.rows" :key="row.id" class="campus-record two">
+              <span class="campus-record-main">
                 <strong>{{ row.place || '未知地点' }}</strong>
                 <small>{{ row.time }}</small>
               </span>
@@ -390,7 +402,7 @@ onMounted(async () => {
                 row.valid ? '有效' : '无效'
               }}</span>
             </div>
-            <div class="record-pages">
+            <div class="campus-record-pages">
               <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
                 上一页
               </button>
@@ -404,6 +416,10 @@ onMounted(async () => {
           </template>
         </SettingGroup>
       </template>
+
+      <CampusRooms v-else-if="tool === 'rooms'" />
+      <CampusCourses v-else-if="tool === 'courses'" />
+      <CampusEvaluations v-else-if="tool === 'evaluations'" />
 
       <template v-else-if="tool === 'calendar'">
         <SettingGroup title="校历">
@@ -433,63 +449,5 @@ onMounted(async () => {
   font-size: 18px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.record-row {
-  display: grid;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--divider);
-}
-.record-row.two {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.record-row.three {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-.record-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.record-main strong {
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.record-main small {
-  margin-top: 2px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.record-amount {
-  color: var(--text);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.record-amount.income {
-  color: var(--success);
-}
-.record-amount.failed {
-  color: var(--danger);
-}
-.record-meta {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.record-pages {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--divider);
 }
 </style>

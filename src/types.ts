@@ -170,7 +170,12 @@ export type SchoolQuery =
   | { type: 'grades' }
   | { type: 'exams' }
   | { type: 'attendanceStreams'; page: number }
-  | { type: 'calendar' };
+  | { type: 'calendar' }
+  | { type: 'roomOptions' }
+  | { type: 'rooms'; campus: string; building: string; date: string; start: number; end: number }
+  | { type: 'terms' }
+  | { type: 'courses'; term: string | null; name: string; campus: string }
+  | { type: 'evaluations'; finished: boolean };
 export interface GradeRow {
   id: string;
   name: string;
@@ -214,6 +219,80 @@ export interface CalendarEntry {
 }
 export interface CalendarList {
   rows: CalendarEntry[];
+}
+export interface Option {
+  id: string;
+  name: string;
+}
+export interface RoomOptions {
+  campuses: Option[];
+  buildings: Option[];
+}
+export interface RoomRow {
+  name: string;
+  building: string;
+  category: string;
+  capacity: number | null;
+  campus: string;
+}
+export interface Rooms {
+  rows: RoomRow[];
+}
+export interface Terms {
+  rows: Option[];
+}
+export interface CourseRow {
+  code: string;
+  name: string;
+  class: string;
+  teachers: string;
+  credits: number | null;
+  campus: string;
+  department: string;
+  timePlace: string;
+}
+export interface Courses {
+  term: string;
+  rows: CourseRow[];
+}
+export interface Questionnaire {
+  id: string;
+  course: string;
+  teacher: string;
+  kind: string;
+  term: string;
+  deadline: string;
+  finished: boolean;
+}
+export interface EvaluationList {
+  rows: Questionnaire[];
+}
+export interface EvaluationPrepare {
+  ids: string[];
+  rank: number;
+  comment: string;
+}
+export interface PreviewAnswer {
+  id: string;
+  question: string;
+  kind: string;
+  answer: string;
+}
+export interface PreviewCourse {
+  questionnaire: Questionnaire;
+  answers: PreviewAnswer[];
+}
+export interface EvaluationPreview {
+  id: string;
+  accountId: string;
+  expiresInSeconds: number;
+  courses: PreviewCourse[];
+}
+export interface EvaluationOutcome {
+  questionnaireId: string;
+  course: string;
+  status: string;
+  message: string;
 }
 export interface CardInfo {
   name: string;

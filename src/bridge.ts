@@ -8,6 +8,9 @@ import type {
   PersonalImageKind,
   SchoolFeature,
   SchoolQuery,
+  EvaluationPrepare,
+  EvaluationPreview,
+  EvaluationOutcome,
   UpdateStatus,
   ModelProviders,
   ProviderInput,
@@ -32,6 +35,12 @@ export const bridge = {
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
   schoolQuery: (query: SchoolQuery) => invoke<unknown>('school_query', { query }),
+  schoolPrepareEvaluations: (input: EvaluationPrepare) =>
+    invoke<EvaluationPreview>('school_prepare_evaluations', { input }),
+  schoolSubmitEvaluations: (previewId: string) =>
+    invoke<EvaluationOutcome[]>('school_submit_evaluations', { previewId }),
+  schoolCancelEvaluations: (previewId: string) =>
+    invoke<void>('school_cancel_evaluations', { previewId }),
   installPlugin: (id: string, version: string) =>
     invoke<void>('install_market_plugin', { id, version }),
   removePlugin: (id: string) => invoke<void>('remove_plugin', { id }),
