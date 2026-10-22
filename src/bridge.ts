@@ -4,6 +4,10 @@ import { open } from '@tauri-apps/plugin-dialog';
 import type {
   ImageCrop,
   MarketCatalog,
+  McpCatalog,
+  McpServer,
+  McpTool,
+  McpTransport,
   ModelListInput,
   PersonalImageKind,
   SchoolFeature,
@@ -188,6 +192,38 @@ export const bridge = {
   async openUrl(url: string): Promise<void> {
     requireNative();
     return invoke('open_external', { url });
+  },
+  async mcpServers(): Promise<McpServer[]> {
+    requireNative();
+    return invoke('list_mcp_servers');
+  },
+  async saveMcpServer(input: {
+    id: string | null;
+    name: string;
+    transport: McpTransport;
+  }): Promise<string> {
+    requireNative();
+    return invoke('save_mcp_server', { input });
+  },
+  async removeMcpServer(id: string): Promise<void> {
+    requireNative();
+    return invoke('remove_mcp_server', { id });
+  },
+  async setMcpEnabled(id: string, enabled: boolean): Promise<void> {
+    requireNative();
+    return invoke('set_mcp_server_enabled', { id, enabled });
+  },
+  async probeMcpServer(id: string): Promise<McpTool[]> {
+    requireNative();
+    return invoke('probe_mcp_server', { id });
+  },
+  async mcpCatalog(): Promise<McpCatalog> {
+    requireNative();
+    return invoke('mcp_catalog');
+  },
+  async installMcpEntry(id: string, values: Record<string, string>): Promise<string> {
+    requireNative();
+    return invoke('install_mcp_entry', { entryId: id, values });
   },
   async onAuth(callback: (event: AuthEvent) => void): Promise<() => void> {
     requireNative();

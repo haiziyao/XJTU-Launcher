@@ -377,3 +377,41 @@ export interface ImageCrop {
   width: number;
   height: number;
 }
+/** MCP transport as stored in ~/.xjtu-launcher/mcp.json. */
+export type McpTransport =
+  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'http'; url: string; headers?: Record<string, string> };
+export interface McpServer {
+  id: string;
+  name: string;
+  enabled: boolean;
+  kind: 'stdio' | 'http';
+  target: string;
+  /** Names only; values never leave Rust. */
+  secrets: string[];
+  /** Keys kept, values blanked; blank values keep the stored secret when saving. */
+  transport: McpTransport;
+}
+export interface McpTool {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+}
+export interface McpField {
+  key: string;
+  label: string;
+  secret: boolean;
+  placeholder: string;
+}
+export interface McpEntry {
+  id: string;
+  name: string;
+  description: string;
+  transport: McpTransport;
+  fields: McpField[];
+}
+export interface McpCatalog {
+  source: string | null;
+  defaultSource: string | null;
+  servers: McpEntry[];
+}

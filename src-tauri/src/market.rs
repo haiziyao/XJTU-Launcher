@@ -114,7 +114,7 @@ fn validate_catalog(catalog: &Catalog, source: &Url) -> Result<(), String> {
     Ok(())
 }
 
-async fn fetch(
+pub(crate) async fn fetch(
     url: Url,
     limit: usize,
     mut progress: impl FnMut(usize, Option<u64>),

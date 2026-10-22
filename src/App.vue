@@ -72,6 +72,12 @@ function openSettings(
   settingsSection.value = section;
   route.value = 'settings';
 }
+// The market remembers which section another page asked for (Agent → MCP 管理).
+const marketTab = ref<string | undefined>(undefined);
+function openMarket(tab?: string) {
+  marketTab.value = tab;
+  route.value = 'market';
+}
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
 const petVariant = computed(() => normalizePet(config.value.pet));
@@ -431,7 +437,7 @@ onBeforeUnmount(() => {
             title="插件市场"
             aria-label="插件市场"
             :aria-current="route === 'market' ? 'page' : undefined"
-            @click="route = 'market'"
+            @click="openMarket()"
           >
             <LayoutGrid :size="20" /><span>插件市场</span>
           </button>
@@ -571,7 +577,11 @@ onBeforeUnmount(() => {
                 @update="persist"
               />
               <CommunityView v-else-if="route === 'community'" />
-              <AgentView v-else-if="route === 'agent'" @models="openSettings('models')" />
+              <AgentView
+                v-else-if="route === 'agent'"
+                @models="openSettings('models')"
+                @mcp="openMarket('mcp')"
+              />
               <div v-else-if="route === 'accounts'" class="subpage">
                 <button class="back-button" @click="route = 'personal'">
                   <ArrowLeft :size="14" /><span>个人</span>
@@ -582,6 +592,7 @@ onBeforeUnmount(() => {
                 v-else-if="route === 'market'"
                 :plugins="sortedPlugins"
                 :config="config"
+                :initial-tab="marketTab"
                 :saving="saving || !configLoaded"
                 :warnings="pluginList.warnings"
                 :sources="pluginList.sources"

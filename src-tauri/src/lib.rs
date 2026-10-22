@@ -2,6 +2,7 @@ mod campus;
 mod campus_browser;
 mod config;
 mod market;
+mod mcp;
 mod personal_image;
 mod plugins;
 mod providers;
@@ -28,6 +29,7 @@ struct AppState {
     config_lock: Mutex<()>,
     market_lock: tokio::sync::Mutex<()>,
     providers_lock: Mutex<()>,
+    mcp_lock: Mutex<()>,
     auth_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
     auth: auth::Manager,
@@ -986,6 +988,127 @@ fn select_model_provider(
     book.select(&id)?;
     providers::save(&path, &book)
 }
+fn mcp_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .home_dir()
+        .map_err(|_| "无法定位 MCP 配置目录")?
+        .join(".xjtu-launcher")
+        .join("mcp.json"))
+}
+#[tauri::command]
+fn list_mcp_servers(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<Vec<mcp::PublicServer>, String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    Ok(mcp::public(&mcp::load(&mcp_path(&app)?)?))
+}
+#[tauri::command]
+fn save_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    input: mcp::Input,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let id = mcp::upsert(&mut book, input)?;
+    mcp::save(&path, &book)?;
+    Ok(id)
+}
+#[tauri::command]
+fn remove_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let before = book.servers.len();
+    book.servers.retain(|server| server.id != id);
+    if book.servers.len() == before {
+        return Err("MCP 服务不存在".into());
+    }
+    mcp::save(&path, &book)
+}
+#[tauri::command]
+fn set_mcp_server_enabled(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let server = book
+        .servers
+        .iter_mut()
+        .find(|server| server.id == id)
+        .ok_or("MCP 服务不存在")?;
+    server.enabled = enabled;
+    mcp::save(&path, &book)
+}
+#[tauri::command]
+async fn probe_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Vec<mcp::Tool>, String> {
+    main_only(&window)?;
+    let server = {
+        let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+        mcp::load(&mcp_path(&app)?)?
+            .servers
+            .into_iter()
+            .find(|server| server.id == id)
+            .ok_or("MCP 服务不存在")?
+    };
+    mcp::probe(&server).await
+}
+#[tauri::command]
+async fn mcp_catalog(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<mcp::RemoteCatalog, String> {
+    main_only(&window)?;
+    mcp::catalog(&config::load(&config_path(&app)?)?).await
+}
+#[tauri::command]
+async fn install_mcp_entry(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    entry_id: String,
+    values: std::collections::BTreeMap<String, String>,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let catalog = mcp::catalog(&config::load(&config_path(&app)?)?).await?;
+    let entry = catalog
+        .servers
+        .into_iter()
+        .find(|entry| entry.id == entry_id)
+        .ok_or("目录中没有这个 MCP 服务")?;
+    let server = mcp::from_entry(&entry, &values)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    book.servers.retain(|existing| existing.id != server.id);
+    book.servers.push(server.clone());
+    mcp::save(&path, &book)?;
+    Ok(server.id)
+}
 // Image work runs off the main thread so the window stays responsive.
 // The source goes back as raw bytes; the webview decodes the crop preview natively.
 #[tauri::command]
@@ -1056,6 +1179,13 @@ pub fn run() {
             save_model_provider,
             remove_model_provider,
             select_model_provider,
+            list_mcp_servers,
+            save_mcp_server,
+            remove_mcp_server,
+            set_mcp_server_enabled,
+            probe_mcp_server,
+            mcp_catalog,
+            install_mcp_entry,
             personal_image_source,
             read_personal_image,
             load_config,
