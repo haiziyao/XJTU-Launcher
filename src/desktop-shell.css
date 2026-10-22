@@ -435,6 +435,14 @@
 }
 
 /* WebView2 draws classic, always-visible scrollbars; match the slim macOS look. */
+/* Windows ships Segoe UI Variable on 11 and YaHei UI for Chinese; keep the
+   Chinese face last so Latin text keeps Segoe's proportions. */
+.platform-windows {
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI',
+    'Microsoft YaHei', sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
 .platform-windows ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
