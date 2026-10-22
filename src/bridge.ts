@@ -3,6 +3,14 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
   ImageCrop,
+  AgentConversation,
+  AgentEvent,
+  AgentMemory,
+  AgentPresetInput,
+  AgentPresetKind,
+  AgentPresets,
+  AgentSummary,
+  AgentToolInfo,
   MarketCatalog,
   McpCatalog,
   McpServer,
@@ -232,6 +240,86 @@ export const bridge = {
   async onAuth(callback: (event: AuthEvent) => void): Promise<() => void> {
     requireNative();
     return listen<AuthEvent>('campus-auth', (e) => callback(e.payload));
+  },
+  async agentList(): Promise<AgentSummary[]> {
+    requireNative();
+    return invoke('agent_list');
+  },
+  async agentGet(id: string): Promise<AgentConversation> {
+    requireNative();
+    return invoke('agent_get', { id });
+  },
+  async agentNew(): Promise<AgentConversation> {
+    requireNative();
+    return invoke('agent_new');
+  },
+  async agentDelete(id: string): Promise<void> {
+    requireNative();
+    return invoke('agent_delete', { id });
+  },
+  async agentRename(id: string, title: string): Promise<void> {
+    requireNative();
+    return invoke('agent_rename', { id, title });
+  },
+  async agentSend(input: {
+    conversationId: string;
+    requestId: string;
+    content: string;
+    providerId: string | null;
+    skillIds: string[];
+  }): Promise<void> {
+    requireNative();
+    return invoke('agent_send', {
+      conversationId: input.conversationId,
+      requestId: input.requestId,
+      content: input.content,
+      providerId: input.providerId,
+      skillIds: input.skillIds,
+    });
+  },
+  async agentPresets(): Promise<AgentPresets> {
+    requireNative();
+    return invoke('agent_presets');
+  },
+  async agentSavePreset(input: AgentPresetInput): Promise<string> {
+    requireNative();
+    return invoke('agent_save_preset', { input });
+  },
+  async agentRemovePreset(kind: AgentPresetKind, id: string): Promise<void> {
+    requireNative();
+    return invoke('agent_remove_preset', { kind, id });
+  },
+  async agentMemories(): Promise<AgentMemory[]> {
+    requireNative();
+    return invoke('agent_memories');
+  },
+  async agentSaveMemory(id: string | null, content: string): Promise<AgentMemory> {
+    requireNative();
+    return invoke('agent_save_memory', { id, content });
+  },
+  async agentRemoveMemory(id: string): Promise<void> {
+    requireNative();
+    return invoke('agent_remove_memory', { id });
+  },
+  async agentSetRole(id: string, roleId: string | null): Promise<void> {
+    requireNative();
+    return invoke('agent_set_role', { id, roleId });
+  },
+  async agentPin(id: string, pinned: boolean): Promise<void> {
+    requireNative();
+    return invoke('agent_pin', { id, pinned });
+  },
+  async agentCancel(requestId: string): Promise<void> {
+    requireNative();
+    return invoke('agent_cancel', { requestId });
+  },
+  async agentTools(): Promise<AgentToolInfo[]> {
+    requireNative();
+    return invoke('agent_tools');
+  },
+  async onAgent(callback: (event: AgentEvent) => void): Promise<() => void> {
+    requireNative();
+    return listen<AgentEvent>('agent-event', (e) => callback(e.payload));
   },
 };
 

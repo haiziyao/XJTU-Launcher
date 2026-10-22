@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import {
-  Check,
-  Download,
-  Home,
-  Package,
-  Pipette,
-  Server,
-  SlidersHorizontal,
-} from 'lucide-vue-next';
+import { Check, Download, Home, Package, Pipette, SlidersHorizontal } from 'lucide-vue-next';
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
 import { ACCENT_PRESETS, normalizeAccent } from '../theme';
@@ -17,7 +9,6 @@ import PetArt from './PetArt.vue';
 import PluginSourceSettings from './PluginSourceSettings.vue';
 import AppUpdateSettings from './AppUpdateSettings.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
-import ProvidersView from './ProvidersView.vue';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
@@ -26,7 +17,7 @@ import UiSwitch from './ui/UiSwitch.vue';
 const props = defineProps<{
   config: AppConfig;
   saving: boolean;
-  initialSection?: 'appearance' | 'home' | 'models' | 'plugins' | 'updates';
+  initialSection?: 'appearance' | 'home' | 'plugins' | 'updates';
   saveSource: (source: string | null) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
@@ -44,7 +35,6 @@ function setAccent(value: string) {
 const sections = [
   { id: 'appearance', title: '外观与交互', icon: SlidersHorizontal },
   { id: 'home', title: '主页', icon: Home },
-  { id: 'models', title: '模型服务', icon: Server },
   { id: 'plugins', title: '插件服务', icon: Package },
   { id: 'updates', title: '软件更新', icon: Download },
 ] as const;
@@ -147,7 +137,6 @@ const sections = [
               </SettingRow>
             </SettingGroup>
           </div>
-          <ProvidersView v-else-if="tab === 'models'" key="models" />
           <PluginSourceSettings
             v-else-if="tab === 'plugins'"
             key="plugins"

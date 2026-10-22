@@ -13,6 +13,7 @@ import {
   MessagesSquare,
   Route,
   Settings,
+  Settings2,
   Wifi,
   WifiOff,
   X,
@@ -37,6 +38,7 @@ import PersonalView from './components/PersonalView.vue';
 import SettingsView from './components/SettingsView.vue';
 import CommunityView from './components/CommunityView.vue';
 import AgentView from './components/AgentView.vue';
+import AgentSettingsView from './components/AgentSettingsView.vue';
 import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
@@ -65,18 +67,10 @@ const primaryNav = [
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
 }
-const settingsSection = ref<'appearance' | 'home' | 'models' | 'plugins' | 'updates'>('appearance');
-function openSettings(
-  section: 'appearance' | 'home' | 'models' | 'plugins' | 'updates' = 'appearance',
-) {
+const settingsSection = ref<'appearance' | 'home' | 'plugins' | 'updates'>('appearance');
+function openSettings(section: 'appearance' | 'home' | 'plugins' | 'updates' = 'appearance') {
   settingsSection.value = section;
   route.value = 'settings';
-}
-// The market remembers which section another page asked for (Agent → MCP 管理).
-const marketTab = ref<string | undefined>(undefined);
-function openMarket(tab?: string) {
-  marketTab.value = tab;
-  route.value = 'market';
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
@@ -438,7 +432,10 @@ onBeforeUnmount(() => {
             <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
               v-else-if="plugin.page.type === 'campus'"
               :size="20"
-            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
+            /><Settings2 v-else-if="plugin.page.type === 'agentSettings'" :size="20" /><Compass
+              v-else
+              :size="20"
+            /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -450,7 +447,7 @@ onBeforeUnmount(() => {
             title="插件市场"
             aria-label="插件市场"
             :aria-current="route === 'market' ? 'page' : undefined"
-            @click="openMarket()"
+            @click="route = 'market'"
           >
             <LayoutGrid :size="20" /><span>插件市场</span>
           </button>
@@ -592,8 +589,12 @@ onBeforeUnmount(() => {
               <CommunityView v-else-if="route === 'community'" />
               <AgentView
                 v-else-if="route === 'agent'"
-                @models="openSettings('models')"
-                @mcp="openMarket('mcp')"
+                @settings="route = 'cn.xjtu.agent-settings'"
+              />
+              <AgentSettingsView
+                v-else-if="activePlugin?.page.type === 'agentSettings'"
+                :key="activePlugin.id"
+                @agent="route = 'agent'"
               />
               <div v-else-if="route === 'accounts'" class="subpage">
                 <button class="back-button" @click="route = 'personal'">
@@ -605,7 +606,6 @@ onBeforeUnmount(() => {
                 v-else-if="route === 'market'"
                 :plugins="sortedPlugins"
                 :config="config"
-                :initial-tab="marketTab"
                 :saving="saving || !configLoaded"
                 :warnings="pluginList.warnings"
                 :sources="pluginList.sources"

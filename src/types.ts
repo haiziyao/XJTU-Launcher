@@ -32,7 +32,11 @@ export interface Plugin {
   version: string;
   description: string;
   icon: string;
-  page: { type: 'timetable' } | { type: 'links'; links: Link[] } | { type: 'campus' };
+  page:
+    | { type: 'timetable' }
+    | { type: 'links'; links: Link[] }
+    | { type: 'campus' }
+    | { type: 'agentSettings' };
   widget: boolean;
 }
 export interface PluginList {
@@ -419,3 +423,91 @@ export interface McpCatalog {
   defaultSource: string | null;
   servers: McpEntry[];
 }
+export interface AgentToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+export interface AgentMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCalls?: AgentToolCall[];
+  toolCallId?: string;
+  name?: string;
+  error?: boolean;
+}
+export interface AgentConversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  roleId: string | null;
+  pinned: boolean;
+  messages: AgentMessage[];
+}
+export interface AgentSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  pinned: boolean;
+  roleId: string | null;
+  messages: number;
+}
+export interface AgentRole {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+}
+export type AgentSkill = AgentRole;
+export interface AgentTask {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  roleId: string | null;
+  skillIds: string[];
+}
+export interface AgentPresets {
+  version: number;
+  roles: AgentRole[];
+  skills: AgentSkill[];
+  tasks: AgentTask[];
+}
+export interface AgentMemory {
+  id: string;
+  content: string;
+  createdAt: number;
+}
+export type AgentPresetKind = 'role' | 'skill' | 'task';
+export type AgentPresetInput =
+  | { kind: 'role'; id?: string | null; name: string; description: string; instructions: string }
+  | { kind: 'skill'; id?: string | null; name: string; description: string; instructions: string }
+  | {
+      kind: 'task';
+      id?: string | null;
+      name: string;
+      description: string;
+      prompt: string;
+      roleId: string | null;
+      skillIds: string[];
+    };
+export interface AgentToolInfo {
+  name: string;
+  description: string;
+  source: 'campus' | 'mcp';
+}
+export type AgentEvent =
+  | { type: 'delta'; requestId: string; text: string }
+  | {
+      type: 'toolStart';
+      requestId: string;
+      callId: string;
+      name: string;
+      arguments: string;
+    }
+  | { type: 'toolEnd'; requestId: string; callId: string; ok: boolean; content: string }
+  | { type: 'done'; requestId: string; conversationId: string }
+  | { type: 'error'; requestId: string; message: string }
+  | { type: 'cancelled'; requestId: string };

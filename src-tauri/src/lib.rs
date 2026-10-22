@@ -1,3 +1,4 @@
+mod agent;
 mod campus;
 mod campus_browser;
 mod config;
@@ -35,6 +36,7 @@ struct AppState {
     auth: auth::Manager,
     school_lock: tokio::sync::Mutex<()>,
     evaluations: school::evaluation::Manager,
+    agent: agent::Manager,
 }
 
 fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -518,27 +520,20 @@ async fn save_api_key(
     vault::save_api_key(&key)
 }
 
-#[tauri::command]
-async fn query_timetable(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
-    plugin_id: String,
-) -> Result<campus::Timetable, String> {
-    main_only(&window)?;
-    if plugin_id != plugins::TIMETABLE_ID {
-        return Err("此插件没有课表服务权限".into());
-    }
-    if config::load(&config_path(&app)?)?
+/// Shared by the timetable command and the Agent's campus tools.
+pub(crate) async fn run_timetable(app: &tauri::AppHandle) -> Result<campus::Timetable, String> {
+    if config::load(&config_path(app)?)?
         .disabled_plugins
-        .contains(&plugin_id)
+        .iter()
+        .any(|id| id == plugins::TIMETABLE_ID)
     {
         return Err("请先启用课表插件".into());
     }
+    let state = app.state::<AppState>();
     let generation = state.generation.load(Ordering::SeqCst);
     let session = {
         let _guard = state.auth_lock.lock().await;
-        let path = accounts_path(&app)?;
+        let path = accounts_path(app)?;
         let book = accounts::load(&path)?;
         if let Some(account) = book.active() {
             vault::Session {
@@ -558,6 +553,19 @@ async fn query_timetable(
         return Err("账户状态已变化，请重新查询".into());
     }
     Ok(timetable)
+}
+
+#[tauri::command]
+async fn query_timetable(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    plugin_id: String,
+) -> Result<campus::Timetable, String> {
+    main_only(&window)?;
+    if plugin_id != plugins::TIMETABLE_ID {
+        return Err("此插件没有课表服务权限".into());
+    }
+    run_timetable(&app).await
 }
 
 #[derive(Clone, Serialize)]
@@ -862,27 +870,35 @@ async fn save_school_session(
     accounts::save(&path, &book)
 }
 
-#[tauri::command]
-async fn school_query(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
+/// Shared by the school_query command and the Agent's campus tools.
+pub(crate) async fn run_school_query(
+    app: &tauri::AppHandle,
     query: school::Query,
 ) -> Result<serde_json::Value, String> {
-    main_only(&window)?;
-    require_school_feature(&app, query.feature())?;
+    require_school_feature(app, query.feature())?;
     query.validate()?;
+    let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
     if matches!(query, school::Query::Calendar) {
         return school::query(None, query).await.map(|(data, _)| data);
     }
-    let (account, generation) = school_account(&app, &state).await?;
+    let (account, generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
     let (data, cookies) = school::query(Some(account), query).await?;
     if let Some(cookies) = cookies {
-        save_school_session(&app, &state, &account_id, generation, cookies).await?;
+        save_school_session(app, &state, &account_id, generation, cookies).await?;
     }
     Ok(data)
+}
+
+#[tauri::command]
+async fn school_query(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    query: school::Query,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    run_school_query(&app, query).await
 }
 
 #[tauri::command]
@@ -956,7 +972,7 @@ fn school_cancel_evaluations(
     state.evaluations.cancel(&preview_id)
 }
 
-fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
         .app_data_dir()
@@ -1099,6 +1115,7 @@ fn save_mcp_server(
     let mut book = mcp::load(&path)?;
     let id = mcp::upsert(&mut book, input)?;
     mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
     Ok(id)
 }
 #[tauri::command]
@@ -1117,7 +1134,9 @@ fn remove_mcp_server(
     if book.servers.len() == before {
         return Err("MCP 服务不存在".into());
     }
-    mcp::save(&path, &book)
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(())
 }
 #[tauri::command]
 fn set_mcp_server_enabled(
@@ -1137,7 +1156,9 @@ fn set_mcp_server_enabled(
         .find(|server| server.id == id)
         .ok_or("MCP 服务不存在")?;
     server.enabled = enabled;
-    mcp::save(&path, &book)
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(())
 }
 #[tauri::command]
 async fn probe_mcp_server(
@@ -1187,6 +1208,7 @@ async fn install_mcp_entry(
     book.servers.retain(|existing| existing.id != server.id);
     book.servers.push(server.clone());
     mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
     Ok(server.id)
 }
 // Image work runs off the main thread so the window stays responsive.
@@ -1220,6 +1242,220 @@ async fn read_personal_image(
     })
     .await
     .map_err(|_| "无法处理图片".to_string())?
+}
+
+#[tauri::command]
+fn agent_list(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::store::Summary>, String> {
+    main_only(&window)?;
+    Ok(agent::store::summaries(&agent::store::load(&agent::path(
+        &app,
+    )?)?))
+}
+#[tauri::command]
+fn agent_get(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<agent::store::Conversation, String> {
+    main_only(&window)?;
+    Ok(agent::store::find(&agent::store::load(&agent::path(&app)?)?, &id)?.clone())
+}
+#[tauri::command]
+fn agent_new(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<agent::store::Conversation, String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::create(&mut book);
+    agent::store::save(&path, &book)?;
+    Ok(conversation)
+}
+#[tauri::command]
+fn agent_delete(app: tauri::AppHandle, window: WebviewWindow, id: String) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    agent::store::remove(&mut book, &id)?;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_rename(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    title: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let title = title.trim();
+    if title.is_empty() || title.chars().count() > 60 {
+        return Err("标题需要 1–60 个字符".into());
+    }
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.title = title.to_string();
+    conversation.updated_at = agent::store::now();
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+async fn agent_send(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    conversation_id: String,
+    request_id: String,
+    content: String,
+    provider_id: Option<String>,
+    skill_ids: Vec<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    agent::send(
+        app,
+        conversation_id,
+        request_id,
+        content,
+        provider_id,
+        skill_ids,
+    )
+    .await
+}
+#[tauri::command]
+fn agent_cancel(
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    request_id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    state.agent.cancel(&request_id);
+    Ok(())
+}
+fn drop_by<T>(list: &mut Vec<T>, predicate: impl Fn(&T) -> bool) -> bool {
+    match list.iter().position(predicate) {
+        Some(index) => {
+            list.remove(index);
+            true
+        }
+        None => false,
+    }
+}
+
+#[tauri::command]
+fn agent_presets(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<agent::presets::Presets, String> {
+    main_only(&window)?;
+    agent::presets::load(&agent::presets_path(&app)?)
+}
+#[tauri::command]
+fn agent_save_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    input: agent::presets::Input,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let id = agent::presets::upsert(&mut presets, input)?;
+    agent::presets::save(&path, &presets)?;
+    Ok(id)
+}
+#[tauri::command]
+fn agent_remove_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    kind: String,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let removed = match kind.as_str() {
+        "role" => drop_by(&mut presets.roles, |item| item.id == id),
+        "skill" => drop_by(&mut presets.skills, |item| item.id == id),
+        "task" => drop_by(&mut presets.tasks, |item| item.id == id),
+        _ => return Err("未知的预设类型".into()),
+    };
+    if !removed {
+        return Err("预设不存在".into());
+    }
+    agent::presets::save(&path, &presets)
+}
+#[tauri::command]
+fn agent_memories(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::memory::Memory>, String> {
+    main_only(&window)?;
+    Ok(agent::memory::load(&agent::memory_path(&app)?)?.entries)
+}
+#[tauri::command]
+fn agent_save_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: Option<String>,
+    content: String,
+) -> Result<agent::memory::Memory, String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    let entry = agent::memory::upsert(&mut book, id, &content)?;
+    agent::memory::save(&path, &book)?;
+    Ok(entry)
+}
+#[tauri::command]
+fn agent_remove_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    agent::memory::remove(&mut book, &id)?;
+    agent::memory::save(&path, &book)
+}
+#[tauri::command]
+fn agent_set_role(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    role_id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.role_id = role_id;
+    conversation.updated_at = agent::store::now();
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_pin(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.pinned = pinned;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+async fn agent_tools(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<agent::tools::ToolInfo>, String> {
+    main_only(&window)?;
+    Ok(state.agent.tool_infos(&app).await)
 }
 
 pub fn run() {
@@ -1266,6 +1502,22 @@ pub fn run() {
             probe_mcp_server,
             mcp_catalog,
             install_mcp_entry,
+            agent_list,
+            agent_get,
+            agent_new,
+            agent_delete,
+            agent_rename,
+            agent_send,
+            agent_cancel,
+            agent_tools,
+            agent_presets,
+            agent_save_preset,
+            agent_remove_preset,
+            agent_memories,
+            agent_save_memory,
+            agent_remove_memory,
+            agent_set_role,
+            agent_pin,
             personal_image_source,
             read_personal_image,
             load_config,
