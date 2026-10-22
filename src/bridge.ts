@@ -5,6 +5,10 @@ import type {
   ImageCrop,
   AgentConversation,
   AgentEvent,
+  AgentMemory,
+  AgentPresetInput,
+  AgentPresetKind,
+  AgentPresets,
   AgentSummary,
   AgentToolInfo,
   MarketCatalog,
@@ -258,6 +262,7 @@ export const bridge = {
     requestId: string;
     content: string;
     providerId: string | null;
+    skillIds: string[];
   }): Promise<void> {
     requireNative();
     return invoke('agent_send', {
@@ -265,7 +270,40 @@ export const bridge = {
       requestId: input.requestId,
       content: input.content,
       providerId: input.providerId,
+      skillIds: input.skillIds,
     });
+  },
+  async agentPresets(): Promise<AgentPresets> {
+    requireNative();
+    return invoke('agent_presets');
+  },
+  async agentSavePreset(input: AgentPresetInput): Promise<string> {
+    requireNative();
+    return invoke('agent_save_preset', { input });
+  },
+  async agentRemovePreset(kind: AgentPresetKind, id: string): Promise<void> {
+    requireNative();
+    return invoke('agent_remove_preset', { kind, id });
+  },
+  async agentMemories(): Promise<AgentMemory[]> {
+    requireNative();
+    return invoke('agent_memories');
+  },
+  async agentSaveMemory(id: string | null, content: string): Promise<AgentMemory> {
+    requireNative();
+    return invoke('agent_save_memory', { id, content });
+  },
+  async agentRemoveMemory(id: string): Promise<void> {
+    requireNative();
+    return invoke('agent_remove_memory', { id });
+  },
+  async agentSetRole(id: string, roleId: string | null): Promise<void> {
+    requireNative();
+    return invoke('agent_set_role', { id, roleId });
+  },
+  async agentPin(id: string, pinned: boolean): Promise<void> {
+    requireNative();
+    return invoke('agent_pin', { id, pinned });
   },
   async agentCancel(requestId: string): Promise<void> {
     requireNative();

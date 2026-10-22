@@ -3,28 +3,29 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ask } from '@tauri-apps/plugin-dialog';
 import {
   ArrowUp,
-  Bot,
   Check,
+  ChevronRight,
   History,
   LoaderCircle,
   Plus,
   Settings2,
-  Trash2,
+  Square,
   Wrench,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type {
   AgentEvent,
   AgentMessage,
+  AgentPresets,
+  AgentSkill,
   AgentSummary,
+  AgentTask,
   AgentToolCall,
   AgentConversation,
   ModelProviders,
 } from '../types';
-import PageHeader from './ui/PageHeader.vue';
 import MenuSelect from './ui/MenuSelect.vue';
-import EmptyState from './ui/EmptyState.vue';
-import UiAvatar from './ui/UiAvatar.vue';
+import AgentHistory from './AgentHistory.vue';
 
 const emit = defineEmits<{ settings: [] }>();
 
@@ -36,12 +37,32 @@ interface LiveStep {
   ok: boolean | null;
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  campus_timetable: '查询课程表',
+  campus_terms: '查询学期',
+  campus_grades: '查询成绩',
+  campus_exams: '查询考试安排',
+  campus_calendar: '查询校历',
+  campus_attendance_streams: '查询考勤流水',
+  campus_attendance_records: '查询考勤',
+  campus_card: '查询校园卡',
+  campus_card_transactions: '查询校园卡流水',
+  campus_fitness: '查询体测',
+  campus_fitness_score: '查询体测成绩',
+  campus_room_options: '查询教室选项',
+  campus_rooms: '查询空闲教室',
+  campus_courses: '查询全校课程',
+};
+
 const providers = ref<ModelProviders>({
   defaultId: null,
   providers: [],
   legacyKeyAvailable: false,
 });
 const providerId = ref('');
+const presets = ref<AgentPresets>({ version: 1, roles: [], skills: [], tasks: [] });
+const roleId = ref('');
+const selectedSkills = ref<AgentSkill[]>([]);
 const conversation = ref<AgentConversation | null>(null);
 const summaries = ref<AgentSummary[]>([]);
 const messages = ref<AgentMessage[]>([]);
@@ -50,6 +71,7 @@ const draft = ref('');
 const running = ref(false);
 const liveText = ref('');
 const liveSteps = ref<LiveStep[]>([]);
+const expanded = ref(new Set<string>());
 const error = ref('');
 const scroller = ref<HTMLElement | null>(null);
 let requestId = '';
@@ -58,9 +80,27 @@ let unlisten: (() => void) | undefined;
 const providerOptions = computed(() =>
   providers.value.providers.map((provider) => ({
     value: provider.id,
-    label: `${provider.name} · ${provider.model}`,
+    label: provider.model || provider.name,
   })),
 );
+const roleOptions = computed(() => [
+  { value: '', label: '通用角色' },
+  ...presets.value.roles.map((role) => ({ value: role.id, label: role.name })),
+]);
+const slashQuery = computed(() => {
+  const text = draft.value;
+  if (!text.startsWith('/') || text.includes('\n')) return null;
+  return text.slice(1).trim();
+});
+const slashMatches = computed(() => {
+  const query = slashQuery.value;
+  if (query === null || !presets.value.skills.length) return [];
+  const needle = query.toLowerCase();
+  return presets.value.skills.filter(
+    (skill) =>
+      skill.name.toLowerCase().includes(needle) || skill.description.toLowerCase().includes(needle),
+  );
+});
 const currentTitle = computed(() => conversation.value?.title || '新对话');
 const canSend = computed(
   () =>
@@ -86,6 +126,57 @@ async function loadProviders() {
     error.value = errorText(e);
   }
 }
+async function loadPresets() {
+  try {
+    presets.value = await bridge.agentPresets();
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
+async function changeRole(value: string) {
+  roleId.value = value;
+  if (conversation.value) {
+    try {
+      await bridge.agentSetRole(conversation.value.id, value || null);
+      conversation.value.roleId = value || null;
+      await loadSummaries();
+    } catch (e) {
+      error.value = errorText(e);
+    }
+  }
+}
+function attachSkill(skill: AgentSkill) {
+  if (!selectedSkills.value.some((item) => item.id === skill.id)) {
+    selectedSkills.value = [...selectedSkills.value, skill];
+  }
+  draft.value = '';
+}
+function detachSkill(id: string) {
+  selectedSkills.value = selectedSkills.value.filter((skill) => skill.id !== id);
+}
+function applyTask(task: AgentTask) {
+  draft.value = task.prompt;
+  roleId.value = task.roleId || '';
+  selectedSkills.value = presets.value.skills.filter((skill) => task.skillIds.includes(skill.id));
+}
+async function renameConversation(id: string, title: string) {
+  try {
+    await bridge.agentRename(id, title);
+    if (conversation.value?.id === id) conversation.value.title = title;
+    await loadSummaries();
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
+async function pinConversation(id: string, pinned: boolean) {
+  try {
+    await bridge.agentPin(id, pinned);
+    if (conversation.value?.id === id) conversation.value.pinned = pinned;
+    await loadSummaries();
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
 async function loadSummaries() {
   try {
     summaries.value = await bridge.agentList();
@@ -99,8 +190,11 @@ async function openConversation(id: string) {
     const next = await bridge.agentGet(id);
     conversation.value = next;
     messages.value = next.messages.slice();
+    roleId.value = next.roleId || '';
+    selectedSkills.value = [];
     liveText.value = '';
     liveSteps.value = [];
+    expanded.value = new Set();
     error.value = '';
     showHistory.value = false;
     await scrollDown();
@@ -112,8 +206,11 @@ function newChat() {
   if (running.value) void stop();
   conversation.value = null;
   messages.value = [];
+  roleId.value = '';
+  selectedSkills.value = [];
   liveText.value = '';
   liveSteps.value = [];
+  expanded.value = new Set();
   draft.value = '';
   error.value = '';
   showHistory.value = false;
@@ -208,14 +305,24 @@ async function send() {
   liveText.value = '';
   liveSteps.value = [];
   running.value = true;
-  requestId = crypto.randomUUID();
+  requestId =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const skillIds = selectedSkills.value.map((skill) => skill.id);
+  selectedSkills.value = [];
   await scrollDown();
   try {
+    if (roleId.value !== (conversation.value.roleId || '')) {
+      await bridge.agentSetRole(conversation.value.id, roleId.value || null);
+      conversation.value.roleId = roleId.value || null;
+    }
     await bridge.agentSend({
       conversationId: conversation.value.id,
       requestId,
       content: text,
       providerId: providerId.value || null,
+      skillIds,
     });
   } catch (e) {
     error.value = errorText(e);
@@ -236,11 +343,18 @@ function resultFor(message: AgentMessage, call: AgentToolCall): AgentMessage | u
   );
 }
 function callLabel(name: string) {
+  if (TOOL_LABELS[name]) return TOOL_LABELS[name];
   if (name.startsWith('mcp__')) {
     const parts = name.split('__');
     return `${parts[1] || 'MCP'} · ${parts.slice(2).join('__')}`;
   }
-  return name.replace(/^campus_/, '校园 · ');
+  return name;
+}
+function toggleTool(callId: string) {
+  const next = new Set(expanded.value);
+  if (next.has(callId)) next.delete(callId);
+  else next.add(callId);
+  expanded.value = next;
 }
 function prettyArguments(raw: string) {
   try {
@@ -251,12 +365,12 @@ function prettyArguments(raw: string) {
     return raw;
   }
 }
-function shortContent(text: string, limit = 4000) {
+function shortContent(text: string, limit = 6000) {
   return text.length > limit ? `${text.slice(0, limit)}\n…` : text;
 }
 watch(liveText, () => void scrollDown());
 onMounted(async () => {
-  await Promise.all([loadProviders(), loadSummaries()]);
+  await Promise.all([loadProviders(), loadSummaries(), loadPresets()]);
   try {
     unlisten = await bridge.onAgent(onEvent);
   } catch (e) {
@@ -269,367 +383,615 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <section class="desktop-page agent-page">
-    <PageHeader title="Agent">
-      <template #actions>
-        <MenuSelect
-          v-if="providerOptions.length"
-          v-model="providerId"
-          :options="providerOptions"
-          label="选择模型"
-        />
+    <header class="agent-bar">
+      <div class="agent-bar-title">
+        <span class="agent-name">{{ currentTitle }}</span>
+      </div>
+      <div class="agent-bar-actions">
         <button
-          class="btn ghost icon"
-          :aria-pressed="showHistory"
+          class="agent-icon-button"
+          :class="{ active: showHistory }"
           title="历史记录"
           aria-label="历史记录"
+          :aria-expanded="showHistory"
           @click="showHistory = !showHistory"
         >
-          <History :size="16" />
+          <History :size="15" />
         </button>
-        <button class="btn" @click="newChat"><Plus :size="14" />新对话</button>
+        <button class="agent-icon-button" title="新对话" aria-label="新对话" @click="newChat">
+          <Plus :size="15" />
+        </button>
         <button
-          class="btn ghost icon"
+          class="agent-icon-button"
           title="Agent 设置"
           aria-label="Agent 设置"
           @click="emit('settings')"
         >
-          <Settings2 :size="16" />
+          <Settings2 :size="15" />
         </button>
-      </template>
-    </PageHeader>
+      </div>
+    </header>
 
     <Transition name="drop">
-      <p v-if="error" class="notice" role="alert">{{ error }}</p>
+      <p v-if="error" class="notice agent-notice" role="alert">{{ error }}</p>
     </Transition>
 
-    <div class="agent-layout">
-      <aside v-if="showHistory" class="agent-history" aria-label="历史对话">
-        <EmptyState
-          v-if="!summaries.length"
-          compact
-          :icon="Bot"
-          title="还没有对话"
-          description="发送第一条消息后会出现在这里。"
-        />
-        <div v-for="summary in summaries" :key="summary.id" class="agent-history-row">
-          <button
-            class="agent-history-open"
-            :class="{ current: conversation?.id === summary.id }"
-            :disabled="running"
-            @click="openConversation(summary.id)"
-          >
-            <strong>{{ summary.title }}</strong>
-            <small>{{ summary.messages }} 条消息</small>
-          </button>
-          <button
-            class="btn ghost icon small"
-            :disabled="running"
-            :aria-label="'删除 ' + summary.title"
-            @click="removeConversation(summary)"
-          >
-            <Trash2 :size="14" />
-          </button>
-        </div>
-      </aside>
+    <div v-if="showHistory" class="agent-backdrop" @click="showHistory = false"></div>
+    <Transition name="drop">
+      <AgentHistory
+        v-if="showHistory"
+        :summaries="summaries"
+        :current-id="conversation?.id"
+        :disabled="running"
+        @open="openConversation"
+        @remove="removeConversation"
+        @rename="renameConversation"
+        @pin="pinConversation"
+        @close="showHistory = false"
+      />
+    </Transition>
 
-      <div ref="scroller" class="agent-thread">
-        <EmptyState
-          v-if="!messages.length && !running"
-          :icon="Bot"
-          title="开始和 Agent 对话"
-          :description="
-            providerOptions.length
-              ? '可以问课程表、成绩、考勤、校园卡，也会调用已启用的 MCP 工具。'
-              : '还没有可用的模型服务，先到 Agent 设置里添加。'
-          "
-        >
+    <div ref="scroller" class="agent-thread">
+      <div class="agent-column">
+        <div v-if="!messages.length && !running" class="agent-empty">
+          <h2>有什么可以帮你？</h2>
+          <p v-if="providerOptions.length">
+            可以查询课表、成绩、考试、考勤、校园卡，也会调用已启用的 MCP 工具。
+          </p>
+          <p v-else>还没有可用的模型服务，先到 Agent 设置里添加。</p>
           <button v-if="!providerOptions.length" class="btn" @click="emit('settings')">
             打开 Agent 设置
           </button>
-        </EmptyState>
-        <template v-for="(message, index) in messages" :key="index">
-          <div v-if="message.role === 'user'" class="agent-row user">
-            <div class="agent-bubble">{{ message.content }}</div>
-            <UiAvatar :src="null" :size="28" />
+          <div v-if="presets.tasks.length" class="agent-tasks">
+            <p class="agent-tasks-title">预设任务</p>
+            <button
+              v-for="task in presets.tasks"
+              :key="task.id"
+              class="agent-task"
+              @click="applyTask(task)"
+            >
+              <strong>{{ task.name }}</strong>
+              <span>{{ task.description || task.prompt }}</span>
+            </button>
           </div>
-          <div v-else-if="message.role === 'assistant'" class="agent-row assistant">
-            <div class="agent-avatar"><Bot :size="16" /></div>
-            <div class="agent-assistant-body">
-              <div v-if="message.content" class="agent-text">{{ message.content }}</div>
-              <div v-for="call in message.toolCalls" :key="call.id" class="agent-tool">
-                <header>
-                  <Wrench :size="14" />
-                  <strong>{{ callLabel(call.name) }}</strong>
-                  <span class="agent-tool-state">
-                    <Check
-                      v-if="resultFor(message, call) && !resultFor(message, call)?.error"
-                      :size="13"
-                    />
-                    <LoaderCircle v-else-if="!resultFor(message, call)" :size="13" class="spin" />
-                    {{
-                      resultFor(message, call)?.error
-                        ? '失败'
-                        : resultFor(message, call)
-                          ? '完成'
-                          : '执行中'
-                    }}
-                  </span>
-                </header>
-                <pre v-if="prettyArguments(call.arguments)" class="agent-tool-args">{{
+        </div>
+
+        <template v-for="(message, index) in messages" :key="index">
+          <div v-if="message.role === 'user'" class="agent-user">{{ message.content }}</div>
+          <div v-else-if="message.role === 'assistant'" class="agent-assistant">
+            <div v-if="message.content" class="agent-text">{{ message.content }}</div>
+            <div v-for="call in message.toolCalls" :key="call.id" class="agent-tool">
+              <button
+                class="agent-tool-row"
+                :aria-expanded="expanded.has(call.id)"
+                @click="toggleTool(call.id)"
+              >
+                <Wrench :size="13" class="agent-tool-icon" />
+                <span class="agent-tool-name">{{ callLabel(call.name) }}</span>
+                <span
+                  class="agent-tool-status"
+                  :class="{ failed: resultFor(message, call)?.error }"
+                >
+                  <template v-if="resultFor(message, call)?.error">失败</template>
+                  <template v-else-if="resultFor(message, call)">完成</template>
+                  <template v-else>执行中</template>
+                </span>
+                <ChevronRight
+                  :size="13"
+                  class="agent-tool-chevron"
+                  :class="{ open: expanded.has(call.id) }"
+                />
+              </button>
+              <div v-if="expanded.has(call.id)" class="agent-tool-detail">
+                <pre v-if="prettyArguments(call.arguments)">{{
                   prettyArguments(call.arguments)
                 }}</pre>
                 <pre
                   v-if="resultFor(message, call)"
-                  class="agent-tool-result"
                   :class="{ failed: resultFor(message, call)?.error }"
                   >{{ shortContent(resultFor(message, call)!.content) }}</pre>
               </div>
             </div>
           </div>
         </template>
-        <div v-if="running || liveText || liveSteps.length" class="agent-row assistant">
-          <div class="agent-avatar"><Bot :size="16" /></div>
-          <div class="agent-assistant-body">
-            <div v-if="liveText" class="agent-text">{{ liveText }}</div>
-            <div v-for="step in liveSteps" :key="step.callId" class="agent-tool">
-              <header>
-                <Wrench :size="14" />
-                <strong>{{ callLabel(step.name) }}</strong>
-                <span class="agent-tool-state">
-                  <Check v-if="step.ok === true" :size="13" />
-                  <LoaderCircle v-else-if="step.ok === null" :size="13" class="spin" />
-                  {{ step.ok === null ? '执行中' : step.ok ? '完成' : '失败' }}
-                </span>
-              </header>
-              <pre v-if="prettyArguments(step.arguments)" class="agent-tool-args">{{
+
+        <div v-if="running || liveText || liveSteps.length" class="agent-assistant">
+          <div v-if="liveText" class="agent-text">{{ liveText }}</div>
+          <div v-for="step in liveSteps" :key="step.callId" class="agent-tool">
+            <button
+              class="agent-tool-row"
+              :aria-expanded="expanded.has(step.callId)"
+              @click="toggleTool(step.callId)"
+            >
+              <Wrench :size="13" class="agent-tool-icon" />
+              <span class="agent-tool-name">{{ callLabel(step.name) }}</span>
+              <span class="agent-tool-status" :class="{ failed: step.ok === false }">
+                <template v-if="step.ok === null">执行中</template>
+                <template v-else-if="step.ok">完成</template>
+                <template v-else>失败</template>
+              </span>
+              <ChevronRight
+                :size="13"
+                class="agent-tool-chevron"
+                :class="{ open: expanded.has(step.callId) }"
+              />
+            </button>
+            <div v-if="expanded.has(step.callId)" class="agent-tool-detail">
+              <pre v-if="prettyArguments(step.arguments)">{{
                 prettyArguments(step.arguments)
               }}</pre>
-              <pre
-                v-if="step.content"
-                class="agent-tool-result"
-                :class="{ failed: step.ok === false }"
-                >{{ shortContent(step.content) }}</pre>
+              <pre v-if="step.content" :class="{ failed: step.ok === false }">{{
+                shortContent(step.content)
+              }}</pre>
             </div>
-            <div v-if="running && !liveText && !liveSteps.length" class="agent-pending">
-              <LoaderCircle :size="14" class="spin" />正在思考…
-            </div>
+          </div>
+          <div v-if="running && !liveText && !liveSteps.length" class="agent-thinking">
+            <LoaderCircle :size="13" class="spin" />正在思考
           </div>
         </div>
       </div>
     </div>
 
-    <form class="agent-composer" @submit.prevent="send">
-      <textarea
-        v-model="draft"
-        rows="1"
-        :placeholder="
-          providerOptions.length ? '发消息，Enter 发送，Shift+Enter 换行' : '请先配置模型服务'
-        "
-        :disabled="!providerOptions.length"
-        aria-label="消息"
-        @keydown.enter.exact.prevent="send"
-      ></textarea>
-      <button
-        v-if="running"
-        type="button"
-        class="btn agent-send stop"
-        aria-label="停止生成"
-        @click="stop"
-      >
-        停止
-      </button>
-      <button v-else type="submit" class="btn primary agent-send" :disabled="!canSend">
-        <ArrowUp :size="15" />发送
-      </button>
-    </form>
-    <p class="agent-hint">{{ currentTitle }}</p>
+    <div class="agent-composer-wrap">
+      <div class="agent-column">
+        <form class="agent-composer" @submit.prevent="send">
+          <div v-if="slashMatches.length" class="agent-slash">
+            <button
+              v-for="skill in slashMatches"
+              :key="skill.id"
+              type="button"
+              @click="attachSkill(skill)"
+            >
+              <strong>{{ skill.name }}</strong>
+              <span>{{ skill.description }}</span>
+            </button>
+          </div>
+          <div v-if="selectedSkills.length" class="agent-chips">
+            <span v-for="skill in selectedSkills" :key="skill.id" class="agent-chip">
+              {{ skill.name }}
+              <button type="button" aria-label="移除 Skill" @click="detachSkill(skill.id)">
+                ×
+              </button>
+            </span>
+          </div>
+          <textarea
+            v-model="draft"
+            rows="1"
+            :placeholder="providerOptions.length ? '问点什么…' : '请先配置模型服务'"
+            :disabled="!providerOptions.length"
+            aria-label="消息"
+            @keydown.enter.exact.prevent="send"
+          ></textarea>
+          <div class="agent-composer-bar">
+            <MenuSelect
+              v-if="roleOptions.length > 1"
+              :model-value="roleId"
+              :options="roleOptions"
+              label="选择角色"
+              class="agent-model-select"
+              @update:model-value="changeRole"
+            />
+            <MenuSelect
+              v-if="providerOptions.length"
+              v-model="providerId"
+              :options="providerOptions"
+              label="选择模型"
+              class="agent-model-select"
+            />
+            <span v-if="running" class="agent-running"><Check :size="12" />生成中</span>
+            <span v-else></span>
+            <button
+              v-if="running"
+              type="button"
+              class="agent-send-circle stop"
+              aria-label="停止生成"
+              @click="stop"
+            >
+              <Square :size="12" />
+            </button>
+            <button
+              v-else
+              type="submit"
+              class="agent-send-circle"
+              aria-label="发送"
+              :disabled="!canSend"
+            >
+              <ArrowUp :size="15" />
+            </button>
+          </div>
+        </form>
+        <p class="agent-disclaimer">Agent 可能出错，校园数据请以学校系统为准。</p>
+      </div>
+    </div>
   </section>
 </template>
 <style scoped>
 .agent-page {
+  position: relative;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 140px);
+  height: calc(100vh - 120px);
+  min-height: 420px;
 }
-.agent-layout {
-  display: flex;
-  gap: 20px;
-  flex: 1;
-  min-height: 0;
+.mac-native .agent-page {
+  height: calc(100vh - 150px);
 }
-.agent-history {
-  width: 240px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  padding-right: 12px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-.agent-history-row {
+.agent-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  border-radius: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
-.agent-history-row:hover {
-  background: var(--surface-hover);
-}
-.agent-history-open {
-  flex: 1;
+.agent-bar-title {
   min-width: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  padding: 10px 8px;
-  border-radius: 10px;
-  color: var(--text);
-  cursor: pointer;
 }
-.agent-history-open.current {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.agent-history-open strong {
-  display: block;
+.agent-name {
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.agent-history-open small {
+.agent-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.agent-icon-button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: var(--text-tertiary);
-  font-size: 11px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.agent-icon-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.agent-icon-button.active {
+  background: var(--surface-pressed);
+  color: var(--text);
+}
+.agent-notice {
+  margin: 10px 0 0;
+}
+.agent-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
 }
 .agent-thread {
   flex: 1;
-  min-width: 0;
-  max-height: 62vh;
+  min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 4px 2px 12px;
+  padding: 18px 0 8px;
 }
-.agent-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
+.agent-column {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 4px;
 }
-.agent-row.user {
-  justify-content: flex-end;
+.agent-empty {
+  padding: 18vh 0 0;
+  text-align: center;
+  color: var(--text-secondary);
 }
-.agent-bubble {
-  max-width: 72%;
-  background: var(--surface-sunken);
+.agent-empty h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-empty p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.agent-user {
+  margin: 18px 0 0 auto;
+  max-width: 82%;
+  width: fit-content;
+  padding: 8px 13px;
   border-radius: 14px;
-  padding: 10px 14px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
   white-space: pre-wrap;
-  line-height: 1.55;
+  word-break: break-word;
 }
-.agent-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-.agent-assistant-body {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 10px;
+.agent-assistant {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
 }
 .agent-text {
   white-space: pre-wrap;
-  line-height: 1.6;
+  word-break: break-word;
 }
 .agent-tool {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface-subtle);
+  margin-top: 6px;
 }
-.agent-tool header {
+.agent-tool-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
+  gap: 7px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 5px 6px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
 }
-.agent-tool header strong {
-  font-weight: 600;
+.agent-tool-row:hover {
+  background: var(--surface-hover);
 }
-.agent-tool-state {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.agent-tool-icon {
   color: var(--text-tertiary);
-  font-size: 12px;
+  flex-shrink: 0;
 }
-.agent-tool pre {
-  margin: 0;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 220px;
-  overflow-y: auto;
+.agent-tool-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.agent-tool-result.failed {
+.agent-tool-status {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.agent-tool-status.failed {
   color: var(--danger);
 }
-.agent-pending {
+.agent-tool-chevron {
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+}
+.agent-tool-chevron.open {
+  transform: rotate(90deg);
+}
+.agent-tool-detail {
+  margin: 2px 0 8px 26px;
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+.agent-tool-detail pre {
+  margin: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.agent-tool-detail pre.failed {
+  color: var(--danger);
+}
+.agent-thinking {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-top: 8px;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: 12.5px;
+}
+.agent-composer-wrap {
+  padding: 8px 0 0;
+  background: linear-gradient(transparent, var(--surface) 40%);
 }
 .agent-composer {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
+  position: relative;
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
   background: var(--surface);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  padding: 10px 10px 8px 14px;
+}
+.agent-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .agent-composer textarea {
-  flex: 1;
+  width: 100%;
   border: 0;
   resize: none;
   background: transparent;
   color: var(--text);
   font: inherit;
-  line-height: 1.5;
-  max-height: 180px;
+  font-size: 14px;
+  line-height: 1.55;
   min-height: 24px;
-  padding: 4px 2px;
+  max-height: 160px;
+  padding: 2px 0;
 }
 .agent-composer textarea:focus {
   outline: none;
 }
-.agent-send {
+.agent-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.agent-model-select {
+  max-width: 260px;
+}
+.agent-model-select :deep(.field-shell) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.agent-model-select :deep(.menu-field-value) {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.agent-model-select :deep(.menu-field-value:hover) {
+  background: var(--surface-hover);
+}
+.agent-running {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.agent-composer-bar > span:empty {
+  margin-left: auto;
+}
+.agent-send-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.agent-send-circle:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+  cursor: default;
+}
+.agent-send-circle.stop {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.agent-tasks {
+  margin: 26px auto 0;
+  max-width: 520px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+.agent-tasks-title {
+  margin: 0 0 2px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.agent-task {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.agent-task:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-subtle);
+}
+.agent-task strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-task span {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.agent-send.stop {
-  color: var(--danger);
+.agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 8px;
 }
-.agent-hint {
-  margin: 8px 2px 0;
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+}
+.agent-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 50%;
+}
+.agent-chip button:hover {
+  background: var(--accent-tint);
+}
+.agent-slash {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  z-index: 5;
+}
+.agent-slash button {
+  display: grid;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 7px 9px;
+  border-radius: 7px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.agent-slash button:hover {
+  background: var(--surface-hover);
+}
+.agent-slash strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-slash span {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-disclaimer {
+  margin: 6px 0 0;
+  text-align: center;
   color: var(--text-tertiary);
   font-size: 11px;
-  text-align: right;
 }
 </style>

@@ -1230,9 +1230,18 @@ async fn agent_send(
     request_id: String,
     content: String,
     provider_id: Option<String>,
+    skill_ids: Vec<String>,
 ) -> Result<(), String> {
     main_only(&window)?;
-    agent::send(app, conversation_id, request_id, content, provider_id).await
+    agent::send(
+        app,
+        conversation_id,
+        request_id,
+        content,
+        provider_id,
+        skill_ids,
+    )
+    .await
 }
 #[tauri::command]
 fn agent_cancel(
@@ -1243,6 +1252,121 @@ fn agent_cancel(
     main_only(&window)?;
     state.agent.cancel(&request_id);
     Ok(())
+}
+fn drop_by<T>(list: &mut Vec<T>, predicate: impl Fn(&T) -> bool) -> bool {
+    match list.iter().position(predicate) {
+        Some(index) => {
+            list.remove(index);
+            true
+        }
+        None => false,
+    }
+}
+
+#[tauri::command]
+fn agent_presets(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<agent::presets::Presets, String> {
+    main_only(&window)?;
+    agent::presets::load(&agent::presets_path(&app)?)
+}
+#[tauri::command]
+fn agent_save_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    input: agent::presets::Input,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let id = agent::presets::upsert(&mut presets, input)?;
+    agent::presets::save(&path, &presets)?;
+    Ok(id)
+}
+#[tauri::command]
+fn agent_remove_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    kind: String,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let removed = match kind.as_str() {
+        "role" => drop_by(&mut presets.roles, |item| item.id == id),
+        "skill" => drop_by(&mut presets.skills, |item| item.id == id),
+        "task" => drop_by(&mut presets.tasks, |item| item.id == id),
+        _ => return Err("未知的预设类型".into()),
+    };
+    if !removed {
+        return Err("预设不存在".into());
+    }
+    agent::presets::save(&path, &presets)
+}
+#[tauri::command]
+fn agent_memories(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::memory::Memory>, String> {
+    main_only(&window)?;
+    Ok(agent::memory::load(&agent::memory_path(&app)?)?.entries)
+}
+#[tauri::command]
+fn agent_save_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: Option<String>,
+    content: String,
+) -> Result<agent::memory::Memory, String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    let entry = agent::memory::upsert(&mut book, id, &content)?;
+    agent::memory::save(&path, &book)?;
+    Ok(entry)
+}
+#[tauri::command]
+fn agent_remove_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    agent::memory::remove(&mut book, &id)?;
+    agent::memory::save(&path, &book)
+}
+#[tauri::command]
+fn agent_set_role(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    role_id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.role_id = role_id;
+    conversation.updated_at = agent::store::now();
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_pin(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.pinned = pinned;
+    agent::store::save(&path, &book)
 }
 #[tauri::command]
 async fn agent_tools(
@@ -1306,6 +1430,14 @@ pub fn run() {
             agent_send,
             agent_cancel,
             agent_tools,
+            agent_presets,
+            agent_save_preset,
+            agent_remove_preset,
+            agent_memories,
+            agent_save_memory,
+            agent_remove_memory,
+            agent_set_role,
+            agent_pin,
             personal_image_source,
             read_personal_image,
             load_config,

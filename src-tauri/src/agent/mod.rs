@@ -1,5 +1,7 @@
 //! Agent runtime: conversation storage, model streaming and the tool loop.
 pub mod chat;
+pub mod memory;
+pub mod presets;
 pub mod store;
 pub mod tools;
 
@@ -26,14 +28,25 @@ pub struct Manager {
     tools: tokio::sync::Mutex<Option<(Instant, Vec<tools::ToolDef>)>>,
 }
 
-pub fn path(app: &AppHandle) -> Result<PathBuf, String> {
+fn directory(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
         .home_dir()
         .map_err(|_| "无法定位对话目录")?
         .join(".xjtu-launcher")
-        .join("agent")
-        .join("conversations.json"))
+        .join("agent"))
+}
+
+pub fn path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(directory(app)?.join("conversations.json"))
+}
+
+pub fn presets_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(directory(app)?.join("presets.json"))
+}
+
+pub fn memory_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(directory(app)?.join("memory.json"))
 }
 
 impl Manager {
@@ -132,6 +145,7 @@ pub async fn send(
     request_id: String,
     content: String,
     provider_id: Option<String>,
+    skill_ids: Vec<String>,
 ) -> Result<(), String> {
     let content = content.trim().to_string();
     if content.is_empty() {
@@ -147,6 +161,18 @@ pub async fn send(
     let conversation = conversation.clone();
     store::save(&path, &book)?;
     drop(_guard);
+    let presets = presets::load(&presets_path(&app)?)?;
+    let memory = memory::prompt_block(&memory::load(&memory_path(&app)?)?);
+    let role = conversation
+        .role_id
+        .as_ref()
+        .and_then(|id| presets.roles.iter().find(|role| &role.id == id).cloned());
+    let skills = presets.skills.clone();
+    let active_skills = skills
+        .iter()
+        .filter(|skill| skill_ids.iter().any(|id| id == &skill.id))
+        .cloned()
+        .collect::<Vec<_>>();
     state.agent.claim(&conversation_id)?;
     let tools = state.agent.tool_set(&app).await;
     let cancel = state.agent.register(&request_id);
@@ -166,6 +192,10 @@ pub async fn send(
                 app: app.clone(),
                 provider,
                 tools,
+                role,
+                skills,
+                active_skills,
+                memory,
                 request_id: request.clone(),
                 cancel: cancel.clone(),
                 emit: &mut emit,

@@ -1,5 +1,6 @@
 //! Streaming chat against the configured model providers, with a tool loop.
 use crate::agent::{
+    presets::{Role, Skill},
     store::{Conversation, Message, ToolCall},
     tools::ToolDef,
 };
@@ -66,6 +67,13 @@ pub struct Chat<'a> {
     pub app: AppHandle,
     pub provider: Provider,
     pub tools: Vec<ToolDef>,
+    /// Selected for this conversation; its instructions join the system prompt.
+    pub role: Option<Role>,
+    /// Skills the model may load with `use_skill`.
+    pub skills: Vec<Skill>,
+    /// Skills the user explicitly attached to this turn.
+    pub active_skills: Vec<Skill>,
+    pub memory: String,
     pub request_id: String,
     pub cancel: Arc<AtomicBool>,
     pub emit: &'a mut (dyn FnMut(Event) + Send),
@@ -74,11 +82,12 @@ pub struct Chat<'a> {
 
 impl Chat<'_> {
     pub async fn run(&mut self, conversation: &mut Conversation) -> Result<(), String> {
+        let system = self.system_prompt();
         for _ in 0..MAX_ROUNDS {
             if self.cancelled() {
                 return Ok(());
             }
-            let (text, calls) = self.complete(&conversation.messages).await?;
+            let (text, calls) = self.complete(&system, &conversation.messages).await?;
             let message = Message::assistant(text, calls.clone());
             conversation.messages.push(message);
             (self.persist)(conversation);
@@ -96,9 +105,13 @@ impl Chat<'_> {
                     arguments: call.arguments.clone(),
                 });
                 let args: Value = serde_json::from_str(&call.arguments).unwrap_or(json!({}));
-                let outcome = match self.tools.iter().find(|tool| tool.name == call.name) {
-                    Some(tool) => tool.call(&self.app, args).await,
-                    None => Err(format!("工具 {} 不存在", call.name)),
+                let outcome = match call.name.as_str() {
+                    "use_skill" => self.load_skill(&args),
+                    "remember" => self.remember(&args),
+                    _ => match self.tools.iter().find(|tool| tool.name == call.name) {
+                        Some(tool) => tool.call(&self.app, args).await,
+                        None => Err(format!("工具 {} 不存在", call.name)),
+                    },
                 };
                 let (content, failed) = match outcome {
                     Ok(content) => (content, false),
@@ -123,20 +136,136 @@ impl Chat<'_> {
         self.cancel.load(Ordering::Relaxed)
     }
 
-    async fn complete(&mut self, messages: &[Message]) -> Result<(String, Vec<ToolCall>), String> {
-        if !self.provider.api_key.trim().is_empty() && self.provider.base_url.is_empty() {
+    fn system_prompt(&self) -> String {
+        let mut prompt = SYSTEM_PROMPT.to_string();
+        if let Some(role) = &self.role {
+            prompt.push_str(&format!(
+                "\n\n当前角色：{}\n{}",
+                role.name,
+                role.instructions.trim()
+            ));
+        }
+        if !self.memory.trim().is_empty() {
+            prompt.push_str("\n\n");
+            prompt.push_str(self.memory.trim());
+        }
+        if !self.skills.is_empty() {
+            prompt.push_str("\n\n可用 Skill。需要时调用 use_skill 获取完整指令：\n");
+            for skill in &self.skills {
+                let description = if skill.description.trim().is_empty() {
+                    ""
+                } else {
+                    skill.description.trim()
+                };
+                prompt.push_str(&format!("- {}：{}\n", skill.name, description));
+            }
+        }
+        for skill in &self.active_skills {
+            prompt.push_str(&format!(
+                "\n本次已启用 Skill「{}」：\n{}",
+                skill.name,
+                skill.instructions.trim()
+            ));
+        }
+        prompt
+    }
+
+    fn load_skill(&mut self, args: &Value) -> Result<String, String> {
+        let name = args.get("name").and_then(Value::as_str).unwrap_or("");
+        let skill = self
+            .skills
+            .iter()
+            .find(|skill| skill.name == name || skill.id == name)
+            .ok_or_else(|| format!("Skill「{name}」不存在"))?;
+        Ok(format!(
+            "Skill「{}」的指令：\n{}",
+            skill.name,
+            skill.instructions.trim()
+        ))
+    }
+
+    fn remember(&self, args: &Value) -> Result<String, String> {
+        let content = args
+            .get("content")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if content.is_empty() {
+            return Err("记忆内容为空".into());
+        }
+        let path = crate::agent::memory_path(&self.app)?;
+        let mut book = crate::agent::memory::load(&path)?;
+        crate::agent::memory::upsert(&mut book, None, content)?;
+        crate::agent::memory::save(&path, &book)?;
+        Ok(format!("已记住：{content}"))
+    }
+
+    /// Tool schemas sent to the model: real tools plus the two built-in ones.
+    fn tool_schemas(&self) -> Vec<(String, String, Value)> {
+        let mut schemas: Vec<(String, String, Value)> = self
+            .tools
+            .iter()
+            .map(|tool| {
+                (
+                    tool.name.clone(),
+                    tool.description.clone(),
+                    tool.parameters.clone(),
+                )
+            })
+            .collect();
+        if !self.skills.is_empty() {
+            schemas.push((
+                "use_skill".into(),
+                "加载一个 Skill 的完整指令，按它的要求完成任务。".into(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Skill 名称",
+                            "enum": self.skills.iter().map(|skill| skill.name.clone()).collect::<Vec<_>>()
+                        }
+                    },
+                    "required": ["name"],
+                    "additionalProperties": false
+                }),
+            ));
+        }
+        schemas.push((
+            "remember".into(),
+            "把用户明确希望长期记住的偏好或背景写入全局记忆。只记录稳定、可复用的信息。".into(),
+            json!({
+                "type": "object",
+                "properties": { "content": { "type": "string", "description": "一句话记忆" } },
+                "required": ["content"],
+                "additionalProperties": false
+            }),
+        ));
+        schemas
+    }
+
+    async fn complete(
+        &mut self,
+        system: &str,
+        messages: &[Message],
+    ) -> Result<(String, Vec<ToolCall>), String> {
+        if self.provider.base_url.trim().is_empty() {
             return Err("模型服务地址为空".into());
         }
         match self.provider.protocol.as_str() {
-            "openai-compatible" => self.openai(messages).await,
-            "anthropic" => self.anthropic(messages).await,
-            "gemini" => self.gemini(messages).await,
+            "openai-compatible" => self.openai(system, messages).await,
+            "anthropic" => self.anthropic(system, messages).await,
+            "gemini" => self.gemini(system, messages).await,
             _ => Err("不支持的模型协议".into()),
         }
     }
 
-    async fn openai(&mut self, messages: &[Message]) -> Result<(String, Vec<ToolCall>), String> {
-        let mut wire = vec![json!({ "role": "system", "content": SYSTEM_PROMPT })];
+    async fn openai(
+        &mut self,
+        system: &str,
+        messages: &[Message],
+    ) -> Result<(String, Vec<ToolCall>), String> {
+        let mut wire = vec![json!({ "role": "system", "content": system })];
         for message in messages {
             wire.push(match message.role.as_str() {
                 "assistant" => {
@@ -170,23 +299,18 @@ impl Chat<'_> {
             "stream": true,
             "messages": wire,
         });
-        if !self.tools.is_empty() {
-            body["tools"] = Value::Array(
-                self.tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "type": "function",
-                            "function": {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "parameters": tool.parameters
-                            }
-                        })
+        let schemas = self.tool_schemas();
+        body["tools"] = Value::Array(
+            schemas
+                .iter()
+                .map(|(name, description, parameters)| {
+                    json!({
+                        "type": "function",
+                        "function": { "name": name, "description": description, "parameters": parameters }
                     })
-                    .collect(),
-            );
-        }
+                })
+                .collect(),
+        );
         let request = http_client()?
             .post(format!("{}/chat/completions", base(&self.provider)?))
             .bearer_auth(&self.provider.api_key)
@@ -263,7 +387,11 @@ impl Chat<'_> {
         Ok((text, calls))
     }
 
-    async fn anthropic(&mut self, messages: &[Message]) -> Result<(String, Vec<ToolCall>), String> {
+    async fn anthropic(
+        &mut self,
+        system: &str,
+        messages: &[Message],
+    ) -> Result<(String, Vec<ToolCall>), String> {
         let mut wire: Vec<Value> = Vec::new();
         let mut pending_tools: Vec<Value> = Vec::new();
         for message in messages {
@@ -313,23 +441,22 @@ impl Chat<'_> {
             "model": self.provider.model,
             "max_tokens": 4096,
             "stream": true,
-            "system": SYSTEM_PROMPT,
+            "system": system,
             "messages": wire,
         });
-        if !self.tools.is_empty() {
-            body["tools"] = Value::Array(
-                self.tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "name": tool.name,
-                            "description": tool.description,
-                            "input_schema": tool.parameters
-                        })
+        let schemas = self.tool_schemas();
+        body["tools"] = Value::Array(
+            schemas
+                .iter()
+                .map(|(name, description, parameters)| {
+                    json!({
+                        "name": name,
+                        "description": description,
+                        "input_schema": parameters
                     })
-                    .collect(),
-            );
-        }
+                })
+                .collect(),
+        );
         let request = http_client()?
             .post(format!("{}/messages", base(&self.provider)?))
             .header("x-api-key", &self.provider.api_key)
@@ -415,7 +542,11 @@ impl Chat<'_> {
         Ok((text, calls))
     }
 
-    async fn gemini(&mut self, messages: &[Message]) -> Result<(String, Vec<ToolCall>), String> {
+    async fn gemini(
+        &mut self,
+        system: &str,
+        messages: &[Message],
+    ) -> Result<(String, Vec<ToolCall>), String> {
         let mut contents: Vec<Value> = Vec::new();
         let mut pending_tools: Vec<Value> = Vec::new();
         for message in messages {
@@ -459,18 +590,17 @@ impl Chat<'_> {
             contents.push(json!({ "role": "user", "parts": pending_tools }));
         }
         let mut body = json!({
-            "systemInstruction": { "parts": [{ "text": SYSTEM_PROMPT }] },
+            "systemInstruction": { "parts": [{ "text": system }] },
             "contents": contents,
         });
-        if !self.tools.is_empty() {
-            body["tools"] = json!([{
-                "functionDeclarations": self.tools.iter().map(|tool| json!({
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": gemini_schema(&tool.parameters)
-                })).collect::<Vec<_>>()
-            }]);
-        }
+        let schemas = self.tool_schemas();
+        body["tools"] = json!([{
+            "functionDeclarations": schemas.iter().map(|(name, description, parameters)| json!({
+                "name": name,
+                "description": description,
+                "parameters": gemini_schema(parameters)
+            })).collect::<Vec<_>>()
+        }]);
         let model = self.provider.model.trim_start_matches("models/");
         let url = url::Url::parse(&format!(
             "{}/models/{}:streamGenerateContent",

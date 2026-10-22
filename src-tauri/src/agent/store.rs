@@ -76,6 +76,10 @@ pub struct Conversation {
     pub created_at: i64,
     pub updated_at: i64,
     #[serde(default)]
+    pub role_id: Option<String>,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
     pub messages: Vec<Message>,
 }
 
@@ -84,7 +88,10 @@ pub struct Conversation {
 pub struct Summary {
     pub id: String,
     pub title: String,
+    pub created_at: i64,
     pub updated_at: i64,
+    pub pinned: bool,
+    pub role_id: Option<String>,
     pub messages: usize,
 }
 
@@ -144,6 +151,8 @@ pub fn create(store: &mut Store) -> Conversation {
         title: "新对话".into(),
         created_at: now(),
         updated_at: now(),
+        role_id: None,
+        pinned: false,
         messages: Vec::new(),
     };
     store.conversations.push(conversation.clone());
@@ -164,11 +173,19 @@ pub fn summaries(store: &Store) -> Vec<Summary> {
         .map(|conversation| Summary {
             id: conversation.id.clone(),
             title: conversation.title.clone(),
+            created_at: conversation.created_at,
             updated_at: conversation.updated_at,
+            pinned: conversation.pinned,
+            role_id: conversation.role_id.clone(),
             messages: conversation.messages.len(),
         })
         .collect();
-    list.sort_by_key(|summary| std::cmp::Reverse(summary.updated_at));
+    list.sort_by_key(|summary| {
+        (
+            std::cmp::Reverse(summary.pinned),
+            std::cmp::Reverse(summary.updated_at),
+        )
+    });
     list
 }
 

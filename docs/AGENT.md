@@ -16,11 +16,12 @@
 | 部分 | 状态 |
 | --- | --- |
 | MCP 后端 | 已实现：配置存 `~/.xjtu-launcher/mcp.json`，stdio 与 Streamable HTTP 两种传输的 JSON-RPC 客户端，启停 / 探测 / 目录安装命令 |
-| Agent 设置插件 | 已实现：内置插件 `cn.xjtu.agent-settings`，分区为模型服务 / 接入工具 / MCP 服务 / MCP 市场；模型配置已从应用设置移出 |
+| Agent 设置插件 | 已实现：内置插件 `cn.xjtu.agent-settings`，标签为模型服务 / 接入工具 / 角色预设 / 全局记忆 / 市场；模型配置已从应用设置移出 |
 | 插件市场 | 恢复三分区，MCP 标签页已移除 |
-| Agent 运行时 | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（校园查询 + MCP），单条对话串行、可取消，对话持久化 |
-| Agent 对话页 | 已实现：历史记录、新对话、模型选择、流式文本、工具调用卡片、停止生成 |
-| Skills、长期记忆 | 未实现，后续另议 |
+| Agent 运行时 | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（校园查询 + MCP），角色提示词、Skill 自动/手动加载、全局记忆注入与 `remember` 工具，单条对话串行、可取消，对话持久化 |
+| Agent 对话页 | 已实现：单列对话、历史记录（搜索 / 重命名 / 置顶 / 按时间分组 / 删除）、新对话、角色与模型选择、预设任务、`/` 手动选择 Skill、流式文本、可折叠工具行、停止生成 |
+| 角色 / Skills / 预设任务 | 已实现：存于 `~/.xjtu-launcher/agent/presets.json`；Skill 目录注入提示词，模型可用 `use_skill` 加载，用户也可以在输入框用 `/` 指定 |
+| 全局记忆 | 已实现：存于 `~/.xjtu-launcher/agent/memory.json`，自动注入系统提示词，可在 Agent 设置中增删改，模型也可通过 `remember` 工具写入 |
 | MCP HTTP 传输 | 未实机验证；stdio 用过 node mock 服务器验证连接、`tools/list`、`tools/call` |
 | 真实模型调用 | 尚未用真实 API Key 验证；需要用户自己的 Key，不写入日志、截图和仓库 |
 | 自动测试 | Rust 66 项通过（3 项忽略）、前端 15 项通过；模型流式与工具调用未做端到端自动测试 |
@@ -58,7 +59,7 @@
 
 - MCP 配置：`~/.xjtu-launcher/mcp.json`，含环境变量/请求头凭据，仅本机读取。
 - 模型配置：沿用现有的加密文件与 `auth.json` 边界，不把 API Key 写入日志。
-- 对话记录：计划放在 `~/.xjtu-launcher/agent/`，具体格式随运行时实现确定。
+- 对话记录：`~/.xjtu-launcher/agent/conversations.json`；角色、Skills 与预设任务在 `presets.json`；全局记忆在 `memory.json`。
 - 校园查询工具复用 `school_query` 的封闭枚举，不接受任意 URL；账号切换时旧请求必须按会话代次丢弃。
 - 本地 MCP 会启动子进程，安装或编辑时界面必须显示实际命令；不把市场目录里的命令当作可信输入静默执行。
 

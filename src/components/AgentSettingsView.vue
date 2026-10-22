@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { Bot, LoaderCircle, Plug, Wrench } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type { AgentToolInfo } from '../types';
@@ -11,20 +11,22 @@ import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import ProvidersView from './ProvidersView.vue';
 import McpSettings from './McpSettings.vue';
+import AgentPresets from './AgentPresets.vue';
+import AgentMemories from './AgentMemories.vue';
 
 const emit = defineEmits<{ agent: [] }>();
 const tabs = [
   { id: 'models', title: '模型服务' },
   { id: 'tools', title: '接入工具' },
-  { id: 'mcp', title: 'MCP 服务' },
-  { id: 'market', title: 'MCP 市场' },
+  { id: 'presets', title: '角色预设' },
+  { id: 'memory', title: '全局记忆' },
+  { id: 'market', title: '市场' },
 ];
 const tab = ref('models');
 const tools = ref<AgentToolInfo[]>([]);
 const loading = ref(false);
 const error = ref('');
 const campusTools = computed(() => tools.value.filter((tool) => tool.source === 'campus'));
-const mcpTools = computed(() => tools.value.filter((tool) => tool.source === 'mcp'));
 
 async function loadTools() {
   if (loading.value) return;
@@ -38,9 +40,6 @@ async function loadTools() {
     loading.value = false;
   }
 }
-watch(tab, (value) => {
-  if (value === 'tools' && !tools.value.length) void loadTools();
-});
 onMounted(() => void loadTools());
 </script>
 <template>
@@ -54,60 +53,62 @@ onMounted(() => void loadTools());
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
     </Transition>
+
     <div v-if="tab === 'models'" role="tabpanel">
       <ProvidersView />
     </div>
+
     <div v-else-if="tab === 'tools'" role="tabpanel">
-      <EmptyState v-if="loading && !tools.length" :icon="LoaderCircle" busy title="正在读取工具…" />
-      <template v-else>
-        <SettingGroup
-          title="校园工具"
-          footnote="校园工具使用当前登录账号查询；插件被停用或账号失效时，工具会返回明确错误。"
+      <SettingGroup
+        title="校园工具"
+        footnote="校园工具使用当前登录账号查询；插件被停用或账号失效时，工具会返回明确错误。"
+      >
+        <EmptyState
+          v-if="loading && !tools.length"
+          compact
+          :icon="LoaderCircle"
+          busy
+          title="正在读取工具…"
+        />
+        <SettingRow
+          v-for="tool in campusTools"
+          :key="tool.name"
+          :title="tool.name"
+          :description="tool.description"
         >
-          <SettingRow
-            v-for="tool in campusTools"
-            :key="tool.name"
-            :title="tool.name"
-            :description="tool.description"
-          >
-            <template #leading
-              ><IconTile :size="34"><Wrench :size="17" /></IconTile
-            ></template>
-          </SettingRow>
-          <EmptyState
-            v-if="!campusTools.length && !loading"
-            compact
-            :icon="Wrench"
-            title="没有可用的校园工具"
-          />
-        </SettingGroup>
-        <SettingGroup
-          title="MCP 工具"
-          footnote="MCP 工具随启用的 MCP 服务加载；本页只列出已内置的工具定义。"
-        >
-          <SettingRow
-            v-for="tool in mcpTools"
-            :key="tool.name"
-            :title="tool.name"
-            :description="tool.description"
-          >
-            <template #leading
-              ><IconTile :size="34"><Plug :size="17" /></IconTile
-            ></template>
-          </SettingRow>
-          <EmptyState
-            v-if="!mcpTools.length"
-            compact
-            :icon="Plug"
-            title="尚未启用 MCP 服务"
-            description="在“MCP 服务”中添加并启用后，工具会自动加入 Agent。"
-          >
-            <button class="btn small" @click="tab = 'mcp'">前往 MCP 服务</button>
-          </EmptyState>
-        </SettingGroup>
-      </template>
+          <template #leading
+            ><IconTile :size="34"><Wrench :size="17" /></IconTile
+          ></template>
+        </SettingRow>
+        <EmptyState
+          v-if="!campusTools.length && !loading"
+          compact
+          :icon="Wrench"
+          title="没有可用的校园工具"
+        />
+      </SettingGroup>
+      <AgentPresets kind="skill" />
+      <McpSettings :search="''" section="servers" />
+      <SettingGroup
+        title="MCP 工具"
+        footnote="MCP 工具会在 Agent 使用已启用的 MCP 服务时自动加入。"
+      >
+        <EmptyState
+          compact
+          :icon="Plug"
+          title="随 MCP 服务加载"
+          description="在下方 MCP 服务中启用后，工具会出现在对话里。"
+        />
+      </SettingGroup>
     </div>
-    <McpSettings v-else-if="tab === 'mcp'" :search="''" section="servers" />
+
+    <div v-else-if="tab === 'presets'" role="tabpanel">
+      <AgentPresets kind="role" />
+      <AgentPresets kind="task" />
+    </div>
+
+    <AgentMemories v-else-if="tab === 'memory'" />
+
     <McpSettings v-else :search="''" section="market" />
   </section>
 </template>

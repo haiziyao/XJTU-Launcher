@@ -437,14 +437,58 @@ export interface AgentConversation {
   title: string;
   createdAt: number;
   updatedAt: number;
+  roleId: string | null;
+  pinned: boolean;
   messages: AgentMessage[];
 }
 export interface AgentSummary {
   id: string;
   title: string;
+  createdAt: number;
   updatedAt: number;
+  pinned: boolean;
+  roleId: string | null;
   messages: number;
 }
+export interface AgentRole {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+}
+export type AgentSkill = AgentRole;
+export interface AgentTask {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  roleId: string | null;
+  skillIds: string[];
+}
+export interface AgentPresets {
+  version: number;
+  roles: AgentRole[];
+  skills: AgentSkill[];
+  tasks: AgentTask[];
+}
+export interface AgentMemory {
+  id: string;
+  content: string;
+  createdAt: number;
+}
+export type AgentPresetKind = 'role' | 'skill' | 'task';
+export type AgentPresetInput =
+  | { kind: 'role'; id?: string | null; name: string; description: string; instructions: string }
+  | { kind: 'skill'; id?: string | null; name: string; description: string; instructions: string }
+  | {
+      kind: 'task';
+      id?: string | null;
+      name: string;
+      description: string;
+      prompt: string;
+      roleId: string | null;
+      skillIds: string[];
+    };
 export interface AgentToolInfo {
   name: string;
   description: string;
