@@ -262,6 +262,18 @@ function close() {
   page.value = 1;
 }
 
+/** Calendar rows open their image in the campus window. */
+function openCalendar(url: string) {
+  void bridge.openUrl(url);
+}
+
+/** Double-clicking a row opens it, unless the click landed on a control. */
+function rowDblClick(event: MouseEvent, action: () => void) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('button, a, input, [role="switch"]')) return;
+  action();
+}
+
 async function loadCard() {
   const [start, end] = range(30);
   const [card, list] = await Promise.all([
@@ -345,6 +357,7 @@ onMounted(async () => {
           :key="item.id"
           :title="item.name"
           :description="item.description"
+          @dblclick="rowDblClick($event, () => open(item.id))"
         >
           <template #leading
             ><IconTile :size="32" :tone="item.tone"
@@ -370,6 +383,7 @@ onMounted(async () => {
           :key="item.id"
           :title="item.name"
           :description="item.description"
+          @dblclick="rowDblClick($event, () => open(item.id))"
         >
           <template #leading
             ><IconTile :size="32" :tone="item.tone"
@@ -554,8 +568,9 @@ onMounted(async () => {
             :key="index"
             :title="row.year || '未标注学年'"
             description="在校园窗口中打开校历图片"
+            @dblclick="rowDblClick($event, () => openCalendar(row.url))"
           >
-            <button class="btn small" @click="bridge.openUrl(row.url)">打开</button>
+            <button class="btn small" @click="openCalendar(row.url)">打开</button>
           </SettingRow>
         </SettingGroup>
       </template>
