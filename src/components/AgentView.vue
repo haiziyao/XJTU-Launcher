@@ -1008,7 +1008,7 @@ onBeforeUnmount(() => {
   color: var(--accent-text);
 }
 .agent-name {
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -1021,7 +1021,7 @@ onBeforeUnmount(() => {
   background: transparent;
   padding: 2px 5px;
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text);
   cursor: text;
@@ -1032,14 +1032,14 @@ onBeforeUnmount(() => {
 .agent-title-input {
   min-width: 120px;
   max-width: 260px;
-  height: 24px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--accent);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
   outline: none;
 }
@@ -1111,14 +1111,14 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: var(--accent-soft);
   color: var(--text);
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 .agent-assistant {
   margin: 16px 0 0;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--text);
 }
