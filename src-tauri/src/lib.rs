@@ -1120,6 +1120,27 @@ fn set_provider_model(
     book.set_model(&id, &model)?;
     providers::save(&path, &book)
 }
+/// Shows the stored key on request; it never leaves the local window otherwise.
+#[tauri::command]
+fn reveal_provider_key(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let book = providers::load(&providers_path(&app)?)?;
+    let provider = book
+        .providers
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or("模型配置不存在")?;
+    Ok(provider.api_key.clone())
+}
 /// Checks reachability, the key and the model endpoint in one call.
 #[tauri::command]
 async fn test_provider(
@@ -1614,6 +1635,7 @@ pub fn run() {
             set_provider_model,
             provider_balance,
             test_provider,
+            reveal_provider_key,
             list_mcp_servers,
             save_mcp_server,
             remove_mcp_server,

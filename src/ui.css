@@ -54,7 +54,7 @@
     transform var(--duration-fast) var(--ease-out);
 }
 .btn:hover:not(:disabled) {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .btn:active:not(:disabled) {
   background: var(--surface-sunken);
@@ -211,6 +211,12 @@ select.text-field {
   text-align: left;
   cursor: pointer;
 }
+.menu-field:hover .field-shell {
+  border-color: var(--accent-outline);
+}
+.menu-field-value:hover svg {
+  color: var(--accent-text);
+}
 .menu-field-value span {
   overflow: hidden;
   white-space: nowrap;
@@ -272,6 +278,12 @@ select.text-field {
   border-radius: var(--radius-full);
   background: #cdd1d7;
   transition: background var(--duration) ease;
+}
+.ui-switch:hover:not(:disabled) {
+  background: #bcc2ca;
+}
+.ui-switch[aria-checked='true']:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .ui-switch-thumb {
   position: absolute;
@@ -392,11 +404,14 @@ select.text-field {
 .setting-card > * {
   position: relative;
 }
-.setting-row.clickable {
+.setting-row {
   transition: background var(--duration-fast) ease;
 }
+.setting-row:hover {
+  background: var(--accent-wash);
+}
 .setting-row.clickable:hover:not(:disabled) {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .setting-row.clickable:active:not(:disabled) {
   background: var(--surface-sunken);

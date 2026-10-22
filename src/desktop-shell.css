@@ -414,7 +414,7 @@
 .desktop-shell.has-wallpaper .plugin-tile:hover,
 .desktop-shell.has-wallpaper .setting-row.clickable:hover:not(:disabled),
 .desktop-shell.has-wallpaper .day-heading {
-  background: var(--surface-hover);
+  background: var(--accent-wash);
 }
 .desktop-shell.has-wallpaper .shortcut:active,
 .desktop-shell.has-wallpaper .setting-row.clickable:active:not(:disabled) {

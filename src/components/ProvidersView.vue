@@ -42,7 +42,6 @@ const status = ref('');
 const testing = ref('');
 const editing = ref(false);
 const showKey = ref(false);
-const clearKey = ref(false);
 const draft = ref<ProviderInput>(empty());
 const models = ref<string[]>([]);
 const modelStatus = ref('');
@@ -77,7 +76,6 @@ function edit(provider?: ModelProvider) {
     : empty();
   editing.value = true;
   showKey.value = false;
-  clearKey.value = false;
   error.value = '';
   status.value = '';
   models.value = provider?.models.slice() ?? [];
@@ -89,7 +87,6 @@ function cancel() {
   editing.value = false;
   draft.value = empty();
   showKey.value = false;
-  clearKey.value = false;
   models.value = [];
   modelStatus.value = '';
 }
@@ -100,6 +97,18 @@ watch(
     modelStatus.value = '';
   },
 );
+/** Reveals the stored key on demand; the field stays empty until then. */
+async function toggleKey() {
+  if (!showKey.value && !draft.value.apiKey && current.value?.keySet && draft.value.id) {
+    try {
+      draft.value.apiKey = await bridge.revealProviderKey(draft.value.id);
+    } catch (e) {
+      error.value = String(e);
+      return;
+    }
+  }
+  showKey.value = !showKey.value;
+}
 async function fetchModels() {
   if (fetching.value || busy.value) return;
   if (!draft.value.baseUrl.trim()) {
@@ -113,7 +122,7 @@ async function fetchModels() {
       id: draft.value.id,
       baseUrl: draft.value.baseUrl.trim(),
       protocol: draft.value.protocol,
-      apiKey: clearKey.value ? '' : draft.value.apiKey?.trim() || null,
+      apiKey: draft.value.apiKey?.trim() || null,
       useLegacyKey: draft.value.useLegacyKey,
     });
     modelStatus.value = models.value.length ? `已获取 ${models.value.length} 个模型` : '';
@@ -165,7 +174,7 @@ async function run(action: () => Promise<void>, message: string) {
 async function save() {
   if (!valid.value) return;
   await run(async () => {
-    const apiKey = clearKey.value ? '' : draft.value.apiKey?.trim() || null;
+    const apiKey = draft.value.apiKey?.trim() || null;
     await bridge.saveProvider({ ...draft.value, models: models.value, apiKey });
     cancel();
   }, '配置已保存');
@@ -215,7 +224,7 @@ onBeforeUnmount(() => {
         v-if="!editing"
         key="list"
         title="模型厂商"
-        footnote="配置和密钥保存在本机，密钥不会回显。模型调用将在 Agent 接入后启用。"
+        footnote="配置和密钥保存在本机；密钥默认隐藏，可点右侧按钮查看或替换。"
       >
         <template #actions>
           <button class="btn small" :disabled="busy || loading" @click="edit()">
@@ -361,37 +370,29 @@ onBeforeUnmount(() => {
                   id="provider-key"
                   v-model="draft.apiKey"
                   :type="showKey ? 'text' : 'password'"
-                  :placeholder="current?.keySet ? '留空保留现有密钥' : '输入 API Key'"
+                  :placeholder="
+                    current?.keySet ? '已保存，点击右侧按钮查看或直接输入新密钥' : '输入 API Key'
+                  "
                   aria-label="API Key"
                   autocomplete="off"
                   spellcheck="false"
                   maxlength="8192"
-                  :disabled="clearKey || draft.useLegacyKey"
+                  :disabled="draft.useLegacyKey"
                 /><button
                   class="btn ghost icon small"
                   type="button"
                   :aria-label="showKey ? '隐藏密钥' : '显示密钥'"
-                  @click="showKey = !showKey"
+                  @click="toggleKey"
                 >
                   <EyeOff v-if="showKey" :size="14" /><Eye v-else :size="14" />
                 </button>
               </div>
-            </SettingRow>
-            <SettingRow v-if="current?.keySet" title="移除已保存的密钥">
-              <input
-                v-model="clearKey"
-                type="checkbox"
-                aria-label="移除已保存的密钥"
-                :disabled="draft.useLegacyKey"
-                @change="draft.apiKey = ''"
-              />
             </SettingRow>
             <SettingRow v-if="book.legacyKeyAvailable" title="使用之前保存的 API Key">
               <input
                 v-model="draft.useLegacyKey"
                 type="checkbox"
                 aria-label="使用之前保存的 API Key"
-                :disabled="clearKey"
                 @change="draft.apiKey = ''"
               />
             </SettingRow>

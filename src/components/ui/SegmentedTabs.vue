@@ -59,6 +59,10 @@ button {
     color var(--duration) ease,
     box-shadow var(--duration) ease;
 }
+button:hover:not(.active):not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--text);
+}
 button.active {
   background: var(--surface);
   color: var(--text);

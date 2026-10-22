@@ -242,7 +242,7 @@ const sections = [
     color var(--duration) ease;
 }
 .pet-option:hover:not(:disabled):not(.active) {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .pet-option.active {
   border-color: var(--accent-outline);

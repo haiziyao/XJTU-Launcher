@@ -1065,8 +1065,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .agent-icon-button:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-text);
 }
 .agent-icon-button.active {
   background: var(--surface-pressed);
@@ -1281,6 +1281,9 @@ onBeforeUnmount(() => {
   place-items: center;
   cursor: pointer;
 }
+.agent-send-circle:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
 .agent-send-circle:disabled {
   background: var(--surface-sunken);
   color: var(--text-tertiary);
@@ -1314,8 +1317,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .agent-task:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-subtle);
+  border-color: var(--accent-outline);
+  background: var(--accent-wash);
 }
 .agent-task strong {
   font-size: 13px;

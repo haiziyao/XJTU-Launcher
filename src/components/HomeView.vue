@@ -330,7 +330,7 @@ const paired = computed(() => showCourses.value && showLinks.value);
   transition: background var(--duration-fast) ease;
 }
 .course-item:hover {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .course-period {
   display: flex;
@@ -418,7 +418,7 @@ const paired = computed(() => showCourses.value && showLinks.value);
     transform var(--duration-fast) var(--ease-out);
 }
 .shortcut:hover {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .shortcut:active {
   background: var(--surface-sunken);
