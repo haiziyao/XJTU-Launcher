@@ -258,14 +258,6 @@ async function openLink(url: string) {
     error.value = errorText(e);
   }
 }
-function toggleVisibility(id: string) {
-  void persist({
-    ...config.value,
-    hiddenPlugins: config.value.hiddenPlugins.includes(id)
-      ? config.value.hiddenPlugins.filter((p) => p !== id)
-      : [...config.value.hiddenPlugins, id],
-  });
-}
 async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
@@ -591,7 +583,6 @@ onBeforeUnmount(() => {
                 :saving="saving || !configLoaded"
                 :warnings="pluginList.warnings"
                 :sources="pluginList.sources"
-                @visibility="toggleVisibility"
                 @settings="openSettings('plugins')"
                 @toggle="togglePlugin"
                 @move="movePlugin"

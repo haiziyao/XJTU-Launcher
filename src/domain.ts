@@ -68,7 +68,5 @@ export function moveItem<T>(items: T[], from: number, delta: number): T[] {
 }
 
 export function visiblePlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
-  return plugins.filter(
-    (p) => !config.disabledPlugins.includes(p.id) && !config.hiddenPlugins.includes(p.id),
-  );
+  return plugins.filter((p) => !config.disabledPlugins.includes(p.id));
 }

@@ -8,7 +8,6 @@ import {
   CalendarDays,
   Compass,
   Download,
-  GraduationCap,
   MoreHorizontal,
   Package,
   RefreshCw,
@@ -16,7 +15,7 @@ import {
   Search,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
-import type { AppConfig, Plugin, MarketCatalog, MarketEntry, SchoolFeature } from '../types';
+import type { AppConfig, Plugin, MarketCatalog, MarketEntry } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
@@ -33,7 +32,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
-  visibility: [id: string];
   move: [index: number, delta: number];
   reload: [];
   open: [id: string];
@@ -48,7 +46,6 @@ const tab = ref('campus');
 const search = ref('');
 const loading = ref(false);
 const loaded = ref(false);
-const features = ref<SchoolFeature[]>([]);
 const catalog = ref<MarketCatalog>({ source: null, defaultSource: null, plugins: [], updates: [] });
 const menu = ref('');
 let disposed = false;
@@ -56,12 +53,9 @@ const matches = (p: { name: string; description?: string }) =>
   (p.name + (p.description || '')).toLowerCase().includes(search.value.trim().toLowerCase());
 const filtered = computed(() => props.plugins.filter(matches));
 const builtins = computed(() =>
-  props.plugins.filter((p) => ['cn.xjtu.timetable', 'cn.xjtu.links'].includes(p.id) && matches(p)),
+  props.plugins.filter((p) => ['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(p.id) && matches(p)),
 );
 const remote = computed(() => catalog.value.plugins.filter(matches));
-const categories = computed(() => [
-  ...new Set(features.value.filter(matches).map((f) => f.category)),
-]);
 const installed = (id: string) => props.plugins.find((p) => p.id === id);
 const upgrade = (id: string) =>
   catalog.value.plugins.find(
@@ -136,13 +130,8 @@ watch(tab, (value) => {
   search.value = '';
   if (value === 'remote' && !loaded.value) void refresh();
 });
-onMounted(async () => {
-  try {
-    features.value = await bridge.schoolCatalog();
-    if (props.config.checkPluginUpdates && !disposed) void refresh();
-  } catch (e) {
-    if (!disposed) error.value = String(e);
-  }
+onMounted(() => {
+  if (props.config.checkPluginUpdates && !disposed) void refresh();
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -182,12 +171,7 @@ onBeforeUnmount(() => {
       {{ warning }}
     </p>
     <div v-if="tab === 'campus'" role="tabpanel">
-      <EmptyState
-        v-if="!builtins.length && !categories.length"
-        compact
-        :icon="Search"
-        title="没有匹配的插件"
-      />
+      <EmptyState v-if="!builtins.length" compact :icon="Search" title="没有匹配的插件" />
       <SettingGroup v-if="builtins.length" title="常用功能">
         <SettingRow
           v-for="plugin in builtins"
@@ -212,18 +196,6 @@ onBeforeUnmount(() => {
           >
             {{ config.disabledPlugins.includes(plugin.id) ? '启用' : '打开' }}
           </button>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup v-for="category in categories" :key="category" :title="category">
-        <SettingRow
-          v-for="feature in features.filter((f) => f.category === category && matches(f))"
-          :key="feature.id"
-          :title="feature.name"
-        >
-          <template #leading
-            ><IconTile :size="34" tone="gray"><GraduationCap :size="19" /></IconTile
-          ></template>
-          <span class="setting-value">待接入</span>
         </SettingRow>
       </SettingGroup>
     </div>
@@ -274,9 +246,7 @@ onBeforeUnmount(() => {
       </SettingGroup>
     </div>
     <div v-else role="tabpanel">
-      <div class="installed-heading">
-        <span>插件</span><span>启用</span><span>侧栏显示</span><span></span>
-      </div>
+      <div class="installed-heading"><span>插件</span><span>启用</span><span></span></div>
       <div v-for="plugin in filtered" :key="plugin.id" class="installed-item">
         <div class="installed-row">
           <div class="installed-name">
@@ -304,12 +274,6 @@ onBeforeUnmount(() => {
             :label="plugin.name + '启用'"
             :disabled="saving || !!busy"
             @toggle="emit('toggle', plugin.id)"
-          />
-          <UiSwitch
-            :checked="!config.hiddenPlugins.includes(plugin.id)"
-            :label="plugin.name + '侧栏显示'"
-            :disabled="saving || !!busy || config.disabledPlugins.includes(plugin.id)"
-            @toggle="emit('visibility', plugin.id)"
           />
           <button
             class="btn ghost icon"
@@ -358,7 +322,7 @@ onBeforeUnmount(() => {
             <ArrowDown :size="14" />
           </button>
           <button
-            v-if="!['cn.xjtu.timetable', 'cn.xjtu.links'].includes(plugin.id)"
+            v-if="!['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(plugin.id)"
             class="btn ghost small danger"
             :disabled="!!busy"
             @click="remove(plugin)"

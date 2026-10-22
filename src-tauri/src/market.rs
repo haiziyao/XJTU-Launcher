@@ -97,7 +97,7 @@ fn validate_catalog(catalog: &Catalog, source: &Url) -> Result<(), String> {
     let mut ids = HashSet::new();
     for entry in &catalog.plugins {
         if !plugins::valid_id(&entry.id)
-            || [plugins::TIMETABLE_ID, plugins::LINKS_ID].contains(&entry.id.as_str())
+            || [plugins::TIMETABLE_ID, plugins::CAMPUS_ID].contains(&entry.id.as_str())
             || !ids.insert(&entry.id)
             || entry.name.trim().is_empty()
             || entry.name.chars().count() > 30
@@ -231,7 +231,7 @@ fn validate_package(source: &str, entry: &Entry, bytes: &[u8]) -> Result<Install
 }
 
 fn target(directory: &Path, id: &str) -> Result<PathBuf, String> {
-    if !plugins::valid_id(id) || [plugins::TIMETABLE_ID, plugins::LINKS_ID].contains(&id) {
+    if !plugins::valid_id(id) || [plugins::TIMETABLE_ID, plugins::CAMPUS_ID].contains(&id) {
         return Err("不能移除或覆盖内置插件".into());
     }
     let path = directory.join(id);
@@ -361,7 +361,7 @@ mod tests {
         let (entry, bytes) = fixture("1.0.0");
         let package = validate_package("https://server.test", &entry, &bytes).unwrap();
         install(dir.path(), package.clone()).unwrap();
-        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 4);
+        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 3);
         assert!(install(dir.path(), package).is_err());
         let (entry2, bytes2) = fixture("1.1.0");
         assert!(validate_package("https://server.test", &entry2, &bytes).is_err());
@@ -390,8 +390,8 @@ mod tests {
             "1.1.0"
         );
         assert!(remove(dir.path(), "../escape").is_err());
-        assert!(remove(dir.path(), plugins::LINKS_ID).is_err());
+        assert!(remove(dir.path(), plugins::CAMPUS_ID).is_err());
         remove(dir.path(), &entry.id).unwrap();
-        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 3);
+        assert_eq!(plugins::list(dir.path()).unwrap().plugins.len(), 2);
     }
 }

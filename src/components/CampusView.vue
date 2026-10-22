@@ -22,7 +22,15 @@ import SettingRow from './ui/SettingRow.vue';
 import IconTile from './ui/IconTile.vue';
 import EmptyState from './ui/EmptyState.vue';
 import { bridge } from '../bridge';
-import type { CardInfo, CardTransactions, SchoolFeature } from '../types';
+import type {
+  AttendanceStreams,
+  CalendarList,
+  CardInfo,
+  CardTransactions,
+  Exams,
+  Grades,
+  SchoolFeature,
+} from '../types';
 
 defineProps<{ name: string }>();
 
@@ -121,18 +129,23 @@ const SECTIONS: { title: string; tools: Tool[] }[] = [
   },
 ];
 
+const READY = ['card', 'grades', 'exams', 'attendance', 'calendar'];
 const features = ref<SchoolFeature[]>([]);
 const tool = ref('');
 const error = ref('');
 const loading = ref(false);
 const info = ref<CardInfo | null>(null);
 const transactions = ref<CardTransactions | null>(null);
+const grades = ref<Grades | null>(null);
+const exams = ref<Exams | null>(null);
+const streams = ref<AttendanceStreams | null>(null);
+const calendar = ref<CalendarList | null>(null);
 const page = ref(1);
 
 const backend = (id: string) => features.value.find((feature) => feature.id === id)?.backend;
-const available = (id: string) => id === 'card';
+const available = (id: string) => READY.includes(id);
 const badge = (id: string) => {
-  if (id === 'card') return '可用';
+  if (available(id)) return '可用';
   const state = backend(id);
   if (!state) return '…';
   return state === 'pending' ? '待接入' : '界面待实现';
@@ -153,23 +166,16 @@ async function open(id: string) {
   if (!available(id)) return;
   tool.value = id;
   error.value = '';
-  if (id === 'card') {
-    page.value = 1;
-    await loadCard();
-  }
-}
-
-async function loadCard() {
+  page.value = 1;
   loading.value = true;
-  error.value = '';
   try {
-    const [start, end] = range(30);
-    const [card, list] = await Promise.all([
-      bridge.schoolQuery({ type: 'card' }),
-      bridge.schoolQuery({ type: 'cardTransactions', start, end, page: page.value }),
-    ]);
-    info.value = card as CardInfo;
-    transactions.value = list as CardTransactions;
+    if (id === 'card') await loadCard();
+    else if (id === 'grades')
+      grades.value = (await bridge.schoolQuery({ type: 'grades' })) as Grades;
+    else if (id === 'exams') exams.value = (await bridge.schoolQuery({ type: 'exams' })) as Exams;
+    else if (id === 'attendance') await loadStreams();
+    else if (id === 'calendar')
+      calendar.value = (await bridge.schoolQuery({ type: 'calendar' })) as CalendarList;
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -177,18 +183,30 @@ async function loadCard() {
   }
 }
 
+async function loadCard() {
+  const [start, end] = range(30);
+  const [card, list] = await Promise.all([
+    bridge.schoolQuery({ type: 'card' }),
+    bridge.schoolQuery({ type: 'cardTransactions', start, end, page: page.value }),
+  ]);
+  info.value = card as CardInfo;
+  transactions.value = list as CardTransactions;
+}
+
+async function loadStreams() {
+  streams.value = (await bridge.schoolQuery({
+    type: 'attendanceStreams',
+    page: page.value,
+  })) as AttendanceStreams;
+}
+
 async function turn(delta: number) {
   page.value += delta;
   loading.value = true;
   error.value = '';
   try {
-    const [start, end] = range(30);
-    transactions.value = (await bridge.schoolQuery({
-      type: 'cardTransactions',
-      start,
-      end,
-      page: page.value,
-    })) as CardTransactions;
+    if (tool.value === 'card') await loadCard();
+    else if (tool.value === 'attendance') await loadStreams();
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
     page.value -= delta;
@@ -199,9 +217,13 @@ async function turn(delta: number) {
 
 const yuan = (cents: number) => (cents / 100).toFixed(2);
 const signed = (cents: number) => `${cents < 0 ? '-' : '+'}${yuan(Math.abs(cents))}`;
-const morePages = computed(
-  () => (transactions.value?.page ?? 1) * 30 < (transactions.value?.total ?? 0),
-);
+const morePages = computed(() => {
+  if (tool.value === 'card' && transactions.value)
+    return transactions.value.page * 30 < transactions.value.total;
+  if (tool.value === 'attendance' && streams.value)
+    return streams.value.page * 50 < streams.value.total;
+  return false;
+});
 
 onMounted(async () => {
   try {
@@ -241,60 +263,167 @@ onMounted(async () => {
         <ArrowLeft :size="14" /><span>{{ name }}</span>
       </button>
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
-      <SettingGroup title="校园卡">
-        <SettingRow
-          title="余额"
-          :description="info ? `${info.name} · ${info.account}` : '正在读取…'"
-        >
-          <strong class="card-balance">{{ info ? `¥${yuan(info.balance)}` : '—' }}</strong>
-        </SettingRow>
-        <SettingRow
-          v-if="info"
-          title="状态"
-          :description="`${info.cardType || '校园卡'} · 有效期 ${info.expireDate || '未知'}`"
-        >
-          <span class="badge">{{ info.lost ? '已挂失' : info.frozen ? '已冻结' : '正常' }}</span>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="最近 30 天流水">
-        <EmptyState v-if="loading && !transactions" compact title="正在读取流水…" />
-        <EmptyState
-          v-else-if="!transactions?.rows.length"
-          compact
-          :icon="CreditCard"
-          title="这段时间没有流水"
-        />
-        <template v-else>
-          <div
-            v-for="(row, index) in transactions.rows"
-            :key="`${row.time}-${index}`"
-            class="tx-row"
+
+      <template v-if="tool === 'card'">
+        <SettingGroup title="校园卡">
+          <SettingRow
+            title="余额"
+            :description="info ? `${info.name} · ${info.account}` : '正在读取…'"
           >
-            <span class="tx-main">
-              <strong>{{ row.merchant || row.type || '校园卡交易' }}</strong>
+            <strong class="card-balance">{{ info ? `¥${yuan(info.balance)}` : '—' }}</strong>
+          </SettingRow>
+          <SettingRow
+            v-if="info"
+            title="状态"
+            :description="`${info.cardType || '校园卡'} · 有效期 ${info.expireDate || '未知'}`"
+          >
+            <span class="badge">{{ info.lost ? '已挂失' : info.frozen ? '已冻结' : '正常' }}</span>
+          </SettingRow>
+        </SettingGroup>
+        <SettingGroup title="最近 30 天流水">
+          <EmptyState v-if="loading && !transactions" compact title="正在读取流水…" />
+          <EmptyState
+            v-else-if="!transactions?.rows.length"
+            compact
+            :icon="CreditCard"
+            title="这段时间没有流水"
+          />
+          <template v-else>
+            <div
+              v-for="(row, index) in transactions.rows"
+              :key="`${row.time}-${index}`"
+              class="record-row three"
+            >
+              <span class="record-main">
+                <strong>{{ row.merchant || row.type || '校园卡交易' }}</strong>
+                <small
+                  >{{ row.time
+                  }}<template v-if="row.description"> · {{ row.description }}</template></small
+                >
+              </span>
+              <span class="record-amount" :class="{ income: row.amount > 0 }">
+                {{ signed(row.amount) }}
+              </span>
+              <span class="record-meta">¥{{ yuan(row.balance) }}</span>
+            </div>
+            <div class="record-pages">
+              <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
+                上一页
+              </button>
+              <span class="setting-value"
+                >第 {{ transactions.page }} 页 · 共 {{ transactions.total }} 条</span
+              >
+              <button class="btn small" :disabled="loading || !morePages" @click="turn(1)">
+                下一页
+              </button>
+            </div>
+          </template>
+        </SettingGroup>
+      </template>
+
+      <template v-else-if="tool === 'grades'">
+        <SettingGroup title="成绩">
+          <EmptyState v-if="loading && !grades" compact title="正在读取成绩…" />
+          <EmptyState
+            v-else-if="!grades?.rows.length"
+            compact
+            :icon="BarChart3"
+            title="还没有成绩记录"
+          />
+          <div v-for="row in grades?.rows ?? []" :key="row.id" class="record-row three">
+            <span class="record-main">
+              <strong>{{ row.name }}</strong>
               <small
-                >{{ row.time
-                }}<template v-if="row.description"> · {{ row.description }}</template></small
+                >{{ row.term }}<template v-if="row.category"> · {{ row.category }}</template></small
               >
             </span>
-            <span class="tx-amount" :class="{ income: row.amount > 0 }">
-              {{ signed(row.amount) }}
+            <span class="record-amount" :class="{ failed: row.passed === false }">
+              {{ row.score || '—' }}
             </span>
-            <span class="tx-balance">¥{{ yuan(row.balance) }}</span>
-          </div>
-          <div class="tx-pages">
-            <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
-              上一页
-            </button>
-            <span class="setting-value"
-              >第 {{ transactions.page }} 页 · 共 {{ transactions.total }} 条</span
+            <span class="record-meta"
+              >{{ row.credits ?? '—' }} 学分<template v-if="row.gpa != null">
+                · 绩点 {{ row.gpa }}</template
+              ></span
             >
-            <button class="btn small" :disabled="loading || !morePages" @click="turn(1)">
-              下一页
-            </button>
           </div>
-        </template>
-      </SettingGroup>
+        </SettingGroup>
+      </template>
+
+      <template v-else-if="tool === 'exams'">
+        <SettingGroup :title="exams?.term ? `考试安排 · ${exams.term}` : '考试安排'">
+          <EmptyState v-if="loading && !exams" compact title="正在读取考试安排…" />
+          <EmptyState
+            v-else-if="!exams?.rows.length"
+            compact
+            :icon="ClipboardList"
+            title="还没有考试安排"
+          />
+          <div v-for="(row, index) in exams?.rows ?? []" :key="index" class="record-row three">
+            <span class="record-main">
+              <strong>{{ row.course }}</strong>
+              <small>{{ [row.date, row.time, row.campus].filter(Boolean).join(' · ') }}</small>
+            </span>
+            <span class="record-meta"
+              >{{ row.location || '考场未知'
+              }}<template v-if="row.seat"> · {{ row.seat }} 号</template></span
+            >
+          </div>
+        </SettingGroup>
+      </template>
+
+      <template v-else-if="tool === 'attendance'">
+        <SettingGroup title="刷卡流水">
+          <EmptyState v-if="loading && !streams" compact title="正在读取考勤流水…" />
+          <EmptyState
+            v-else-if="!streams?.rows.length"
+            compact
+            :icon="CalendarCheck"
+            title="还没有考勤流水"
+          />
+          <template v-else>
+            <div v-for="row in streams.rows" :key="row.id" class="record-row two">
+              <span class="record-main">
+                <strong>{{ row.place || '未知地点' }}</strong>
+                <small>{{ row.time }}</small>
+              </span>
+              <span class="badge" :class="{ accent: row.valid }">{{
+                row.valid ? '有效' : '无效'
+              }}</span>
+            </div>
+            <div class="record-pages">
+              <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
+                上一页
+              </button>
+              <span class="setting-value"
+                >第 {{ streams.page }} 页 · 共 {{ streams.total }} 条</span
+              >
+              <button class="btn small" :disabled="loading || !morePages" @click="turn(1)">
+                下一页
+              </button>
+            </div>
+          </template>
+        </SettingGroup>
+      </template>
+
+      <template v-else-if="tool === 'calendar'">
+        <SettingGroup title="校历">
+          <EmptyState v-if="loading && !calendar" compact title="正在读取校历…" />
+          <EmptyState
+            v-else-if="!calendar?.rows.length"
+            compact
+            :icon="CalendarDays"
+            title="暂时没有校历图片"
+          />
+          <SettingRow
+            v-for="(row, index) in calendar?.rows ?? []"
+            :key="index"
+            :title="row.year || '未标注学年'"
+            description="在校园窗口中打开校历图片"
+          >
+            <button class="btn small" @click="bridge.openUrl(row.url)">打开</button>
+          </SettingRow>
+        </SettingGroup>
+      </template>
     </template>
   </section>
 </template>
@@ -305,27 +434,32 @@ onMounted(async () => {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.tx-row {
+.record-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
   border-top: 1px solid var(--divider);
 }
-.tx-main {
+.record-row.two {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.record-row.three {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.record-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.tx-main strong {
+.record-main strong {
   font-size: 13px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tx-main small {
+.record-main small {
   margin-top: 2px;
   color: var(--text-tertiary);
   font-size: 11.5px;
@@ -333,20 +467,24 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tx-amount {
+.record-amount {
   color: var(--text);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.tx-amount.income {
+.record-amount.income {
   color: var(--success);
 }
-.tx-balance {
+.record-amount.failed {
+  color: var(--danger);
+}
+.record-meta {
   color: var(--text-tertiary);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.tx-pages {
+.record-pages {
   display: flex;
   align-items: center;
   justify-content: flex-end;

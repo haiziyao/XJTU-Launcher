@@ -52,13 +52,10 @@ describe('workspace customization', () => {
   });
 });
 
-it('hiding a sidebar entry preserves its enabled state across disabling and reenabling', () => {
+it('shows enabled plugins and ignores the legacy hidden list', () => {
   const plugins = [{ id: 'local.one' }, { id: 'local.two' }] as Plugin[];
   const config = { ...defaultConfig(), hiddenPlugins: ['local.one'] };
-  expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual(['local.two']);
-  expect(config.disabledPlugins).toEqual([]);
-  config.disabledPlugins = ['local.one', 'local.two'];
-  expect(visiblePlugins(plugins, config)).toEqual([]);
-  config.disabledPlugins = [];
+  expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual(['local.one', 'local.two']);
+  config.disabledPlugins = ['local.one'];
   expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual(['local.two']);
 });

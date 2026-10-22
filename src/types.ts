@@ -165,7 +165,56 @@ export interface MarketCatalog {
 }
 /** Closed query set for the campus plugin page. */
 export type SchoolQuery =
-  { type: 'card' } | { type: 'cardTransactions'; start: string; end: string; page: number };
+  | { type: 'card' }
+  | { type: 'cardTransactions'; start: string; end: string; page: number }
+  | { type: 'grades' }
+  | { type: 'exams' }
+  | { type: 'attendanceStreams'; page: number }
+  | { type: 'calendar' };
+export interface GradeRow {
+  id: string;
+  name: string;
+  code: string;
+  term: string;
+  credits: number | null;
+  score: string;
+  gpa: number | null;
+  category: string;
+  passed: boolean | null;
+}
+export interface Grades {
+  rows: GradeRow[];
+}
+export interface ExamRow {
+  course: string;
+  date: string;
+  time: string;
+  location: string;
+  seat: string;
+  campus: string;
+}
+export interface Exams {
+  term: string;
+  rows: ExamRow[];
+}
+export interface AttendanceStream {
+  id: string;
+  place: string;
+  time: string;
+  valid: boolean;
+}
+export interface AttendanceStreams {
+  page: number;
+  total: number;
+  rows: AttendanceStream[];
+}
+export interface CalendarEntry {
+  year: string | null;
+  url: string;
+}
+export interface CalendarList {
+  rows: CalendarEntry[];
+}
 export interface CardInfo {
   name: string;
   studentNo: string;
