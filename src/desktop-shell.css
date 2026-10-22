@@ -90,7 +90,6 @@
   transition:
     background var(--duration-fast) ease,
     color var(--duration) ease,
-    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-nav-item svg {
@@ -159,8 +158,11 @@
   height: 14px;
   padding: 0;
 }
+/* Icons keep one fixed anchor whether the rail is open or collapsed; centring
+   each state separately made the icons jump when toggling. */
 .sidebar-collapsed .sidebar-group-label::after {
   top: 8px;
+  left: 21px;
   opacity: 1;
   transition-delay: 120ms;
 }
@@ -185,7 +187,6 @@
   overflow: hidden;
   transition:
     background var(--duration-fast) ease,
-    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-identity:hover {
@@ -243,13 +244,6 @@
 /* The rail is wider on macOS to clear the window buttons, so icons centre in it.
    The offset uses the settled rail width, not the dragged width, so icons do not
    drift across the divider while the sidebar is being resized. */
-.sidebar-collapsed .desktop-nav-item {
-  padding-left: calc((var(--sidebar-collapsed-width) - 36px) / 2);
-}
-.sidebar-collapsed .desktop-identity {
-  padding-left: calc((var(--sidebar-collapsed-width) - 44px) / 2);
-}
-
 /* Collapse toggle sits on the divider's vertical middle. */
 .sidebar-toggle {
   position: absolute;
