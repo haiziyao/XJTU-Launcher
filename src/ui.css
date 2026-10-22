@@ -73,6 +73,19 @@
 .btn.primary:active:not(:disabled) {
   background: var(--accent-pressed);
 }
+/* Accent tint instead of a solid fill, for lightweight open actions. */
+.btn.tinted {
+  border-color: var(--accent-outline);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  box-shadow: none;
+}
+.btn.tinted:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.btn.tinted:active:not(:disabled) {
+  background: var(--accent-soft);
+}
 .btn.ghost {
   border-color: transparent;
   background: transparent;

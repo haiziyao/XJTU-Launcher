@@ -373,7 +373,7 @@ onMounted(async () => {
           >
             <ArrowDown :size="14" />
           </button>
-          <button class="btn small" :disabled="!available(item.id)" @click="open(item.id)">
+          <button class="btn small tinted" :disabled="!available(item.id)" @click="open(item.id)">
             {{ available(item.id) ? '打开' : '未开放' }}
           </button>
         </SettingRow>
@@ -400,7 +400,7 @@ onMounted(async () => {
           >
             <ArrowUp :size="14" />
           </button>
-          <button class="btn small" :disabled="!available(item.id)" @click="open(item.id)">
+          <button class="btn small tinted" :disabled="!available(item.id)" @click="open(item.id)">
             {{ available(item.id) ? '打开' : '未开放' }}
           </button>
         </SettingRow>
@@ -573,7 +573,7 @@ onMounted(async () => {
             description="在校园窗口中打开校历图片"
             @dblclick="rowDblClick($event, () => openCalendar(row.url))"
           >
-            <button class="btn small" @click="openCalendar(row.url)">打开</button>
+            <button class="btn small tinted" @click="openCalendar(row.url)">打开</button>
           </SettingRow>
         </SettingGroup>
       </template>

@@ -197,6 +197,7 @@ onBeforeUnmount(() => {
           ></template>
           <button
             class="btn small"
+            :class="{ tinted: !config.disabledPlugins.includes(plugin.id) }"
             :disabled="saving"
             @click="
               config.disabledPlugins.includes(plugin.id)
@@ -323,7 +324,7 @@ onBeforeUnmount(() => {
             sources[plugin.id] || plugin.description
           }}</span>
           <button
-            class="btn small"
+            class="btn small tinted"
             :disabled="config.disabledPlugins.includes(plugin.id)"
             @click="emit('open', plugin.id)"
           >
