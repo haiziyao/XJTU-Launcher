@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "XJTU Launcher",
+  "productName": "XJTU Launcher Agent",
   "version": "0.2.1",
-  "identifier": "cn.haiziyao.xjtu-launcher",
+  "identifier": "cn.haiziyao.xjtu-launcher.agent",
   "build": {
     "beforeDevCommand": "npm run dev:frontend",
     "devUrl": "http://127.0.0.1:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "XJTU Launcher",
+        "title": "XJTU Launcher Agent",
         "width": 1120,
         "height": 760,
         "minWidth": 900,
