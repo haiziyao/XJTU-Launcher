@@ -672,7 +672,8 @@ async fn check_network(
         }
     }
     Ok(NetworkCheck { tone, message })
-}#[tauri::command]
+}
+#[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,
     window: WebviewWindow,

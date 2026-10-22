@@ -235,11 +235,7 @@ pub struct ListInput {
 
 /// Reads the provider's model catalogue. The key only goes to the configured
 /// host, and redirects are refused so it cannot be forwarded elsewhere.
-pub async fn list_models(
-    base_url: &str,
-    protocol: &str,
-    key: &str,
-) -> Result<Vec<String>, String> {
+pub async fn list_models(base_url: &str, protocol: &str, key: &str) -> Result<Vec<String>, String> {
     if !valid_url(base_url) {
         return Err("接口地址无效；仅本机地址支持 HTTP".into());
     }
@@ -269,8 +265,7 @@ pub async fn list_models(
             request
         }
         "gemini" => {
-            let mut url = url::Url::parse(&format!("{base}/models"))
-                .map_err(|_| "接口地址无效")?;
+            let mut url = url::Url::parse(&format!("{base}/models")).map_err(|_| "接口地址无效")?;
             if !key.is_empty() {
                 url.query_pairs_mut().append_pair("key", key);
             }

@@ -167,10 +167,7 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
 
 /// Whether the campus host answers at all in the given access mode. Any HTTP
 /// status counts: the sidebar self-check reports network reachability, not auth.
-pub async fn reachable(
-    session: &crate::vault::Session,
-    mode: crate::network::AccessMode,
-) -> bool {
+pub async fn reachable(session: &crate::vault::Session, mode: crate::network::AccessMode) -> bool {
     let Ok(host) = domain(&session.degree) else {
         return false;
     };
