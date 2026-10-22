@@ -50,7 +50,7 @@ export interface AccountStatus {
 }
 /** Result of the sidebar network self-check. */
 export interface NetworkCheck {
-  environment: 'campus' | 'vpn' | 'offline' | 'unbound';
+  tone: 'campus' | 'vpn' | 'manual' | 'neutral';
   message: string;
 }
 /** Animation state of the sidebar pet. */

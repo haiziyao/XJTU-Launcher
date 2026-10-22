@@ -548,8 +548,8 @@ async fn query_timetable(
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NetworkCheck {
-    /// campus | vpn | offline | unbound
-    environment: &'static str,
+    /// campus | vpn | manual | neutral
+    tone: &'static str,
     message: String,
 }
 
@@ -632,7 +632,7 @@ async fn check_network(
     };
     let Some(session) = session else {
         return Ok(NetworkCheck {
-            environment: "unbound",
+            tone: "neutral",
             message: "未绑定校园账号，无法检测校园网络".into(),
         });
     };
@@ -641,31 +641,37 @@ async fn check_network(
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账户状态已变化，请重新检查".into());
     }
-    let (environment, mut message) = if direct {
+    let (tone, mut message) = if direct {
         ("campus", "校园网环境下，网络可正常访问".to_string())
     } else if vpn {
-        ("vpn", "检测到非校园网环境".to_string())
+        ("vpn", "检测到非校园网环境，目前自动连接vpn".to_string())
     } else {
         return Ok(NetworkCheck {
-            environment: "offline",
+            tone: "neutral",
             message: "校园网和 vpn 均不可用".into(),
         });
     };
     // A bound account can outlive its VPN session; refresh it on the spot when
-    // the saved password allows an unattended login.
+    // the saved password allows an unattended login. A session that cannot be
+    // renewed turns the whole result red.
     if !campus::session_valid(&session).await {
         match refresh_saved_session(&app, &state).await {
             Ok(SessionRefresh::Refreshed) => message.push_str("，校园会话已刷新"),
             Ok(SessionRefresh::NeedsManual) => {
-                message.push_str("，校园会话已失效，请手动重新登录")
+                return Ok(NetworkCheck {
+                    tone: "manual",
+                    message: "校园会话已失效，请手动重新登录".into(),
+                })
             }
-            Err(error) => message.push_str(&format!("，自动登录失败：{error}")),
+            Err(error) => {
+                return Ok(NetworkCheck {
+                    tone: "manual",
+                    message: format!("自动登录失败：{error}，请手动重新登录"),
+                })
+            }
         }
     }
-    Ok(NetworkCheck {
-        environment,
-        message,
-    })
+    Ok(NetworkCheck { tone, message })
 }#[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,

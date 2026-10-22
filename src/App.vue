@@ -90,7 +90,7 @@ const toast = ref<{ id: number; message: string; tone: ToastTone } | null>(null)
 let petTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let toastId = 0;
-type ToastTone = NetworkCheck['environment'];
+type ToastTone = NetworkCheck['tone'];
 function showToast(message: string, tone: ToastTone) {
   if (toastTimer) clearTimeout(toastTimer);
   toastId += 1;
@@ -224,13 +224,13 @@ async function checkNetwork() {
   petMessage.value = '';
   const started = performance.now();
   let next: PetState = 'warn';
-  let tone: ToastTone = 'offline';
+  let tone: ToastTone = 'neutral';
   let message = '';
   try {
     const result = await bridge.checkNetwork();
     message = result.message;
-    tone = result.environment;
-    next = result.environment === 'campus' || result.environment === 'vpn' ? 'ok' : 'warn';
+    tone = result.tone;
+    next = result.tone === 'campus' || result.tone === 'vpn' ? 'ok' : 'warn';
   } catch (e) {
     message = errorText(e);
   }
