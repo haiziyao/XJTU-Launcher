@@ -4,6 +4,13 @@
 
 插件市场地址与应用更新端点分别配置。修改插件来源不会修改应用更新来源。
 
+## 当前配置（2026-10-22）
+
+- 更新端点：`https://github.com/haiziyao/XJTU-Launcher/releases/latest/download/latest.json`（仓库为公开仓库，使用 Release 资产中的 latest.json）。
+- 更新公钥：`dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCRDUwMjM1QzIzRTVBRkIKUldUN1dqN0NOUUxWYTQ0WlRpUGZWeVg1V21OVDZna1BsdW9kSExSWitYaUNHay9TL2JZU0hkSnIK`
+- 签名密钥已在本机生成（`~/.tauri/xjtu-launcher.key`，无密码）；私钥不入仓库，需自行备份并填入 GitHub Secret。丢失私钥后无法再为已发布客户端签名更新。
+- 仓库 Variables 与 Secret 仍需在 GitHub 上填写后才能运行发布工作流。
+
 ## 首次部署
 
 1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
