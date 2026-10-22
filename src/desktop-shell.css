@@ -128,22 +128,24 @@
 }
 .sidebar-group-label {
   position: relative;
-  height: 30px;
-  padding: 12px 11px 0;
+  height: 36px;
+  padding: 8px 11px 0;
   color: var(--text-tertiary);
   font-size: 11px;
+  line-height: 16px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
 }
-/* The group block keeps one height in both states, so the plugin icons never
-   shift vertically when the sidebar toggles. top 13px balances the 6px section
-   gap above against the 2px item gap plus the rest of the label below. */
+/* The label text and the collapsed divider share the same 16px centre, and the
+   block keeps one height in both states so plugin icons never shift vertically.
+   With the 6px section gap above and 2px item gap below, the divider ends up
+   equally far from both icon rows. */
 .sidebar-group-label::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 13px;
+  top: 16px;
   width: 28px;
   margin-left: -14px;
   border-top: 1px solid var(--border-strong);
