@@ -67,6 +67,11 @@ pub enum Query {
     LmsSubmissions {
         activity: u64,
     },
+    NoticeChannels,
+    Notices {
+        channel: String,
+        limit: u32,
+    },
     LibraryFloors,
     LibraryAreas {
         floor: String,
@@ -98,6 +103,7 @@ impl Query {
             | Self::LmsActivities { .. }
             | Self::LmsActivity { .. }
             | Self::LmsSubmissions { .. } => "lms",
+            Self::NoticeChannels | Self::Notices { .. } => "notices",
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
             }
@@ -166,6 +172,7 @@ impl Query {
             {
                 return Err("活动编号无效".into());
             }
+            Self::Notices { channel, limit } => super::notices::validate(channel, *limit)?,
             Self::LibraryAreas { floor } if !super::library::valid_floor(floor) => {
                 return Err("请选择有效的图书馆楼层".into());
             }
@@ -239,6 +246,14 @@ pub async fn query(
     }
     if matches!(query, Query::LibraryFloors) {
         return Ok((super::library::floors(), None));
+    }
+    if matches!(query, Query::NoticeChannels | Query::Notices { .. }) {
+        let value = match query {
+            Query::NoticeChannels => super::notices::channels(),
+            Query::Notices { channel, limit } => super::notices::list(&channel, limit).await?,
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
     }
     if matches!(
         query,
@@ -449,6 +464,8 @@ pub async fn query(
         | Query::LmsActivities { .. }
         | Query::LmsActivity { .. }
         | Query::LmsSubmissions { .. }
+        | Query::NoticeChannels
+        | Query::Notices { .. }
         | Query::LibraryFloors
         | Query::LibraryAreas { .. }
         | Query::LibrarySeats { .. }

@@ -132,6 +132,21 @@ pub fn builtin() -> Vec<ToolDef> {
             &[],
         ),
         campus(
+            "campus_notice_channels",
+            "列出可读取的校园通知栏目（教务处、学生处、研究生院、网络信息中心）",
+            json!({}),
+            &[],
+        ),
+        campus(
+            "campus_notices",
+            "读取某个校园通知栏目最近发布的公告标题、分类、日期与链接（公开页面，只读）",
+            json!({
+                "channel": { "type": "string", "description": "栏目编号，来自 campus_notice_channels" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "最多返回条数，默认 20" }
+            }),
+            &["channel"],
+        ),
+        campus(
             "campus_profile",
             "查询学籍档案（姓名、学号、学院、专业、班级等）",
             json!({}),
@@ -316,6 +331,15 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
                 .get("finished")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
+        },
+        "campus_notice_channels" => school::Query::NoticeChannels,
+        "campus_notices" => school::Query::Notices {
+            channel: required(args, "channel")?,
+            limit: args
+                .get("limit")
+                .and_then(Value::as_u64)
+                .unwrap_or(20)
+                .clamp(1, 50) as u32,
         },
         "campus_profile" => school::Query::Profile,
         "campus_lms_courses" => school::Query::LmsCourses,
@@ -510,6 +534,8 @@ mod tests {
         let names: Vec<&str> = defs.iter().map(|def| def.name.as_str()).collect();
         for name in [
             "campus_profile",
+            "campus_notice_channels",
+            "campus_notices",
             "campus_lms_courses",
             "campus_lms_activity",
             "campus_lms_submissions",

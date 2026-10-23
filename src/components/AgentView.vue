@@ -61,6 +61,8 @@ const TOOL_LABELS: Record<string, string> = {
   campus_courses: '查询全校课程',
   campus_evaluations: '查询评教',
   campus_profile: '查询学籍档案',
+  campus_notice_channels: '查询通知栏目',
+  campus_notices: '读取校园通知',
   campus_lms_courses: '查询思源学堂课程',
   campus_lms_activities: '查询课程活动',
   campus_lms_activity: '查看活动详情',

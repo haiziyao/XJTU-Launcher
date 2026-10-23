@@ -1142,7 +1142,10 @@ pub(crate) async fn run_school_query(
     let _service_guard = state.school_lock.lock().await;
     if matches!(
         query,
-        school::Query::Calendar | school::Query::LibraryFloors
+        school::Query::Calendar
+            | school::Query::LibraryFloors
+            | school::Query::NoticeChannels
+            | school::Query::Notices { .. }
     ) {
         let data = school::query(None, query).await.map(|(data, _)| data)?;
         if let Some(key) = cache_key {

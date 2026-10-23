@@ -6,6 +6,7 @@ pub mod evaluation;
 mod fitness;
 mod library;
 pub(crate) mod lms;
+pub(crate) mod notices;
 mod profile;
 mod queries;
 mod transport;
@@ -99,7 +100,7 @@ pub fn catalog() -> Vec<Feature> {
             "notices",
             "通知订阅",
             "校园生活",
-            "pending",
+            "public",
             "app/threads/NoticeThread.py",
         ),
         (
