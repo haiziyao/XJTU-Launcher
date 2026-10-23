@@ -273,20 +273,28 @@ onMounted(() => void load());
 .preset-field input,
 .preset-field textarea,
 .preset-field select {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--control-bg);
   color: var(--text);
   font: inherit;
   font-size: 13px;
   padding: 8px 10px;
   resize: vertical;
 }
+.preset-field select {
+  appearance: none;
+  padding-right: 30px;
+  background-image: var(--chevron-down);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
 .preset-field input:focus,
 .preset-field textarea:focus,
 .preset-field select:focus {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: -1px;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 .preset-skills {
   display: flex;

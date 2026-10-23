@@ -386,10 +386,19 @@
 .desktop-required {
   padding: 32px;
 }
-/* The wallpaper backs every page. Large panels turn translucent; controls keep solid colours. */
+/* The wallpaper backs every page. Panels turn translucent and controls turn
+   frosted through the --control-* tokens; text stays on a light-enough fill. */
 .desktop-shell.has-wallpaper {
   --panel: rgba(255, 255, 255, 0.72);
   --panel-border: rgba(255, 255, 255, 0.6);
+  /* Frosted controls: a bit more solid than panels so text keeps its contrast,
+     still light enough that the wallpaper reads through. */
+  --control-bg: rgba(255, 255, 255, 0.55);
+  --control-bg-subtle: rgba(255, 255, 255, 0.4);
+  /* Panels can rely on a white edge; a control needs a hairline that still
+     reads against a bright wallpaper. */
+  --control-border: rgba(15, 23, 42, 0.1);
+  --control-sunken: rgba(15, 23, 42, 0.05);
   --sidebar-bg: rgba(241, 242, 244, 0.6);
   --sidebar-border: rgba(15, 23, 42, 0.08);
   /* An opaque highlight reads as a grey slab on the frosted sidebar. */

@@ -518,9 +518,9 @@ onBeforeUnmount(() => {
 .mcp-field input,
 .mcp-field textarea,
 .mcp-var input {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--control-bg);
   color: var(--text);
   font: inherit;
   font-size: 13px;
@@ -530,8 +530,9 @@ onBeforeUnmount(() => {
 .mcp-field input:focus,
 .mcp-field textarea:focus,
 .mcp-var input:focus {
-  outline: 2px solid var(--accent-soft);
-  outline-offset: -1px;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 .segmented-field {
   display: inline-flex;

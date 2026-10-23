@@ -142,9 +142,9 @@ onMounted(() => void load());
   padding: 14px 12px;
 }
 .memory-form textarea {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--control-bg);
   color: var(--text);
   font: inherit;
   font-size: 13px;

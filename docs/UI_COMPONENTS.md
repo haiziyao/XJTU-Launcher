@@ -68,7 +68,22 @@
 <SegmentedTabs v-model="active" class="lms-tabs" compact :tabs="tabs" label="活动分类" />
 ```
 
-两者都接收 `{ id, title }[]`、`v-model` 和必填的 `label`（`aria-label`），并支持方向键 / Home / End 切换。页面不再用 `:deep()` 覆盖标签栏颜色、底色或间距。
+两者都接收 `{ id, title }[]`、`v-model` 和必填的 `label`（`aria-label`），并支持方向键 / Home / End 切换。页面不再用 `:deep()` 覆盖标签栏颜色、底色或间距。选中态保持实色浅底（`--accent-soft` / 白底），不要换成半透明色，否则壁纸纹理会穿过文字。
+
+## 控件底色与透明度
+
+有壁纸时，页面和卡片是半透明的（`--panel`），控件不能再用纯白盖住壁纸，也不能各写一套颜色。统一使用下面的 token（定义在 `style.css`，`desktop-shell.css` 的 `.desktop-shell.has-wallpaper` 负责切换）：
+
+| token | 无壁纸 | 有壁纸 | 用途 |
+| --- | --- | --- | --- |
+| `--control-bg` | `#fff` | `rgba(255,255,255,.55)` | 按钮、输入框、选择器、周次选择 |
+| `--control-bg-subtle` | `#f7f8fa` | `rgba(255,255,255,.4)` | 页头搜索框等次要输入 |
+| `--control-border` | `#d4d7dc` | `rgba(15,23,42,.1)` | 控件描边；壁纸下仍要能看出边界 |
+| `--control-sunken` | `#f1f2f4` | `rgba(15,23,42,.05)` | 分段标签的轨道 |
+
+- 大面板继续用 `--panel` / `--panel-border`；控件只改底色和描边，不改尺寸。
+- 原生 `<select>` 一律 `appearance: none`，箭头用 `--chevron-down`（12px 灰色 chevron，与 lucide 图标一致），不要再让 macOS 画出白色胶囊。
+- 弹层（下拉菜单、对话框）可以保持实色，保证可读性。
 
 ## 不属于按钮组件的控件
 

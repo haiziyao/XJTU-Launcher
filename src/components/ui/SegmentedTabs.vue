@@ -46,7 +46,7 @@ function key(event: KeyboardEvent, index: number) {
   padding: 3px;
   gap: 2px;
   border-radius: var(--radius);
-  background: var(--surface-sunken);
+  background: var(--control-sunken);
   margin-bottom: 30px;
 }
 button {

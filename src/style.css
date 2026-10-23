@@ -29,6 +29,15 @@
   /* Row hairlines inside cards. Translucent so they stay equally quiet over
      white and tinted surfaces; structural edges use --border instead. */
   --divider: rgba(15, 23, 42, 0.05);
+  /* Controls (buttons, fields, selects, tab rails) sit on top of panels. A
+     wallpaper switches these to frosted fills so the page stays one surface
+     instead of white chips over a picture. */
+  --control-bg: #ffffff;
+  --control-bg-subtle: #f7f8fa;
+  --control-border: #d4d7dc;
+  --control-sunken: #f1f2f4;
+  /* Native select arrow, matching the lucide chevron used elsewhere. */
+  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c929b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #1f6fe5;
   --accent-hover: #1a63cf;

@@ -67,6 +67,8 @@ button:hover:not(.active) {
   background: var(--accent-wash);
   color: var(--text);
 }
+/* The selected pill keeps the opaque tint: a translucent one lets the
+   wallpaper pattern show through the label. */
 button.active {
   background: var(--accent-soft);
   color: var(--accent);

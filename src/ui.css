@@ -39,9 +39,9 @@
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--control-bg);
   color: var(--text);
   font-size: 12.5px;
   font-weight: 500;
@@ -57,7 +57,7 @@
   background: var(--accent-wash);
 }
 .btn:active:not(:disabled) {
-  background: var(--surface-sunken);
+  background: var(--control-sunken);
   transform: scale(0.98);
 }
 .btn.primary {
@@ -117,9 +117,9 @@
   width: 100%;
   min-width: 0;
   padding: 0 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--control-bg);
   font-size: 12.5px;
   outline: none;
   transition:
@@ -135,8 +135,13 @@
 .field-shell input::placeholder {
   color: var(--text-tertiary);
 }
+/* Drop the native macOS pill; every select gets the same arrow as MenuSelect. */
 select.text-field {
-  padding-right: 6px;
+  appearance: none;
+  padding-right: 28px;
+  background-image: var(--chevron-down);
+  background-repeat: no-repeat;
+  background-position: right 9px center;
 }
 .field-shell {
   display: flex;
@@ -145,9 +150,9 @@ select.text-field {
   height: 32px;
   min-width: 0;
   padding: 0 4px 0 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--control-bg);
   color: var(--text-tertiary);
   transition:
     border-color var(--duration-fast) ease,
@@ -168,10 +173,10 @@ select.text-field {
   width: 200px;
   height: 30px;
   padding-right: 10px;
-  background: var(--surface-subtle);
+  background: var(--control-bg-subtle);
 }
 .field-shell.search:focus-within {
-  background: var(--surface);
+  background: var(--control-bg);
 }
 /* Dropdown built on the field shell, shared by the protocol and model picks. */
 .menu-field {
