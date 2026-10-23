@@ -31,6 +31,7 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 - 校园账号：多账号、验证码与短信验证、WebVPN 自动回退，可选保存密码
 - 课表：今日课程与完整学期课表，近校园网自动刷新
 - 畅行校园：成绩、考试安排、考勤流水、校园卡余额与流水、体测成绩、空闲教室、全校课程、校历、评教（预览后由你确认提交）
+- 学习与场馆：学籍档案、思源学堂课程与作业 / 资料 / 回放（可下载附件）、图书馆楼层与座位、场馆时段与订单
 - 校园导航：在独立窗口里复用登录状态访问校内网站
 
 **Agent**
@@ -56,9 +57,9 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 先确认你的电脑，再点对应的链接，下载后直接安装即可：
 
-- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_aarch64.dmg)**
-- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_x64.dmg)**
-- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_x64-setup.exe)**
+- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.3/XJTU.Launcher_0.3.3_aarch64.dmg)**
+- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.3/XJTU.Launcher_0.3.3_x64.dmg)**
+- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.3/XJTU.Launcher_0.3.3_x64-setup.exe)**
 
 不确定自己是什么芯片？Mac 左上角 →「关于本机」，看“芯片”一栏：写着 Apple M 系列就选第一个，写着 Intel 就选第二个。
 
