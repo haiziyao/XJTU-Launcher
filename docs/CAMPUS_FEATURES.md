@@ -12,6 +12,8 @@
 
 2026-10-23：新增内置插件 `cn.xjtu.campus`（畅行校园），侧栏一个入口，单页按“学习 / 校园生活”分区列出校园工具及后台状态。已开放子页：校园卡（余额与流水）、成绩、考试、考勤流水、校历、空闲教室（校区/楼宇/日期/节次）、全校课程（学期 + 课程名）、评教（勾选问卷、评分模板、文字意见、预览后手动提交）。图书馆、场馆、学籍、LMS 仍显示“待接入”。页面顶部“常用”分区支持把工具置顶（上箭头）并移回原位置（下箭头），顺序保存在配置 `campusPinned`；进入子功能时页面标题切换为该工具名称。课表（`cn.xjtu.timetable`）按用户要求保持独立入口；原校园导航插件（`cn.xjtu.links`）已按用户要求移除，主页的校园快捷入口保留。
 
+2026-10-23（0.3.3 开发中）：图书馆、场馆、学籍、LMS 四项已补 Rust 后端，页面尚未实现，也未做真实账号联调；侧栏状态仍显示“界面待实现”。
+
 ## 参考范围
 
 参考本地 `/Users/bilibili/Developer/HZY/References/XJTUToolBox`，提交 `e6a2d3b603ff7a803cc1d658a1fb5d52ca6b511b`。参考仓库含 GPL-3.0 许可证；本批通过阅读接口路径、请求参数和响应字段编写独立 Rust 适配代码，未把 Python 模块、评价模板或 UI 素材复制入仓库。后续需要直接复用上游代码时另行核对许可证及分发安排。
@@ -27,13 +29,13 @@
 | 校历 | `jwxt/calendar.py` | Rust 图片链接解析，未知学年保留为空；未实机验收 |
 | 研究生成绩、课表与评教 | `gmis/`、`gste/` | 待适配；不能套用本科接口 |
 | 考勤统计与流水 | `attendance/attendance.py` | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收 |
-| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 待适配 |
+| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 部分适配：课程与活动列表只读查询（`Query::LmsCourses` / `LmsActivities`）；作业详情、附件与回放未做；未实机验收 |
 | 通知订阅与推送 | `app/threads/NoticeThread.py` | 待适配 |
 | 校园卡余额与流水 | `card/campus_card.py` | Rust 查询适配：CAS Cookie 换 ncard 令牌，余额与流水分页；未实机验收 |
-| 图书馆座位与预约 | `library/seats.py` | 待适配 |
+| 图书馆座位与预约 | `library/seats.py` | 部分适配：楼层清单、区域名与实时座位状态（`Query::LibraryFloors` / `LibraryAreas` / `LibrarySeats`）；预约与签到未开放；仅校园网直连；未实机验收 |
 | 体测成绩 | `fitness/score.py` | Rust 查询适配：学年列表与成绩明细（含项目分项）；未实机验收 |
-| 场馆查询与预约 | `app/sessions/venue_session.py` | 待适配 |
-| 学籍档案 | `app/sessions/hello_session.py` | 待适配 |
+| 场馆查询与预约 | `app/sessions/venue_session.py` | 部分适配：场馆清单、可订/锁定时段与订单查询（`Query::VenueList` / `VenueSlots` / `VenueOrders`）；预订和取消未开放给 Agent 或自动流程；仅校园网直连；未实机验收 |
+| 学籍档案 | `app/sessions/hello_session.py` | Rust 适配：OAuth 落地 JWT 写入 `sites.profile`，查询姓名、学号、校区、书院、专业、班级与班主任/辅导员；未实机验收 |
 
 参考仓库有实现不代表学校当前环境必然可用；所有新服务的真实账号联调单独记录。
 
@@ -43,10 +45,12 @@
 
 2026-10-23 补充：账号现在可以同时保存两套会话。教务、考勤继续使用登录时保存的直连/WebVPN 会话；校园卡、体测等只接受直连的服务改用账号内新增的 `directCookies`（`auth.json`，旧账号缺省为空）。外部网络下首次打开这些工具（或点击侧边栏宠物触发自检）时，Rust 用已保存密码从校园卡登录地址发起一次 CAS 服务登录，成功后保存这套直连 Cookie；需要验证码或手机验证的账号无法自动完成，仍显示“VPN 下不可用”并可手动登录。直连查询遇到失效会续期一次再重试。
 
+2026-10-23（0.3.3 开发中）：`auth.json` 的账号增加按服务保存的 `sites`（旧文件缺省为空），目前用于 `profile`（hello JWT）、`lms`、`library`、`venue`。对应新增 `refresh_profile_session`、`refresh_lms_session`、`refresh_library_session`、`refresh_venue_session` 四个命令，均由已保存密码自动登录；需要验证码、手机验证或未保存密码时返回错误。图书馆和场馆只接受校园网直连，WebVPN 模式下直接提示不可用。传输层新增了**仅限这两个固定 HTTP 来源**的放行：`http://rg.lib.xjtu.edu.cn:8086` 与 `http://202.117.17.144:8080`，其余 HTTP 地址仍被拒绝。
+
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 
 - `school_catalog`：校园能力清单及后端进度，现已接入插件市场校园列表，尚无新业务页面的项目显示待接入；`pending` 项不是可用功能。
-- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历、考勤、校园卡、体测。
+- `school_query`：查询请求使用封闭的 `Query` 枚举，不接受任意 URL。支持成绩、考试、学期、评教列表、教室选项、空闲教室、全校课程、校历、考勤、校园卡、体测，以及新增的学籍档案、LMS 课程 / 活动、图书馆楼层 / 区域 / 座位、场馆清单 / 时段 / 订单。场馆预订、图书馆预约等写操作尚未开放。
 - `refresh_direct_session`：为只接受直连的服务重建 CAS 会话，保存到账号的 `directCookies`；验证码、手机验证或未保存密码会返回错误，由界面提示。
 - `school_prepare_evaluations`：按当前账号重新读取开放问卷及真实选项，生成精确的待提交答案。模板等级 1–5 对应选项顺序；文字意见由用户提供，必填文字题为空时返回错误。支持逐题覆盖答案。预览不会发送评价。
 - `school_submit_evaluations`：消费一次性预览 ID 后逐份提交；账号、会话代次与 15 分钟有效期必须匹配。返回每份 `submitted/failed/skipped/cancelled/unknown` 结果，并发送 `school-evaluation-progress` 事件。网络结果不明时不自动重发，停止余下提交，提示刷新学校状态。

@@ -1,6 +1,6 @@
 # 开发指南
 
-更新于 2026-10-19。当前为 0.1.0 开发版；已完成的代码与尚待验收的能力分别记录。
+更新于 2026-10-23。当前发布版为 0.3.1；`dev` 与 `codex/v0.3.3` 正在开发 0.3.3，已完成的代码与尚待验收的能力分别记录。
 
 ## 代码与分支
 
@@ -46,7 +46,7 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 | `auth.rs` / `accounts.rs` / `network.rs` | 登录状态机、校园账号与直连 / WebVPN |
 | `vault.rs` | auth.json、迁移与原子持久化 |
 | `campus.rs` / `campus_browser.rs` | 课表与独立校园网页窗口 |
-| `school/` | 新教务查询与评教后端 |
+| `school/` | 教务查询、评教与校园服务后端（学籍、思源学堂、图书馆、场馆） |
 | `plugins.rs` / `market.rs` | 本地清单、远端目录、校验、安装及来源 |
 | `updates.rs` | 官方 Updater 接线及任务互斥 |
 | `plugins/` / `examples/` | 内置插件与声明式插件示例 |
@@ -67,8 +67,9 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 | --- | --- |
 | 已有用户实测 | 校园账号登录、账号恢复和真实课表 |
 | 已实现，待进一步验收 | 原生校园窗口逐站认证、插件市场操作、更新设置 |
-| 后台已适配，页面未完成 | 本科成绩、考试、空教室、全校课程、校历、评教 |
-| 待开发 | 研究生教务、考勤、LMS、校园生活模块、Agent 运行时与社区同步 |
+| 后台已适配，页面未完成 | 本科成绩、考试、空教室、全校课程、校历、评教、考勤、校园卡、体测 |
+| 后台已补，页面未实现（0.3.3） | 学籍档案、思源学堂课程 / 活动、图书馆座位、场馆清单 / 时段 / 订单；均未做真实账号联调 |
+| 待开发 | 研究生教务、LMS 作业与回放、场馆与图书馆预订、通知、校园生活模块、Agent 运行时与社区同步 |
 | 待部署 | 正式插件服务、应用更新端点、发布公钥和正式签名发布 |
 
 Agent 需具备通用工具能力，并接入 MCP、Skills、持久对话及长期记忆。模型配置完成不代表 Agent 已能调用模型。现有 Agent 和评教新稿仍未获准，不能直接制作页面。
@@ -88,9 +89,9 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 插件真实 HTTP 联调：先运行 `npm run market:serve`，再执行 `cargo run --locked --manifest-path src-tauri/Cargo.toml --example market_smoke`。测试使用临时安装目录，不接触用户凭据。原生 Cookie 隔离示例为 `campus_browser_smoke`，仅在需要核验校园窗口改动时运行。
 
-本轮结果：前端 9 项测试通过，Rust 44 项通过、2 项联网探测默认忽略，Clippy 和格式检查通过。真实 HTTP 联调覆盖目录、下载、摘要失败、安装、来源保存和移除。独立 macOS App 已构建并打开，确认原生窗口及插件市场入口；Windows、正式签名更新和完整页面交互仍待验收。
+插件市场轮次结果（历史）：前端 9 项测试通过，Rust 44 项通过、2 项联网探测默认忽略，Clippy 和格式检查通过。真实 HTTP 联调覆盖目录、下载、摘要失败、安装、来源保存和移除。独立 macOS App 已构建并打开，确认原生窗口及插件市场入口；Windows、正式签名更新和完整页面交互仍待验收。
 
-本轮后续只调整文档和分支，不重复构建应用。
+0.3.3 校园后台轮次：Rust 80 项通过、3 项联网探测默认忽略，Clippy（`-D warnings`）与 `cargo fmt --check` 通过，`npm run build` 通过。新增覆盖账号 `sites` 校验、hello JWT 落地与 systemType 兜底、LMS / 图书馆 / 场馆字段映射与错误页面识别、HTTP 来源白名单与后端白名单。四套新后端均未做真实账号联调，图书馆与场馆需校园网，前端页面尚未实现；本批未改动正在使用的 App。
 
 ## 字体
 
@@ -100,4 +101,5 @@ Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC�
 
 1. 由用户验收插件市场与设置；部署正式插件服务与应用更新源时按 [发布指南](RELEASING.md) 配置。
 2. 调整并确认校园查询 / 评教页面，接入已存在的 Rust 服务，逐项做真实账号验收。
-3. 迁入其余校园能力，再落实 Agent、MCP、Skills 和记忆；前端仍先出参考图并获准。
+3. 为学籍档案、思源学堂、图书馆座位和场馆清单补页面；仍先出参考图并获准，随后接入 `refresh_*_session` 与对应查询，并在校园网下联调。
+4. 迁入其余校园能力，再落实 Agent、MCP、Skills 和记忆；前端仍先出参考图并获准。
