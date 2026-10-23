@@ -38,6 +38,9 @@ pub fn trusted(url: &Url) -> bool {
                     | "ncard.xjtu.edu.cn"
                     | "tyxylp.xjtu.edu.cn"
                     | "hello.xjtu.edu.cn"
+                    // Keycloak broker between CAS and 思源学堂; it only relays
+                    // the login redirect and holds no user credentials.
+                    | "identity1.xjtu.edu.cn"
                     | "lms.xjtu.edu.cn"
             )
         )
@@ -432,6 +435,16 @@ mod tests {
     fn lms_is_the_only_learning_site_on_the_backend_allowlist() {
         assert!(trusted(
             &Url::parse("https://lms.xjtu.edu.cn/api/my-courses").unwrap()
+        ));
+        // The LMS login hops through the Keycloak broker before reaching CAS.
+        assert!(trusted(
+            &Url::parse(
+                "https://identity1.xjtu.edu.cn/auth/realms/xjtu/broker/cas-client/endpoint"
+            )
+            .unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("http://identity1.xjtu.edu.cn/auth/realms/xjtu").unwrap()
         ));
         assert!(!trusted(
             &Url::parse("http://lms.xjtu.edu.cn/api/my-courses").unwrap()

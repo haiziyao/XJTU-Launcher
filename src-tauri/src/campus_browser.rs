@@ -319,7 +319,9 @@ mod tests {
     }
     #[test]
     fn browser_routing_does_not_expand_backend_authentication_allowlist() {
-        for host in ["syxt.xjtu.edu.cn", "identity1.xjtu.edu.cn"] {
+        // identity1 is on the backend list for the LMS Keycloak hop; pick a
+        // school host that stays browser-only.
+        for host in ["syxt.xjtu.edu.cn", "web.xjtu.edu.cn"] {
             let url = Url::parse(&format!("https://{host}/path?a=1#section")).unwrap();
             assert_eq!(
                 network::browser_address(&url, AccessMode::Direct).unwrap(),

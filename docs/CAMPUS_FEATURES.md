@@ -29,7 +29,7 @@
 | 校历 | `jwxt/calendar.py` | Rust 图片链接解析，未知学年保留为空；未实机验收 |
 | 研究生成绩、课表与评教 | `gmis/`、`gste/` | 待适配；不能套用本科接口 |
 | 考勤统计与流水 | `attendance/attendance.py` | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收 |
-| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 部分适配：课程与活动列表只读查询（`Query::LmsCourses` / `LmsActivities`）；作业详情、附件与回放未做；未实机验收 |
+| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 部分适配：课程与活动列表只读查询（`Query::LmsCourses` / `LmsActivities`），已用真实账号验证登录与查询；作业详情、附件与回放未做 |
 | 通知订阅与推送 | `app/threads/NoticeThread.py` | 待适配 |
 | 校园卡余额与流水 | `card/campus_card.py` | Rust 查询适配：CAS Cookie 换 ncard 令牌，余额与流水分页；未实机验收 |
 | 图书馆座位与预约 | `library/seats.py` | 部分适配：楼层清单、区域名与实时座位状态（`Query::LibraryFloors` / `LibraryAreas` / `LibrarySeats`）；预约与签到未开放；仅校园网直连；未实机验收 |
@@ -46,6 +46,8 @@
 2026-10-23 补充：账号现在可以同时保存两套会话。教务、考勤继续使用登录时保存的直连/WebVPN 会话；校园卡、体测等只接受直连的服务改用账号内新增的 `directCookies`（`auth.json`，旧账号缺省为空）。外部网络下首次打开这些工具（或点击侧边栏宠物触发自检）时，Rust 用已保存密码从校园卡登录地址发起一次 CAS 服务登录，成功后保存这套直连 Cookie；需要验证码或手机验证的账号无法自动完成，仍显示“VPN 下不可用”并可手动登录。直连查询遇到失效会续期一次再重试。
 
 2026-10-23（0.3.3 开发中）：`auth.json` 的账号增加按服务保存的 `sites`（旧文件缺省为空），目前用于 `profile`（hello JWT）、`lms`、`library`、`venue`。对应新增 `refresh_profile_session`、`refresh_lms_session`、`refresh_library_session`、`refresh_venue_session` 四个命令，均由已保存密码自动登录；需要验证码、手机验证或未保存密码时返回错误。图书馆和场馆只接受校园网直连，WebVPN 模式下直接提示不可用。传输层新增了**仅限三个固定 HTTP 来源**的放行：`http://rg.lib.xjtu.edu.cn:8086`、`http://202.117.17.144:8080`，以及学籍服务的 `http://hello.xjtu.edu.cn`（OAuth 中转与学籍 API；学籍接口先走 HTTP，失败再试 HTTPS，与校园系统当前行为一致）；三者都只允许直连，其余 HTTP 地址仍被拒绝。hello 的 token 仍只从重定向地址取出，不保存落地页。
+
+2026-10-23 补充：思源学堂的 CAS 登录先跳到 `identity1.xjtu.edu.cn` 的 Keycloak broker，再回到 `login.xjtu.edu.cn` 提交密码，最后经 broker 回到 LMS 建自己的会话。传输白名单因此新增该 HTTPS 主机（仅中转跳转，不接收凭据）；此前登录在重定向阶段被拒，页面显示“校园跳转地址不受支持”。已用本机真实账号完成只读登录与课程 / 活动查询，课程活动详情、作业附件与回放仍未适配。
 
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 

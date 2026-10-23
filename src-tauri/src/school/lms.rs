@@ -37,6 +37,10 @@ impl Client {
             .as_deref()
             .filter(|cookies| !cookies.is_empty())
             .ok_or("请先完成思源学堂登录")?;
+        Self::with_cookies(cookies)
+    }
+
+    fn with_cookies(cookies: &str) -> Result<Self, String> {
         Ok(Self {
             transport: Transport::new(Some(cookies))?,
         })
@@ -183,6 +187,54 @@ mod tests {
         assert_eq!(brief["type"], "assignment");
         assert_eq!(brief["end"], "2026-10-30 23:59:00");
         assert!(activity(&json!({"title": "missing id"})).is_none());
+    }
+
+    /// Manual probe: signs in with the saved account and reads only the course
+    /// count. It prints no cookies or password material.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_lms_session_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        println!("mode={:?}", account.mode);
+        match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await {
+            Ok(cookies) => {
+                let client = Client::with_cookies(&cookies).expect("client");
+                match client.courses().await {
+                    Ok(value) => {
+                        let courses = value
+                            .get("courses")
+                            .and_then(Value::as_array)
+                            .cloned()
+                            .unwrap_or_default();
+                        println!("courses={}", courses.len());
+                        for course in courses.iter().take(3) {
+                            let id = course.get("id").and_then(Value::as_u64).unwrap_or(0);
+                            match client.activities(id).await {
+                                Ok(value) => println!(
+                                    "course {id} activities={}",
+                                    value
+                                        .get("activities")
+                                        .and_then(Value::as_array)
+                                        .map(Vec::len)
+                                        .unwrap_or(0)
+                                ),
+                                Err(error) => println!("course {id} error: {error}"),
+                            }
+                        }
+                    }
+                    Err(error) => println!("courses error: {error}"),
+                }
+            }
+            Err(error) => println!("login error: {error}"),
+        }
     }
 
     #[test]
