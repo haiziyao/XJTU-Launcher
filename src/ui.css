@@ -375,6 +375,11 @@ select.text-field {
   background: var(--surface);
   overflow: hidden;
 }
+/* A grouped card clips its rows for the rounded corners; an open dropdown has
+   to escape that clip or it is hidden behind the card edge. */
+.setting-card:has(.menu-field-menu) {
+  overflow: visible;
+}
 .setting-group-footnote {
   margin: 8px 4px 0;
   color: var(--text-tertiary);
