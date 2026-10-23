@@ -108,6 +108,8 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 2026-10-23 README 重写：按用户反馈补齐功能描述，改为「校园账号与课表 / 学习 / 校园生活 / Agent / 本机 MCP 接口 / 插件与市场 / 桌面体验」分节；MCP 单独成节，写明端口、14 个工具、分类与逐项开关，并配两张截图；下载区补充系统要求。截图来自真实 Tauri App，存放于 `docs/screenshots/`（`home`、`campus`、`mcp`、`mcp-tools`）：拍摄时临时把显示名称、头像、壁纸与主题色换成中性值，未包含账号、学号、课程、余额或个人聊天内容，拍完已恢复原配置并重启应用。页面切换与滚动使用临时 dev-only 脚本，截图后已删除，源码未保留改动。
 
+2026-10-23 0.4.0 体验优化（第一项）：按用户要求把“双击进入”改为单击。畅行校园的工具行（常用与分类）、校历行，以及插件市场的校园功能行与已安装行，现在单击行内空白处即可打开；行内的打开、置顶、上下移、开关和更多按钮仍按各自点击处理，不会误触进入。相关行增加指针光标与按下态。双击保留给侧栏分隔线重置宽度。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。

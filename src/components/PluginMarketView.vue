@@ -130,7 +130,7 @@ async function remove(plugin: Plugin) {
   }
 }
 /** Double-clicking a row opens it, unless the click landed on a control. */
-function rowDblClick(event: MouseEvent, action: () => void) {
+function rowActivate(event: MouseEvent, action: () => void) {
   const target = event.target as HTMLElement | null;
   if (target?.closest('button, a, input, [role="switch"]')) return;
   action();
@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
           class="actionable"
           :title="plugin.name"
           :description="plugin.description"
-          @dblclick="rowDblClick($event, () => openPlugin(plugin))"
+          @click="rowActivate($event, () => openPlugin(plugin))"
         >
           <template #leading
             ><IconTile :size="34"
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
     <div v-else role="tabpanel">
       <div class="installed-heading"><span>插件</span><span>启用</span><span></span></div>
       <div v-for="plugin in filtered" :key="plugin.id" class="installed-item">
-        <div class="installed-row" @dblclick="rowDblClick($event, () => openPlugin(plugin))">
+        <div class="installed-row" @click="rowActivate($event, () => openPlugin(plugin))">
           <div class="installed-name">
             <IconTile :size="34"
               ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
@@ -388,6 +388,7 @@ onBeforeUnmount(() => {
 }
 .installed-row {
   min-height: 86px;
+  cursor: pointer;
   transition: background var(--duration-fast) ease;
 }
 .installed-row:hover {

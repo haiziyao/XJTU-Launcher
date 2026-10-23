@@ -301,8 +301,8 @@ function openCalendar(url: string) {
   void bridge.openUrl(url);
 }
 
-/** Double-clicking a row opens it, unless the click landed on a control. */
-function rowDblClick(event: MouseEvent, action: () => void) {
+/** Clicking a row opens it, unless the click landed on a control. */
+function rowActivate(event: MouseEvent, action: () => void) {
   const target = event.target as HTMLElement | null;
   if (target?.closest('button, a, input, [role="switch"]')) return;
   action();
@@ -392,7 +392,7 @@ onMounted(async () => {
           :title="item.name"
           :description="[item.description, reason(item.id)].filter(Boolean).join(' · ')"
           :class="{ actionable: available(item.id) }"
-          @dblclick="rowDblClick($event, () => open(item.id))"
+          @click="rowActivate($event, () => open(item.id))"
         >
           <template #leading
             ><IconTile :size="32" :tone="item.tone"
@@ -430,7 +430,7 @@ onMounted(async () => {
           :title="item.name"
           :description="[item.description, reason(item.id)].filter(Boolean).join(' · ')"
           :class="{ actionable: available(item.id) }"
-          @dblclick="rowDblClick($event, () => open(item.id))"
+          @click="rowActivate($event, () => open(item.id))"
         >
           <template #leading
             ><IconTile :size="32" :tone="item.tone"
@@ -631,7 +631,7 @@ onMounted(async () => {
             class="actionable"
             :title="row.year || '未标注学年'"
             description="在校园窗口中打开校历图片"
-            @dblclick="rowDblClick($event, () => openCalendar(row.url))"
+            @click="rowActivate($event, () => openCalendar(row.url))"
           >
             <UiButton variant="tinted" size="sm" @click="openCalendar(row.url)">打开</UiButton>
           </SettingRow>
