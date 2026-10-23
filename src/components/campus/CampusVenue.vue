@@ -8,6 +8,7 @@ import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
 import type { Venue, VenueList, VenueOrder, VenueOrders, VenueSlot, VenueSlots } from '../../types';
 
+import UiButton from '../ui/UiButton.vue';
 const venues = ref<Venue[]>([]);
 const orders = ref<VenueOrder[]>([]);
 const selected = ref<Venue | null>(null);
@@ -127,7 +128,7 @@ onMounted(load);
 
   <SettingGroup v-if="selected" :title="`场馆时段 · ${selected.name}`">
     <template #actions>
-      <button class="btn ghost small" @click="back">返回场馆</button>
+      <UiButton variant="ghost" size="sm" @click="back">返回场馆</UiButton>
     </template>
     <SettingRow title="日期">
       <input
@@ -142,7 +143,7 @@ onMounted(load);
       <span
         >共 {{ slots.length }} 个时段 · 可订 <strong>{{ availableCount }}</strong> 个</span
       >
-      <button class="btn small" :disabled="loading" @click="loadSlots">刷新</button>
+      <UiButton size="sm" :disabled="loading" @click="loadSlots">刷新</UiButton>
     </div>
     <EmptyState v-if="loading && !slots.length" compact title="正在读取时段…" />
     <EmptyState v-else-if="!slots.length" compact title="这一天没有开放时段" />

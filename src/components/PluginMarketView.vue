@@ -25,6 +25,8 @@ import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import SegmentedTabs from './ui/SegmentedTabs.vue';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
   plugins: Plugin[];
   config: AppConfig;
@@ -156,14 +158,13 @@ onBeforeUnmount(() => {
             placeholder="搜索插件"
             aria-label="搜索插件"
         /></label>
-        <button v-if="tab === 'installed'" class="btn" :disabled="!!busy" @click="importPlugin">
+        <UiButton v-if="tab === 'installed'" :disabled="!!busy" @click="importPlugin">
           <Download :size="14" />导入本地插件
-        </button>
-        <button
+        </UiButton>
+        <UiIconButton
+          label="刷新插件"
           v-if="tab !== 'campus'"
-          class="btn ghost icon"
           title="刷新"
-          aria-label="刷新插件"
           :disabled="loading || !!busy"
           @click="
             emit('reload');
@@ -171,7 +172,7 @@ onBeforeUnmount(() => {
           "
         >
           <RefreshCw :size="15" :class="{ spin: loading }" />
-        </button>
+        </UiIconButton>
       </template>
     </PageHeader>
     <SegmentedTabs v-model="tab" :tabs="tabs" label="插件分类" />
@@ -198,8 +199,8 @@ onBeforeUnmount(() => {
                 v-else-if="plugin.page.type === 'homeTheme'"
                 :size="19" /><Compass v-else :size="19" /></IconTile
           ></template>
-          <button
-            class="btn small"
+          <UiButton
+            size="sm"
             :class="{ tinted: !config.disabledPlugins.includes(plugin.id) }"
             :disabled="saving"
             @click="
@@ -209,7 +210,7 @@ onBeforeUnmount(() => {
             "
           >
             {{ config.disabledPlugins.includes(plugin.id) ? '启用' : '打开' }}
-          </button>
+          </UiButton>
         </SettingRow>
       </SettingGroup>
     </div>
@@ -220,7 +221,7 @@ onBeforeUnmount(() => {
         :icon="Package"
         title="尚未配置插件服务"
         description="在设置中添加插件服务器后，即可浏览和安装。"
-        ><button class="btn" @click="emit('settings')">插件服务设置</button></EmptyState
+        ><UiButton @click="emit('settings')">插件服务设置</UiButton></EmptyState
       >
       <SettingGroup v-else>
         <SettingRow
@@ -233,8 +234,8 @@ onBeforeUnmount(() => {
             ><IconTile :size="34"><Package :size="19" /></IconTile
           ></template>
           <span class="setting-value">{{ entry.version }}</span>
-          <button
-            class="btn small"
+          <UiButton
+            size="sm"
             :disabled="!!busy || (!!installed(entry.id) && !upgrade(entry.id))"
             @click="install(entry)"
           >
@@ -249,7 +250,7 @@ onBeforeUnmount(() => {
                     : '已安装'
                   : '安装'
             }}
-          </button>
+          </UiButton>
         </SettingRow>
         <EmptyState
           v-if="!remote.length && !error"
@@ -296,61 +297,63 @@ onBeforeUnmount(() => {
             @toggle="emit('toggle', plugin.id)"
           />
           <span class="installed-move">
-            <button
-              class="btn ghost icon small"
-              aria-label="上移"
+            <UiIconButton
+              label="上移"
+              size="sm"
               :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
               @click="emit('move', plugins.indexOf(plugin), -1)"
             >
               <ArrowUp :size="14" />
-            </button>
-            <button
-              class="btn ghost icon small"
-              aria-label="下移"
+            </UiIconButton>
+            <UiIconButton
+              label="下移"
+              size="sm"
               :disabled="
                 saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
               "
               @click="emit('move', plugins.indexOf(plugin), 1)"
             >
               <ArrowDown :size="14" />
-            </button>
+            </UiIconButton>
           </span>
-          <button
-            class="btn ghost icon"
-            :aria-label="plugin.name + '操作'"
+          <UiIconButton
+            :label="plugin.name + '操作'"
             :aria-expanded="menu === plugin.id"
             @click="menu = menu === plugin.id ? '' : plugin.id"
           >
             <MoreHorizontal :size="18" />
-          </button>
+          </UiIconButton>
         </div>
         <div v-if="menu === plugin.id" class="installed-actions">
           <span class="plugin-origin" :title="sources[plugin.id]">{{
             sources[plugin.id] || plugin.description
           }}</span>
-          <button
-            class="btn small tinted"
+          <UiButton
+            variant="tinted"
+            size="sm"
             :disabled="config.disabledPlugins.includes(plugin.id)"
             @click="emit('open', plugin.id)"
           >
             打开
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            size="sm"
             v-if="upgrade(plugin.id)"
-            class="btn small"
             :disabled="!!busy"
             @click="install(upgrade(plugin.id)!)"
           >
             {{ busy === plugin.id ? '更新中…' : '更新' }}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            variant="ghost"
+            size="sm"
+            danger
             v-if="!['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(plugin.id)"
-            class="btn ghost small danger"
             :disabled="!!busy"
             @click="remove(plugin)"
           >
             移除
-          </button>
+          </UiButton>
         </div>
       </div>
       <EmptyState v-if="!filtered.length" compact :icon="Search" title="没有匹配的插件" />

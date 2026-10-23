@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { ZoomIn, ZoomOut } from 'lucide-vue-next';
 import type { ImageCrop, PersonalImageKind } from '../types';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{ src: string; kind: PersonalImageKind; busy: boolean }>();
 const emit = defineEmits<{ confirm: [crop: ImageCrop]; cancel: [] }>();
 
@@ -135,14 +137,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           ></span>
         </div>
         <div class="crop-zoom">
-          <button
-            class="btn ghost icon small"
-            aria-label="缩小"
-            :disabled="zoom <= 1"
-            @click="setZoom(zoom / 1.2)"
-          >
+          <UiIconButton label="缩小" size="sm" :disabled="zoom <= 1" @click="setZoom(zoom / 1.2)">
             <ZoomOut :size="14" />
-          </button>
+          </UiIconButton>
           <input
             type="range"
             min="1"
@@ -152,20 +149,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             aria-label="缩放"
             @input="setZoom(Number(($event.target as HTMLInputElement).value))"
           />
-          <button
-            class="btn ghost icon small"
-            aria-label="放大"
+          <UiIconButton
+            label="放大"
+            size="sm"
             :disabled="zoom >= MAX_ZOOM"
             @click="setZoom(zoom * 1.2)"
           >
             <ZoomIn :size="14" />
-          </button>
+          </UiIconButton>
         </div>
         <footer class="crop-actions">
-          <button class="btn small" :disabled="busy" @click="emit('cancel')">取消</button>
-          <button class="btn primary small" :disabled="busy || !natural.w" @click="confirm">
+          <UiButton size="sm" :disabled="busy" @click="emit('cancel')">取消</UiButton>
+          <UiButton variant="primary" size="sm" :disabled="busy || !natural.w" @click="confirm">
             {{ busy ? '正在保存…' : '确定' }}
-          </button>
+          </UiButton>
         </footer>
       </div>
     </div>

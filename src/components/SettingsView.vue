@@ -14,6 +14,7 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 
+import UiButton from './ui/UiButton.vue';
 const props = defineProps<{
   config: AppConfig;
   saving: boolean;
@@ -115,13 +116,13 @@ const sections = [
             <SettingGroup title="侧栏">
               <SettingRow title="展开宽度" description="拖动侧栏右侧分隔线调整，双击分隔线恢复默认">
                 <span class="setting-value">{{ config.sidebarWidth }} px</span>
-                <button
-                  class="btn small"
+                <UiButton
+                  size="sm"
                   :disabled="saving || config.sidebarWidth === DEFAULT_SIDEBAR_WIDTH"
                   @click="emit('update', { ...config, sidebarWidth: DEFAULT_SIDEBAR_WIDTH })"
                 >
                   恢复默认
-                </button>
+                </UiButton>
               </SettingRow>
             </SettingGroup>
           </div>

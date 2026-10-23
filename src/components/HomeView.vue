@@ -18,6 +18,8 @@ import UiCard from './ui/UiCard.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile, { type Tone } from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
   config: AppConfig;
   plugins: Plugin[];
@@ -108,15 +110,15 @@ const paired = computed(() => showCourses.value && showLinks.value);
         :style="{ order: order('timetable') }"
       >
         <template v-if="connected && hasTimetable" #actions>
-          <button
-            class="btn ghost icon small"
+          <UiIconButton
+            label="刷新课表"
+            size="sm"
             title="刷新课表"
-            aria-label="刷新课表"
             :disabled="loading"
             @click="emit('refresh')"
           >
             <RefreshCw :size="14" :class="{ spinning: loading }" />
-          </button>
+          </UiIconButton>
         </template>
         <Transition name="fade" mode="out-in">
           <EmptyState
@@ -131,15 +133,16 @@ const paired = computed(() => showCourses.value && showLinks.value);
               error || (connected ? '从校园系统获取最新课表' : '登录后即可在这里查看今日课程')
             "
           >
-            <button
+            <UiButton
+              variant="primary"
+              size="sm"
               v-if="connected"
-              class="btn primary small"
               :disabled="loading"
               @click="emit('refresh')"
             >
               同步课表
-            </button>
-            <button v-else class="btn small" @click="emit('account')">前往校园账号</button>
+            </UiButton>
+            <UiButton size="sm" v-else @click="emit('account')">前往校园账号</UiButton>
           </EmptyState>
           <EmptyState
             v-else-if="!courses.length"

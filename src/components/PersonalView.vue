@@ -10,6 +10,7 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiAvatar from './ui/UiAvatar.vue';
 import IconTile from './ui/IconTile.vue';
+import UiButton from './ui/UiButton.vue';
 const props = defineProps<{ config: AppConfig; account: AccountStatus; saving: boolean }>();
 const emit = defineEmits<{ update: [config: AppConfig]; accounts: [] }>();
 const error = ref('');
@@ -72,17 +73,18 @@ onBeforeUnmount(closeCrop);
         <small>{{ account.studentId || '本机个人资料' }}</small>
       </div>
       <div class="row-actions">
-        <button
+        <UiButton
+          variant="ghost"
+          size="sm"
           v-if="config.avatar"
-          class="btn ghost small"
           :disabled="saving || importing"
           @click="emit('update', { ...config, avatar: null })"
         >
           恢复默认
-        </button>
-        <button class="btn small" :disabled="saving || importing" @click="choose('avatar')">
+        </UiButton>
+        <UiButton size="sm" :disabled="saving || importing" @click="choose('avatar')">
           更换头像
-        </button>
+        </UiButton>
       </div>
     </div>
 
@@ -116,17 +118,18 @@ onBeforeUnmount(closeCrop);
           <strong>{{ config.wallpaper ? '自定义壁纸' : '默认背景' }}</strong>
           <small>壁纸铺满整个窗口，侧栏与卡片会自动变为半透明。</small>
           <div class="row-actions">
-            <button class="btn small" :disabled="saving || importing" @click="choose('wallpaper')">
+            <UiButton size="sm" :disabled="saving || importing" @click="choose('wallpaper')">
               <ImagePlus :size="14" />选择图片
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="sm"
               v-if="config.wallpaper"
-              class="btn ghost small"
               :disabled="saving || importing"
               @click="emit('update', { ...config, wallpaper: null })"
             >
               移除
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import SegmentedTabs from '../ui/SegmentedTabs.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
+import UiButton from '../ui/UiButton.vue';
 import type {
   LmsActivities,
   LmsActivity,
@@ -310,7 +311,7 @@ onMounted(loadCourses);
   <!-- Categorised activities of one course -->
   <template v-else-if="!activity">
     <div class="campus-subhead">
-      <button class="btn ghost small" @click="backToCourses">返回课程</button>
+      <UiButton variant="ghost" size="sm" @click="backToCourses">返回课程</UiButton>
       <strong>{{ selected.name }}</strong>
     </div>
     <EmptyState v-if="loading && !activities.length" compact title="正在读取课程活动…" />
@@ -341,7 +342,7 @@ onMounted(loadCourses);
   <!-- Activity detail -->
   <template v-else>
     <div class="campus-subhead">
-      <button class="btn ghost small" @click="backToActivities">返回活动</button>
+      <UiButton variant="ghost" size="sm" @click="backToActivities">返回活动</UiButton>
       <strong>{{ detail?.title || activity.title || '活动详情' }}</strong>
     </div>
     <EmptyState v-if="loading && !detail" compact title="正在读取活动详情…" />
@@ -376,15 +377,15 @@ onMounted(loadCourses);
           :title="file.name || '未命名附件'"
           :description="fileMeta(file)"
         >
-          <button class="btn small" @click="openFile(file)">打开</button>
-          <button
+          <UiButton size="sm" @click="openFile(file)">打开</UiButton>
+          <UiButton
+            size="sm"
             v-if="file.allowDownload"
-            class="btn small"
             :disabled="downloading === file.id"
             @click="downloadFile(file)"
           >
             {{ downloading === file.id ? '下载中…' : '下载' }}
-          </button>
+          </UiButton>
         </SettingRow>
       </SettingGroup>
 
@@ -394,7 +395,7 @@ onMounted(loadCourses);
           title="观看课程回放"
           description="在校园窗口中播放，会话随当前账号"
         >
-          <button class="btn small" @click="openReplay(detail.player)">打开回放</button>
+          <UiButton size="sm" @click="openReplay(detail.player)">打开回放</UiButton>
         </SettingRow>
         <SettingRow
           v-else-if="detail.replayCode"

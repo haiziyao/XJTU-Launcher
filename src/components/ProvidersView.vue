@@ -21,6 +21,8 @@ import SettingRow from './ui/SettingRow.vue';
 import MenuSelect from './ui/MenuSelect.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const protocolLabel: Record<ModelProtocol, string> = {
   'openai-compatible': 'OpenAI 兼容',
   anthropic: 'Anthropic',
@@ -227,9 +229,9 @@ onBeforeUnmount(() => {
         footnote="配置和密钥保存在本机；密钥默认隐藏，可点右侧按钮查看或替换。"
       >
         <template #actions>
-          <button class="btn small" :disabled="busy || loading" @click="edit()">
+          <UiButton size="sm" :disabled="busy || loading" @click="edit()">
             <Plus :size="14" />添加厂商
-          </button>
+          </UiButton>
         </template>
         <EmptyState v-if="loading" compact :icon="LoaderCircle" busy title="正在读取配置…" />
         <EmptyState
@@ -239,9 +241,9 @@ onBeforeUnmount(() => {
           title="尚未配置模型服务"
           description="添加 OpenAI 兼容、Anthropic 或 Gemini 接口"
         >
-          <button class="btn primary small" :disabled="busy" @click="edit()">
+          <UiButton variant="primary" size="sm" :disabled="busy" @click="edit()">
             <Plus :size="14" />添加厂商
-          </button>
+          </UiButton>
         </EmptyState>
         <TransitionGroup v-else name="list">
           <SettingRow v-for="provider in book.providers" :key="provider.id">
@@ -259,46 +261,47 @@ onBeforeUnmount(() => {
               {{ provider.model }} · {{ provider.keySet ? '已保存密钥' : '未设置密钥' }} ·
               {{ provider.baseUrl }}
             </template>
-            <button
-              class="btn ghost icon small"
+            <UiIconButton
+              :label="provider.id === book.defaultId ? '正在使用' : `使用${provider.name}`"
+              size="sm"
               :class="{ accent: provider.id === book.defaultId }"
               :title="provider.id === book.defaultId ? '正在使用' : `使用${provider.name}`"
-              :aria-label="provider.id === book.defaultId ? '正在使用' : `使用${provider.name}`"
               :disabled="busy || provider.id === book.defaultId"
               :aria-pressed="provider.id === book.defaultId"
               @click="select(provider)"
             >
               <Check v-if="provider.id === book.defaultId" :size="14" />
               <Play v-else :size="14" />
-            </button>
-            <button
-              class="btn ghost icon small"
+            </UiIconButton>
+            <UiIconButton
+              :label="`测试${provider.name}连通性`"
+              size="sm"
               :title="`测试${provider.name}连通性`"
-              :aria-label="`测试${provider.name}连通性`"
               :disabled="busy || testing === provider.id"
               @click="test(provider)"
             >
               <LoaderCircle v-if="testing === provider.id" :size="14" class="spinning" />
               <PlugZap v-else :size="14" />
-            </button>
-            <button
-              class="btn ghost icon small"
+            </UiIconButton>
+            <UiIconButton
+              :label="'编辑' + provider.name"
+              size="sm"
               :title="'编辑' + provider.name"
-              :aria-label="'编辑' + provider.name"
               :disabled="busy"
               @click="edit(provider)"
             >
               <Pencil :size="14" />
-            </button>
-            <button
-              class="btn ghost icon small danger"
+            </UiIconButton>
+            <UiIconButton
+              :label="'移除' + provider.name"
+              variant="danger"
+              size="sm"
               :title="'移除' + provider.name"
-              :aria-label="'移除' + provider.name"
               :disabled="busy"
               @click="remove(provider)"
             >
               <Trash2 :size="14" />
-            </button>
+            </UiIconButton>
           </SettingRow>
         </TransitionGroup>
       </SettingGroup>
@@ -345,16 +348,11 @@ onBeforeUnmount(() => {
                   '获取厂商提供的模型，用于展示；具体使用哪个模型在 Agent 对话框里选择'
                 }}
               </template>
-              <button
-                type="button"
-                class="btn small"
-                :disabled="fetching || busy"
-                @click="fetchModels"
-              >
+              <UiButton size="sm" type="button" :disabled="fetching || busy" @click="fetchModels">
                 <LoaderCircle v-if="fetching" :size="14" class="spinning" />
                 <RefreshCw v-else :size="14" />
                 获取模型列表
-              </button>
+              </UiButton>
             </SettingRow>
             <SettingRow v-if="models.length" title="已获取的模型">
               <div class="model-cloud">
@@ -378,14 +376,14 @@ onBeforeUnmount(() => {
                   spellcheck="false"
                   maxlength="8192"
                   :disabled="draft.useLegacyKey"
-                /><button
-                  class="btn ghost icon small"
+                /><UiIconButton
+                  :label="showKey ? '隐藏密钥' : '显示密钥'"
+                  size="sm"
                   type="button"
-                  :aria-label="showKey ? '隐藏密钥' : '显示密钥'"
                   @click="toggleKey"
                 >
                   <EyeOff v-if="showKey" :size="14" /><Eye v-else :size="14" />
-                </button>
+                </UiIconButton>
               </div>
             </SettingRow>
             <SettingRow v-if="book.legacyKeyAvailable" title="使用之前保存的 API Key">
@@ -398,10 +396,10 @@ onBeforeUnmount(() => {
             </SettingRow>
           </fieldset>
           <div class="form-actions">
-            <button type="button" class="btn" @click="cancel">取消</button>
-            <button class="btn primary" :disabled="!valid || busy">
+            <UiButton type="button" @click="cancel">取消</UiButton>
+            <UiButton variant="primary" :disabled="!valid || busy">
               {{ busy ? '保存中…' : '保存配置' }}
-            </button>
+            </UiButton>
           </div>
         </form>
       </SettingGroup>
@@ -409,10 +407,10 @@ onBeforeUnmount(() => {
   </div>
 </template>
 <style scoped>
-.btn.accent {
+.ui-icon-button.accent {
   color: var(--accent);
 }
-.btn.accent:disabled {
+.ui-icon-button.accent:disabled {
   opacity: 1;
 }
 .model-cloud {

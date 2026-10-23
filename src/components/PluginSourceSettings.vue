@@ -7,6 +7,7 @@ import type { AppConfig } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import UiButton from './ui/UiButton.vue';
 const props = defineProps<{
   config: AppConfig;
   saving: boolean;
@@ -67,9 +68,9 @@ async function save(value: string | null) {
       <SettingRow title="服务端网址">
         <template v-if="!editing"
           ><span class="source-address"><LockKeyhole :size="14" />{{ source || '尚未配置' }}</span
-          ><button class="btn small" :disabled="busy || saving" @click="unlock">
+          ><UiButton size="sm" :disabled="busy || saving" @click="unlock">
             确认更改
-          </button></template
+          </UiButton></template
         >
         <form v-else class="source-form" @submit.prevent="save(draft.trim())">
           <input
@@ -80,10 +81,11 @@ async function save(value: string | null) {
             aria-label="插件服务端网址"
             placeholder="https://"
             :disabled="busy"
-          /><button type="submit" class="btn primary small" :disabled="busy || saving">保存</button
-          ><button
+          /><UiButton variant="primary" size="sm" type="submit" :disabled="busy || saving"
+            >保存</UiButton
+          ><UiButton
+            size="sm"
             type="button"
-            class="btn small"
             :disabled="busy"
             @click="
               editing = false;
@@ -91,17 +93,13 @@ async function save(value: string | null) {
             "
           >
             取消
-          </button>
+          </UiButton>
         </form>
       </SettingRow>
       <SettingRow title="恢复默认地址"
-        ><button
-          class="btn small"
-          :disabled="busy || saving || !config.pluginServer"
-          @click="save(null)"
-        >
+        ><UiButton size="sm" :disabled="busy || saving || !config.pluginServer" @click="save(null)">
           恢复默认
-        </button></SettingRow
+        </UiButton></SettingRow
       >
     </SettingGroup>
     <SettingGroup title="插件更新"

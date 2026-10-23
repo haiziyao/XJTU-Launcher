@@ -48,6 +48,8 @@ import TimetableView from './components/TimetableView.vue';
 import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
+import UiButton from './components/ui/UiButton.vue';
+import UiIconButton from './components/ui/UiIconButton.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
 import { applyAccent, normalizeAccent } from './theme';
 import './ui.css';
@@ -545,9 +547,15 @@ onBeforeUnmount(() => {
           <Transition name="drop">
             <div v-if="error" class="notice desktop-error" role="alert">
               <AlertCircle :size="15" /><span>{{ error }}</span
-              ><button class="notice-close" aria-label="关闭提示" @click="error = ''">
+              ><UiIconButton
+                variant="inherit"
+                size="xs"
+                label="关闭提示"
+                class="notice-close"
+                @click="error = ''"
+              >
                 <X :size="14" />
-              </button>
+              </UiIconButton>
             </div>
           </Transition>
           <Transition name="page" mode="out-in" @after-leave="resetScroll"
@@ -606,9 +614,9 @@ onBeforeUnmount(() => {
                 @update="persist"
               />
               <div v-else-if="route === 'accounts'" class="subpage">
-                <button class="back-button" @click="route = 'personal'">
+                <UiButton variant="ghost" size="sm" class="back-button" @click="route = 'personal'">
                   <ArrowLeft :size="14" /><span>个人</span>
-                </button>
+                </UiButton>
                 <AccountsView @changed="reloadAccount" />
               </div>
               <PluginMarketView

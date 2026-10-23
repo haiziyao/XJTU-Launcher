@@ -21,6 +21,8 @@ import EmptyState from './ui/EmptyState.vue';
 import UiAvatar from './ui/UiAvatar.vue';
 import CampusLoginForm from './CampusLoginForm.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const emit = defineEmits<{ changed: [] }>();
 const book = ref<CampusAccountList>({ activeId: null, accounts: [] });
 const busy = ref(false);
@@ -150,9 +152,9 @@ onBeforeUnmount(() => {
   <section v-else class="desktop-page narrow-page">
     <PageHeader title="校园账号" description="管理本机保存的校园账号">
       <template #actions
-        ><button class="btn primary small" :disabled="busy || loading" @click="beginLogin()">
+        ><UiButton variant="primary" size="sm" :disabled="busy || loading" @click="beginLogin()">
           <Plus :size="14" />添加账号
-        </button></template
+        </UiButton></template
       >
     </PageHeader>
     <p v-if="notice" class="notice success" role="status">{{ notice }}</p>
@@ -167,9 +169,9 @@ onBeforeUnmount(() => {
         :icon="GraduationCap"
         title="尚未添加校园账号"
         description="添加账号后即可同步课表等校园数据"
-        ><button class="btn primary small" :disabled="busy" @click="beginLogin()">
+        ><UiButton variant="primary" size="sm" :disabled="busy" @click="beginLogin()">
           <Plus :size="14" />添加账号
-        </button></EmptyState
+        </UiButton></EmptyState
       >
       <TransitionGroup v-else name="list">
         <SettingRow v-for="account in book.accounts" :key="account.id">
@@ -197,25 +199,25 @@ onBeforeUnmount(() => {
             {{ account.degree === 'undergraduate' ? '本科生' : '研究生' }}
             <template v-if="account.accessMode === 'webvpn'"> · WebVPN</template>
           </template>
-          <button class="btn ghost small" :disabled="busy" @click="beginLogin(account)">
+          <UiButton variant="ghost" size="sm" :disabled="busy" @click="beginLogin(account)">
             <LogIn :size="14" />重新登录
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            size="sm"
             v-if="account.id !== book.activeId"
-            class="btn small"
             :disabled="busy"
             @click="switchAccount(account.id)"
           >
             切换
-          </button>
-          <button
-            class="btn ghost icon small"
+          </UiButton>
+          <UiIconButton
+            :label="'管理' + (account.name || account.username)"
+            size="sm"
             :disabled="busy"
-            :aria-label="'管理' + (account.name || account.username)"
             @click="more($event, account)"
           >
             <MoreHorizontal :size="16" />
-          </button>
+          </UiIconButton>
         </SettingRow>
       </TransitionGroup>
     </SettingGroup>

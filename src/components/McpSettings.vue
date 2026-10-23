@@ -10,6 +10,8 @@ import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{ search: string; section?: 'servers' | 'market' }>();
 const emit = defineEmits<{ settings: [] }>();
 
@@ -256,9 +258,9 @@ onBeforeUnmount(() => {
       footnote="启用的 MCP 服务会作为工具提供给 Agent。凭据保存在本机 mcp.json，不会回显。"
     >
       <template #actions>
-        <button class="btn small" :disabled="!!busy" @click="draft = draftFrom()">
+        <UiButton size="sm" :disabled="!!busy" @click="draft = draftFrom()">
           <Plus :size="14" />添加 MCP
-        </button>
+        </UiButton>
       </template>
       <EmptyState
         v-if="loading && !servers.length"
@@ -290,23 +292,22 @@ onBeforeUnmount(() => {
             :disabled="!!busy"
             @toggle="toggle(server)"
           />
-          <button
-            class="btn ghost icon"
-            :aria-label="server.name + '操作'"
+          <UiIconButton
+            :label="server.name + '操作'"
             :aria-expanded="open === server.id"
             @click="open = open === server.id ? '' : server.id"
           >
             <Wrench :size="16" />
-          </button>
+          </UiIconButton>
         </SettingRow>
         <div v-if="open === server.id" class="mcp-actions">
-          <button class="btn small" :disabled="!!busy" @click="probe(server)">测试连接</button>
-          <button class="btn small" :disabled="!!busy" @click="draft = draftFrom(server)">
+          <UiButton size="sm" :disabled="!!busy" @click="probe(server)">测试连接</UiButton>
+          <UiButton size="sm" :disabled="!!busy" @click="draft = draftFrom(server)">
             编辑
-          </button>
-          <button class="btn ghost small danger" :disabled="!!busy" @click="remove(server)">
+          </UiButton>
+          <UiButton variant="ghost" size="sm" danger :disabled="!!busy" @click="remove(server)">
             移除
-          </button>
+          </UiButton>
         </div>
         <ul v-if="tools[server.id]?.length" class="mcp-tools">
           <li v-for="tool in tools[server.id]" :key="tool.name">
@@ -358,35 +359,37 @@ onBeforeUnmount(() => {
       <div class="mcp-vars">
         <div class="mcp-vars-head">
           <span>{{ draft.type === 'stdio' ? '环境变量' : '请求头' }}</span>
-          <button
+          <UiButton
+            variant="ghost"
+            size="sm"
             type="button"
-            class="btn ghost small"
             @click="draft.vars.push({ key: '', value: '' })"
           >
             <Plus :size="13" />添加
-          </button>
+          </UiButton>
         </div>
         <div v-for="(entry, index) in draft.vars" :key="index" class="mcp-var">
           <input v-model="entry.key" placeholder="KEY" aria-label="名称" />
           <input v-model="entry.value" type="password" placeholder="值" aria-label="值" />
-          <button
+          <UiButton
+            variant="ghost"
+            size="sm"
             type="button"
-            class="btn ghost small"
             aria-label="删除此行"
             @click="draft.vars.splice(index, 1)"
           >
             删除
-          </button>
+          </UiButton>
         </div>
         <p v-if="draft.vars.length" class="mcp-hint">编辑时留空表示保留已保存的值。</p>
       </div>
       <div class="mcp-form-actions">
-        <button type="button" class="btn ghost" :disabled="!!busy" @click="draft = null">
+        <UiButton variant="ghost" type="button" :disabled="!!busy" @click="draft = null">
           取消
-        </button>
-        <button type="submit" class="btn primary" :disabled="!valid || !!busy">
+        </UiButton>
+        <UiButton variant="primary" type="submit" :disabled="!valid || !!busy">
           {{ busy === 'save' ? '保存中…' : '保存' }}
-        </button>
+        </UiButton>
       </div>
     </form>
 
@@ -396,15 +399,14 @@ onBeforeUnmount(() => {
       footnote="目录由插件服务端提供；未配置插件服务时只能手动添加。安装前请确认命令与来源可信，本地 MCP 会启动对应进程。"
     >
       <template #actions>
-        <button
-          class="btn ghost icon"
+        <UiIconButton
+          label="刷新 MCP 目录"
           title="刷新 MCP 目录"
-          aria-label="刷新 MCP 目录"
           :disabled="catalogLoading"
           @click="refreshCatalog"
         >
           <RefreshCw :size="15" :class="{ spin: catalogLoading }" />
-        </button>
+        </UiIconButton>
       </template>
       <EmptyState
         v-if="catalogLoading && !catalogLoaded"
@@ -420,7 +422,7 @@ onBeforeUnmount(() => {
         title="尚未配置插件服务"
         description="配置插件服务地址后即可浏览 MCP 市场。"
       >
-        <button class="btn small" @click="emit('settings')">插件服务设置</button>
+        <UiButton size="sm" @click="emit('settings')">插件服务设置</UiButton>
       </EmptyState>
       <EmptyState
         v-else-if="!filteredMarket.length"
@@ -433,9 +435,9 @@ onBeforeUnmount(() => {
           <template #leading
             ><IconTile :size="34"><Server :size="17" /></IconTile
           ></template>
-          <button class="btn small" :disabled="!!busy" @click="startInstall(entry)">
+          <UiButton size="sm" :disabled="!!busy" @click="startInstall(entry)">
             {{ busy === entry.id ? '添加中…' : '添加' }}
-          </button>
+          </UiButton>
         </SettingRow>
         <form
           v-if="installing?.entry.id === entry.id"
@@ -452,8 +454,12 @@ onBeforeUnmount(() => {
             />
           </label>
           <div class="mcp-form-actions">
-            <button type="button" class="btn ghost small" @click="installing = null">取消</button>
-            <button type="submit" class="btn primary small" :disabled="!!busy">确认添加</button>
+            <UiButton variant="ghost" size="sm" type="button" @click="installing = null"
+              >取消</UiButton
+            >
+            <UiButton variant="primary" size="sm" type="submit" :disabled="!!busy"
+              >确认添加</UiButton
+            >
           </div>
         </form>
       </div>

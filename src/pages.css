@@ -8,25 +8,9 @@
 .subpage {
   max-width: 720px;
 }
+/* A ghost UiButton that sits above a subpage heading. */
 .back-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
   margin: -4px 0 12px -8px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  transition:
-    background var(--duration-fast) ease,
-    color var(--duration-fast) ease;
-}
-.back-button:hover {
-  background: var(--surface-hover);
-  color: var(--text);
 }
 .back-button svg {
   transition: transform var(--duration) var(--ease-out);

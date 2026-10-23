@@ -9,6 +9,7 @@ import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
 import type { EvaluationList, EvaluationOutcome, EvaluationPreview } from '../../types';
 
+import UiButton from '../ui/UiButton.vue';
 const list = ref<EvaluationList | null>(null);
 const selected = ref<string[]>([]);
 const rank = ref('2');
@@ -170,9 +171,9 @@ onBeforeUnmount(() => {
         ></textarea>
       </SettingRow>
       <div class="campus-form-actions">
-        <button class="btn primary" :disabled="loading || !selected.length" @click="prepare">
+        <UiButton variant="primary" :disabled="loading || !selected.length" @click="prepare">
           {{ loading ? '生成预览…' : '预览答案' }}
-        </button>
+        </UiButton>
       </div>
     </template>
   </SettingGroup>
@@ -188,10 +189,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="campus-form-actions">
-        <button class="btn" :disabled="submitting" @click="cancelPreview">取消预览</button>
-        <button class="btn primary" :disabled="submitting" @click="submit">
+        <UiButton :disabled="submitting" @click="cancelPreview">取消预览</UiButton>
+        <UiButton variant="primary" :disabled="submitting" @click="submit">
           {{ submitting ? '提交中…' : '提交评教' }}
-        </button>
+        </UiButton>
       </div>
     </SettingGroup>
   </template>

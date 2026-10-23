@@ -12,6 +12,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [按钮与通用控件](UI_COMPONENTS.md) | `UiButton` / `UiIconButton` 的样式、变体和用法 |
 | [插件格式](PLUGINS.md) | 声明式插件、安装和管理，对 main / dev 共用 |
 | [插件市场与更新](PLUGIN_MARKET_AND_UPDATES.md) | 已获准方案、实现及部署边界 |
 | [插件服务](../tools/plugin-server/README.md) | 本地服务、目录契约和真实 HTTP 联调 |

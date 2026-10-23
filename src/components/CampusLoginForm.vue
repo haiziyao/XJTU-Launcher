@@ -10,6 +10,8 @@ import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import EmptyState from './ui/EmptyState.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{ account?: CampusAccount | null }>();
 const emit = defineEmits<{ cancel: []; success: [] }>();
 const degree = ref<CampusDegree>(props.account?.degree || 'undergraduate');
@@ -128,17 +130,17 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="desktop-page narrow-page">
-    <button class="btn ghost small login-back" @click="cancel">
+    <UiButton variant="ghost" size="sm" class="login-back" @click="cancel">
       <ArrowLeft :size="14" />校园账号
-    </button>
+    </UiButton>
     <PageHeader
       :title="account ? '重新登录' : '添加校园账号'"
       description="使用西安交通大学统一身份认证账号"
     >
       <template #actions
-        ><button class="btn ghost small" :disabled="busy" @click="restart">
+        ><UiButton variant="ghost" size="sm" :disabled="busy" @click="restart">
           <RefreshCw :size="14" />重新开始
-        </button></template
+        </UiButton></template
       >
     </PageHeader>
     <SettingGroup title="校园身份">
@@ -196,7 +198,7 @@ onBeforeUnmount(() => {
         :busy="busy"
         :title="busy ? '正在检测校园网络…' : '连接尚未完成'"
       >
-        <button v-if="!busy" class="btn small" @click="restart">重试</button>
+        <UiButton size="sm" v-if="!busy" @click="restart">重试</UiButton>
       </EmptyState>
       <form v-else class="campus-login-form" @submit.prevent="submit">
         <fieldset :disabled="busy">
@@ -216,7 +218,9 @@ onBeforeUnmount(() => {
             <label :for="useSaved ? undefined : 'campus-password'">密码</label>
             <div v-if="useSaved" class="saved-password">
               <ShieldCheck :size="16" /><span>使用本机保存的密码</span
-              ><button class="btn ghost small" type="button" @click="enterPassword">更换</button>
+              ><UiButton variant="ghost" size="sm" type="button" @click="enterPassword"
+                >更换</UiButton
+              >
             </div>
             <div v-else class="field-shell">
               <input
@@ -226,14 +230,14 @@ onBeforeUnmount(() => {
                 autocomplete="current-password"
                 :placeholder="flow.canContinue ? '已完成前一步，可直接继续' : '输入统一认证密码'"
                 maxlength="512"
-              /><button
-                class="btn ghost icon small"
+              /><UiIconButton
+                :label="showPassword ? '隐藏密码' : '显示密码'"
+                size="sm"
                 type="button"
-                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
                 @click="showPassword = !showPassword"
               >
                 <EyeOff v-if="showPassword" :size="15" /><Eye v-else :size="15" />
-              </button>
+              </UiIconButton>
             </div>
             <template v-if="flow.phase === 'captcha'">
               <label for="campus-captcha">图片验证码</label>
@@ -285,14 +289,14 @@ onBeforeUnmount(() => {
                 inputmode="numeric"
                 autocomplete="one-time-code"
                 maxlength="16"
-              /><button
-                class="btn small"
+              /><UiButton
+                size="sm"
                 type="button"
                 :disabled="busy || retrySeconds > 0"
                 @click="login.submit({ type: 'sendMfa' })"
               >
                 {{ retrySeconds ? retrySeconds + ' 秒后重发' : '发送验证码' }}
-              </button>
+              </UiButton>
             </div>
           </template>
           <template v-else-if="flow.phase === 'identity'">
@@ -310,8 +314,8 @@ onBeforeUnmount(() => {
           </template>
           <p v-else class="login-help">学校认证已完成，重试保存本机账号。</p>
           <div class="login-actions">
-            <button type="button" class="btn" @click="cancel">取消</button
-            ><button class="btn primary" :disabled="!canSubmit">
+            <UiButton type="button" @click="cancel">取消</UiButton
+            ><UiButton variant="primary" :disabled="!canSubmit">
               <LoaderCircle v-if="busy" :size="14" class="spinning" />{{
                 busy
                   ? '处理中…'
@@ -323,7 +327,7 @@ onBeforeUnmount(() => {
                         ? '继续'
                         : '登录'
               }}
-            </button>
+            </UiButton>
           </div>
         </fieldset>
       </form>

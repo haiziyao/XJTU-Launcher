@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue';
 import { Check, Pencil, X } from 'lucide-vue-next';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
   value: string;
   placeholder: string;
@@ -48,18 +49,12 @@ function save() {
       :placeholder="placeholder"
       :disabled="disabled"
     />
-    <button class="btn ghost icon small" :disabled="disabled" aria-label="保存修改" title="保存">
+    <UiIconButton label="保存修改" size="sm" :disabled="disabled" title="保存">
       <Check :size="14" />
-    </button>
-    <button
-      class="btn ghost icon small"
-      type="button"
-      aria-label="取消修改"
-      title="取消"
-      @click="close"
-    >
+    </UiIconButton>
+    <UiIconButton label="取消修改" size="sm" type="button" title="取消" @click="close">
       <X :size="14" />
-    </button>
+    </UiIconButton>
   </form>
   <button
     v-else

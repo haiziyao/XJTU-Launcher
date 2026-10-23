@@ -9,6 +9,7 @@ import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
 import type { LibraryArea, LibraryAreas, LibraryFloor, LibrarySeats } from '../../types';
 
+import UiButton from '../ui/UiButton.vue';
 const floors = ref<LibraryFloor[]>([]);
 const campus = ref('');
 const floor = ref('');
@@ -160,7 +161,7 @@ onMounted(loadFloors);
       <span
         >共 {{ seats?.seats.length ?? 0 }} 个座位 · 空余 <strong>{{ freeCount }}</strong> 个</span
       >
-      <button class="btn small" :disabled="loading" @click="loadSeats">刷新</button>
+      <UiButton size="sm" :disabled="loading" @click="loadSeats">刷新</UiButton>
     </div>
     <div v-if="loading && !seats" class="library-grid">
       <span class="setting-value">正在读取座位…</span>

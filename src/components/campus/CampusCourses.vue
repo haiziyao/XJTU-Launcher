@@ -8,6 +8,7 @@ import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
 import type { Courses, Terms } from '../../types';
 
+import UiButton from '../ui/UiButton.vue';
 const terms = ref<Terms | null>(null);
 const courses = ref<Courses | null>(null);
 const term = ref('');
@@ -80,9 +81,9 @@ onMounted(loadTerms);
       />
     </SettingRow>
     <div class="campus-form-actions">
-      <button class="btn primary" :disabled="loading || !name.trim()" @click="search">
+      <UiButton variant="primary" :disabled="loading || !name.trim()" @click="search">
         {{ loading ? '查询中…' : '查询课程' }}
-      </button>
+      </UiButton>
     </div>
   </SettingGroup>
   <SettingGroup v-if="courses" :title="`查询结果 · ${courses.term}`">

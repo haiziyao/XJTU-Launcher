@@ -8,6 +8,7 @@ import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
 import type { Option, RoomOptions, Rooms } from '../../types';
 
+import UiButton from '../ui/UiButton.vue';
 const options = ref<RoomOptions | null>(null);
 const rooms = ref<Rooms | null>(null);
 const campus = ref('');
@@ -114,9 +115,9 @@ onMounted(loadOptions);
       </div>
     </SettingRow>
     <div class="campus-form-actions">
-      <button class="btn primary" :disabled="loading || !campus || !building" @click="search">
+      <UiButton variant="primary" :disabled="loading || !campus || !building" @click="search">
         {{ loading ? '查询中…' : '查询空闲教室' }}
-      </button>
+      </UiButton>
     </div>
   </SettingGroup>
   <SettingGroup v-if="rooms" title="查询结果">

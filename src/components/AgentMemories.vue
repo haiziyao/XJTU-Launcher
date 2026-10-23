@@ -7,6 +7,8 @@ import type { AgentMemory } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import EmptyState from './ui/EmptyState.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const entries = ref<AgentMemory[]>([]);
 const loading = ref(true);
 const busy = ref(false);
@@ -92,20 +94,21 @@ onMounted(() => void load());
           placeholder="例如：习惯用简洁的中文回答；每周三下午没有课。"
         ></textarea>
         <div class="memory-actions">
-          <button
+          <UiButton
+            variant="ghost"
+            size="sm"
             v-if="editing"
             type="button"
-            class="btn ghost small"
             @click="
               editing = null;
               draft = '';
             "
           >
             取消编辑
-          </button>
-          <button type="submit" class="btn primary small" :disabled="!draft.trim() || busy">
+          </UiButton>
+          <UiButton variant="primary" size="sm" type="submit" :disabled="!draft.trim() || busy">
             <Plus :size="13" />{{ editing ? '保存修改' : '添加记忆' }}
-          </button>
+          </UiButton>
         </div>
       </form>
       <EmptyState
@@ -124,15 +127,10 @@ onMounted(() => void load());
       />
       <div v-for="entry in entries" :key="entry.id" class="memory-row">
         <span class="memory-text">{{ entry.content }}</span>
-        <button class="btn small" :disabled="busy" @click="edit(entry)">编辑</button>
-        <button
-          class="btn ghost icon"
-          :disabled="busy"
-          aria-label="删除记忆"
-          @click="remove(entry)"
-        >
+        <UiButton size="sm" :disabled="busy" @click="edit(entry)">编辑</UiButton>
+        <UiIconButton label="删除记忆" :disabled="busy" @click="remove(entry)">
           <Trash2 :size="15" />
-        </button>
+        </UiIconButton>
       </div>
     </SettingGroup>
   </div>

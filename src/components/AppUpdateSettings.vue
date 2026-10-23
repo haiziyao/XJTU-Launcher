@@ -8,6 +8,7 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 import IconTile from './ui/IconTile.vue';
+import UiButton from './ui/UiButton.vue';
 const props = defineProps<{ config: AppConfig; saving: boolean }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
 const error = ref('');
@@ -58,15 +59,15 @@ async function restart() {
         <template #leading
           ><IconTile :size="42"><Download :size="24" /></IconTile
         ></template>
-        <button
-          class="btn small"
+        <UiButton
+          size="sm"
           :disabled="
             busy || updateStatus?.phase === 'installed' || updateStatus?.phase === 'unconfigured'
           "
           @click="check"
         >
           {{ updateStatus?.phase === 'checking' ? '正在检查…' : '检查更新' }}
-        </button>
+        </UiButton>
       </SettingRow>
       <SettingRow title="自动检查更新"
         ><UiSwitch
@@ -105,9 +106,11 @@ async function restart() {
           </p></template
         >
         <div class="update-action">
-          <button v-if="updateStatus.phase === 'installed'" class="btn primary" @click="restart">
-            重新启动</button
-          ><button v-else class="btn primary" :disabled="busy" @click="install">下载并更新</button>
+          <UiButton variant="primary" v-if="updateStatus.phase === 'installed'" @click="restart">
+            重新启动</UiButton
+          ><UiButton variant="primary" v-else :disabled="busy" @click="install"
+            >下载并更新</UiButton
+          >
         </div>
       </div>
     </SettingGroup>

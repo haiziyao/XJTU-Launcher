@@ -34,6 +34,8 @@ import CampusLibrary from './campus/CampusLibrary.vue';
 import CampusVenue from './campus/CampusVenue.vue';
 import { bridge } from '../bridge';
 import { directQuery, ensureDirectSession } from '../campusSession';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import type {
   AttendanceStreams,
   CalendarList,
@@ -376,9 +378,9 @@ onMounted(async () => {
         </nav>
       </template>
       <template v-if="tool" #actions>
-        <button class="btn ghost small" @click="close">
+        <UiButton variant="ghost" size="sm" @click="close">
           <ArrowLeft :size="14" aria-hidden="true" />返回
-        </button>
+        </UiButton>
       </template>
     </PageHeader>
     <template v-if="!tool">
@@ -402,22 +404,23 @@ onMounted(async () => {
             :class="{ accent: available(item.id) }"
             >{{ badge(item.id) }}</span
           >
-          <button
-            class="btn ghost icon small"
+          <UiIconButton
+            :label="`将${item.name}移回原位置`"
+            size="sm"
             :title="`将${item.name}移回原位置`"
-            :aria-label="`将${item.name}移回原位置`"
             @click="unpin(item.id)"
           >
             <ArrowDown :size="14" />
-          </button>
-          <button
-            class="btn small tinted"
+          </UiIconButton>
+          <UiButton
+            variant="tinted"
+            size="sm"
             :disabled="!available(item.id)"
             :title="available(item.id) ? undefined : reason(item.id)"
             @click="open(item.id)"
           >
             {{ available(item.id) ? '打开' : '不可用' }}
-          </button>
+          </UiButton>
         </SettingRow>
       </SettingGroup>
       <SettingGroup v-for="section in visibleSections" :key="section.title" :title="section.title">
@@ -439,22 +442,23 @@ onMounted(async () => {
             :class="{ accent: available(item.id) }"
             >{{ badge(item.id) }}</span
           >
-          <button
-            class="btn ghost icon small"
+          <UiIconButton
+            :label="`将${item.name}置顶到常用`"
+            size="sm"
             :title="`将${item.name}置顶到常用`"
-            :aria-label="`将${item.name}置顶到常用`"
             @click="pin(item.id)"
           >
             <ArrowUp :size="14" />
-          </button>
-          <button
-            class="btn small tinted"
+          </UiIconButton>
+          <UiButton
+            variant="tinted"
+            size="sm"
             :disabled="!available(item.id)"
             :title="available(item.id) ? undefined : reason(item.id)"
             @click="open(item.id)"
           >
             {{ available(item.id) ? '打开' : '不可用' }}
-          </button>
+          </UiButton>
         </SettingRow>
       </SettingGroup>
     </template>
@@ -505,15 +509,15 @@ onMounted(async () => {
               <span class="campus-record-meta">¥{{ yuan(row.balance) }}</span>
             </div>
             <div class="campus-record-pages">
-              <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
+              <UiButton size="sm" :disabled="page <= 1 || loading" @click="turn(-1)">
                 上一页
-              </button>
+              </UiButton>
               <span class="setting-value"
                 >第 {{ transactions.page }} 页 · 共 {{ transactions.total }} 条</span
               >
-              <button class="btn small" :disabled="loading || !morePages" @click="turn(1)">
+              <UiButton size="sm" :disabled="loading || !morePages" @click="turn(1)">
                 下一页
-              </button>
+              </UiButton>
             </div>
           </template>
         </SettingGroup>
@@ -589,15 +593,15 @@ onMounted(async () => {
               }}</span>
             </div>
             <div class="campus-record-pages">
-              <button class="btn small" :disabled="page <= 1 || loading" @click="turn(-1)">
+              <UiButton size="sm" :disabled="page <= 1 || loading" @click="turn(-1)">
                 上一页
-              </button>
+              </UiButton>
               <span class="setting-value"
                 >第 {{ streams.page }} 页 · 共 {{ streams.total }} 条</span
               >
-              <button class="btn small" :disabled="loading || !morePages" @click="turn(1)">
+              <UiButton size="sm" :disabled="loading || !morePages" @click="turn(1)">
                 下一页
-              </button>
+              </UiButton>
             </div>
           </template>
         </SettingGroup>
@@ -629,7 +633,7 @@ onMounted(async () => {
             description="在校园窗口中打开校历图片"
             @dblclick="rowDblClick($event, () => openCalendar(row.url))"
           >
-            <button class="btn small tinted" @click="openCalendar(row.url)">打开</button>
+            <UiButton variant="tinted" size="sm" @click="openCalendar(row.url)">打开</UiButton>
           </SettingRow>
         </SettingGroup>
       </template>

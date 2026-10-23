@@ -14,6 +14,7 @@ import McpSettings from './McpSettings.vue';
 import AgentPresets from './AgentPresets.vue';
 import AgentMemories from './AgentMemories.vue';
 
+import UiButton from './ui/UiButton.vue';
 const emit = defineEmits<{ agent: [] }>();
 const tabs = [
   { id: 'models', title: '模型服务' },
@@ -46,7 +47,7 @@ onMounted(() => void loadTools());
   <section class="desktop-page">
     <PageHeader title="Agent 设置">
       <template #actions>
-        <button class="btn" @click="emit('agent')"><Bot :size="14" />打开 Agent</button>
+        <UiButton @click="emit('agent')"><Bot :size="14" />打开 Agent</UiButton>
       </template>
     </PageHeader>
     <SegmentedTabs v-model="tab" :tabs="tabs" label="Agent 设置分类" />

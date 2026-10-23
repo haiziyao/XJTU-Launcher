@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { Check, Folder, Pencil, Pin, Plus, Search, Trash2, X } from 'lucide-vue-next';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import type { AgentSummary, AgentWorkspace } from '../types';
 
 const props = defineProps<{
@@ -123,14 +125,18 @@ function commitCreating() {
   <aside class="history" aria-label="对话管理">
     <header class="history-head">
       <span>对话</span>
-      <button class="icon-button" aria-label="关闭" @click="emit('close')"><X :size="14" /></button>
+      <UiIconButton label="关闭" @click="emit('close')"><X :size="14" /></UiIconButton>
     </header>
     <label class="history-search"
       ><Search :size="13" /><input v-model="search" placeholder="搜索对话" aria-label="搜索对话"
     /></label>
     <div class="history-tools">
-      <button class="history-new" @click="emit('create', null)"><Plus :size="13" />新对话</button>
-      <button class="history-new" @click="startCreating"><Plus :size="13" />工作区</button>
+      <UiButton variant="tinted" size="sm" @click="emit('create', null)">
+        <Plus :size="13" />新对话
+      </UiButton>
+      <UiButton variant="tinted" size="sm" @click="startCreating">
+        <Plus :size="13" />工作区
+      </UiButton>
     </div>
     <form v-if="creating" class="history-workspace-form" @submit.prevent="commitCreating">
       <input
@@ -141,9 +147,9 @@ function commitCreating() {
         aria-label="工作区名称"
         @keydown.esc="creating = false"
       />
-      <button class="icon-button" type="submit" aria-label="创建工作区">
+      <UiIconButton label="创建工作区" type="submit">
         <Check :size="14" />
-      </button>
+      </UiIconButton>
     </form>
     <p v-if="empty" class="history-empty">还没有对话</p>
     <p v-else-if="!total && !workspaces.length" class="history-empty">没有匹配的对话</p>
@@ -157,14 +163,15 @@ function commitCreating() {
         <p class="history-group-title">
           <Folder v-if="section.workspaceId" :size="12" />{{ section.title }}
         </p>
-        <button
+        <UiButton
           v-if="section.workspaceId"
-          class="history-new small"
+          variant="tinted"
+          size="sm"
           :disabled="disabled"
           @click="emit('create', section.workspaceId)"
         >
           <Plus :size="12" />新建
-        </button>
+        </UiButton>
       </div>
       <p v-if="section.workspaceId && !section.rows.length" class="history-empty small">
         还没有对话
@@ -192,31 +199,21 @@ function commitCreating() {
           <small>{{ summary.messages }} 条</small>
         </button>
         <div class="history-actions">
-          <button
-            class="icon-button"
-            :disabled="disabled"
-            :aria-label="summary.pinned ? '取消置顶' : '置顶'"
+          <UiIconButton
+            :label="summary.pinned ? '取消置顶' : '置顶'"
+            :active="summary.pinned"
             :aria-pressed="summary.pinned"
+            :disabled="disabled"
             @click="emit('pin', summary.id, !summary.pinned)"
           >
             <Pin :size="13" :class="{ pinned: summary.pinned }" />
-          </button>
-          <button
-            class="icon-button"
-            :disabled="disabled"
-            aria-label="重命名"
-            @click="startRename(summary)"
-          >
+          </UiIconButton>
+          <UiIconButton label="重命名" :disabled="disabled" @click="startRename(summary)">
             <Check v-if="editingId === summary.id" :size="13" /><Pencil v-else :size="13" />
-          </button>
-          <button
-            class="icon-button"
-            :disabled="disabled"
-            aria-label="删除对话"
-            @click="emit('remove', summary)"
-          >
+          </UiIconButton>
+          <UiIconButton label="删除对话" :disabled="disabled" @click="emit('remove', summary)">
             <Trash2 :size="13" />
-          </button>
+          </UiIconButton>
         </div>
       </div>
     </div>
@@ -280,26 +277,6 @@ function commitCreating() {
   display: flex;
   gap: 4px;
   margin: 0 4px 4px;
-}
-.history-new {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 7px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--accent-wash);
-  color: var(--accent-text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.history-new.small {
-  padding: 2px 5px;
-  font-size: 11px;
-}
-.history-new:hover:not(:disabled) {
-  background: var(--accent-tint);
 }
 .history-workspace-form {
   display: flex;
@@ -417,21 +394,6 @@ function commitCreating() {
 .history-actions {
   display: flex;
   align-items: center;
-}
-.icon-button {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-tertiary);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.icon-button:hover:not(:disabled) {
-  background: var(--surface-pressed);
-  color: var(--text);
 }
 .pinned {
   color: var(--accent);

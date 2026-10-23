@@ -8,6 +8,8 @@ import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{ kind: AgentPresetKind }>();
 
 interface DraftBase {
@@ -161,9 +163,9 @@ onMounted(() => void load());
 
     <SettingGroup v-if="!draft" :title="copy.group" :footnote="copy.foot">
       <template #actions>
-        <button class="btn small" :disabled="busy" @click="edit()">
+        <UiButton size="sm" :disabled="busy" @click="edit()">
           <Plus :size="14" />{{ copy.add }}
-        </button>
+        </UiButton>
       </template>
       <EmptyState
         v-if="loading && !list.length"
@@ -185,15 +187,10 @@ onMounted(() => void load());
         :title="item.name"
         :description="item.description || ('prompt' in item ? item.prompt : item.instructions)"
       >
-        <button class="btn small" :disabled="busy" @click="edit(item)">编辑</button>
-        <button
-          class="btn ghost icon"
-          :disabled="busy"
-          :aria-label="'删除 ' + item.name"
-          @click="remove(item)"
-        >
+        <UiButton size="sm" :disabled="busy" @click="edit(item)">编辑</UiButton>
+        <UiIconButton :label="'删除 ' + item.name" :disabled="busy" @click="remove(item)">
           <Trash2 :size="15" />
-        </button>
+        </UiIconButton>
       </SettingRow>
     </SettingGroup>
 
@@ -244,10 +241,12 @@ onMounted(() => void load());
         </div>
       </template>
       <div class="preset-actions">
-        <button type="button" class="btn ghost" :disabled="busy" @click="draft = null">取消</button>
-        <button type="submit" class="btn primary" :disabled="!valid || busy">
+        <UiButton variant="ghost" type="button" :disabled="busy" @click="draft = null"
+          >取消</UiButton
+        >
+        <UiButton variant="primary" type="submit" :disabled="!valid || busy">
           {{ busy ? '保存中…' : '保存' }}
-        </button>
+        </UiButton>
       </div>
     </form>
   </div>

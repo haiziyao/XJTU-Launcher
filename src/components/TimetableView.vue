@@ -5,6 +5,8 @@ import { academicWeek } from '../domain';
 import type { Timetable } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import EmptyState from './ui/EmptyState.vue';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
   timetable: Timetable | null;
   connected: boolean;
@@ -54,36 +56,25 @@ function hue(name: string) {
       </template>
       <template #actions>
         <div v-if="timetable" class="week-control">
-          <button
-            class="btn ghost icon small"
-            aria-label="上一周"
-            :disabled="week <= 1"
-            @click="week--"
-          >
+          <UiIconButton label="上一周" size="sm" :disabled="week <= 1" @click="week--">
             <ChevronLeft :size="15" />
-          </button>
+          </UiIconButton>
           <select v-model.number="week" class="week-select" aria-label="选择周次">
             <option v-for="n in maxWeek" :key="n" :value="n">第 {{ n }} 周</option>
           </select>
-          <button
-            class="btn ghost icon small"
-            aria-label="下一周"
-            :disabled="week >= maxWeek"
-            @click="week++"
-          >
+          <UiIconButton label="下一周" size="sm" :disabled="week >= maxWeek" @click="week++">
             <ChevronRight :size="15" />
-          </button>
+          </UiIconButton>
         </div>
-        <button
+        <UiIconButton
+          label="刷新课表"
           v-if="connected && timetable"
-          class="btn ghost icon"
           title="刷新课表"
-          aria-label="刷新课表"
           :disabled="loading"
           @click="emit('refresh')"
         >
           <RefreshCw :size="15" :class="{ spinning: loading }" />
-        </button>
+        </UiIconButton>
       </template>
     </PageHeader>
     <Transition name="drop">
@@ -99,13 +90,13 @@ function hue(name: string) {
         :title="connected ? (loading ? '正在同步课表…' : '尚未同步课表') : '未登录校园账号'"
         :description="error || (connected ? '从校园系统获取本学期课表' : '登录校园账号后查看课表')"
       >
-        <button
-          class="btn primary"
+        <UiButton
+          variant="primary"
           :disabled="loading"
           @click="connected ? emit('refresh') : emit('account')"
         >
           {{ connected ? '同步课表' : '前往校园账号' }}
-        </button>
+        </UiButton>
       </EmptyState>
       <div v-else key="grid" class="schedule-scroll">
         <div

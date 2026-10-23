@@ -32,6 +32,8 @@ import type {
 import MenuSelect from './ui/MenuSelect.vue';
 import AgentHistory from './AgentHistory.vue';
 
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 const emit = defineEmits<{ settings: [] }>();
 
 interface LiveStep {
@@ -555,16 +557,17 @@ onBeforeUnmount(() => {
   <section class="desktop-page agent-page">
     <header class="agent-bar">
       <div class="agent-bar-title">
-        <button
-          class="agent-icon-button"
-          :class="{ active: showHistory }"
+        <UiIconButton
+          variant="accent"
+          size="md"
+          label="对话管理"
           title="对话管理"
-          aria-label="对话管理"
+          :active="showHistory"
           :aria-expanded="showHistory"
           @click="showHistory = !showHistory"
         >
           <PanelLeft :size="16" />
-        </button>
+        </UiIconButton>
         <div class="agent-workspace-picker">
           <button
             class="agent-workspace"
@@ -623,17 +626,18 @@ onBeforeUnmount(() => {
         <span v-else class="agent-name">{{ currentTitle }}</span>
       </div>
       <div class="agent-bar-actions">
-        <button class="agent-icon-button" title="新对话" aria-label="新对话" @click="newChat">
+        <UiIconButton variant="accent" size="md" label="新对话" title="新对话" @click="newChat">
           <Plus :size="15" />
-        </button>
-        <button
-          class="agent-icon-button"
+        </UiIconButton>
+        <UiIconButton
+          variant="accent"
+          size="md"
+          label="Agent 设置"
           title="Agent 设置"
-          aria-label="Agent 设置"
           @click="emit('settings')"
         >
           <Settings2 :size="15" />
-        </button>
+        </UiIconButton>
       </div>
     </header>
 
@@ -671,9 +675,9 @@ onBeforeUnmount(() => {
             可以查询课表、成绩、考试、考勤、校园卡，也会调用已启用的 MCP 工具。
           </p>
           <p v-else>还没有可用的模型服务，先到 Agent 设置里添加。</p>
-          <button v-if="!modelOptions.length" class="btn" @click="emit('settings')">
+          <UiButton v-if="!modelOptions.length" @click="emit('settings')">
             打开 Agent 设置
-          </button>
+          </UiButton>
           <div v-if="presets.tasks.length" class="agent-tasks">
             <p class="agent-tasks-title">预设任务</p>
             <button
@@ -831,12 +835,12 @@ onBeforeUnmount(() => {
             >
             <span v-if="running" class="agent-running"><Check :size="12" />生成中</span>
             <span v-else></span>
-            <button
-              type="button"
-              class="agent-icon-button"
-              :class="{ active: showPlus }"
+            <UiIconButton
+              variant="accent"
+              size="md"
+              label="预设与角色"
               title="预设与角色"
-              aria-label="预设与角色"
+              :active="showPlus"
               :aria-expanded="showPlus"
               @click="
                 showPlus = !showPlus;
@@ -844,13 +848,13 @@ onBeforeUnmount(() => {
               "
             >
               <Plus :size="15" />
-            </button>
-            <button
-              type="button"
-              class="agent-icon-button"
-              :class="{ active: showAt }"
+            </UiIconButton>
+            <UiIconButton
+              variant="accent"
+              size="md"
+              label="使用 Skill"
               title="使用 Skill"
-              aria-label="使用 Skill"
+              :active="showAt"
               :aria-expanded="showAt"
               @click="
                 showAt = !showAt;
@@ -858,25 +862,28 @@ onBeforeUnmount(() => {
               "
             >
               <AtSign :size="15" />
-            </button>
-            <button
+            </UiIconButton>
+            <UiIconButton
               v-if="running"
-              type="button"
-              class="agent-send-circle stop"
-              aria-label="停止生成"
+              variant="neutral"
+              size="md"
+              shape="circle"
+              label="停止生成"
               @click="stop"
             >
               <Square :size="12" />
-            </button>
-            <button
+            </UiIconButton>
+            <UiIconButton
               v-else
+              variant="primary"
+              size="md"
+              shape="circle"
               type="submit"
-              class="agent-send-circle"
-              aria-label="发送"
+              label="发送"
               :disabled="!canSend"
             >
               <ArrowUp :size="15" />
-            </button>
+            </UiIconButton>
           </div>
           <div v-if="showPlus" class="agent-menu agent-plus-menu" role="menu">
             <p class="agent-menu-label">角色</p>
@@ -1052,25 +1059,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 2px;
-}
-.agent-icon-button {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-tertiary);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.agent-icon-button:hover:not(:disabled) {
-  background: var(--accent-wash);
-  color: var(--accent-text);
-}
-.agent-icon-button.active {
-  background: var(--surface-pressed);
-  color: var(--text);
 }
 .agent-notice {
   margin: 10px 0 0;
@@ -1269,29 +1257,6 @@ onBeforeUnmount(() => {
 }
 .agent-composer-bar > span:empty {
   margin-left: auto;
-}
-.agent-send-circle {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 0;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.agent-send-circle:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.agent-send-circle:disabled {
-  background: var(--surface-sunken);
-  color: var(--text-tertiary);
-  cursor: default;
-}
-.agent-send-circle.stop {
-  background: var(--surface-sunken);
-  color: var(--text);
 }
 .agent-tasks {
   margin: 26px auto 0;

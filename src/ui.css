@@ -111,24 +111,6 @@
 .btn.icon.small {
   width: 26px;
 }
-.text-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 2px;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--accent-text);
-  font-size: 12.5px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color var(--duration-fast) ease;
-}
-.text-action:hover:not(:disabled) {
-  color: var(--accent-pressed);
-}
-
 /* Inputs */
 .text-field {
   height: 32px;
@@ -651,19 +633,13 @@ select.text-field {
 .notice > span {
   flex: 1;
 }
+/* Alignment-only hook for the UiIconButton that dismisses a notice. */
 .notice-close {
-  display: flex;
   margin: 1px -4px 0 0;
-  padding: 2px;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: inherit;
-  opacity: 0.7;
+  opacity: 0.75;
 }
-.notice-close:hover {
+.notice-close:hover:not(:disabled) {
   opacity: 1;
-  background: rgba(0, 0, 0, 0.05);
 }
 .muted {
   color: var(--text-tertiary);
