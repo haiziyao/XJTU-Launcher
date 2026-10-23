@@ -189,6 +189,18 @@ fn category(name: &str) -> &'static str {
         "campus_attendance_streams" | "campus_attendance_records" => "考勤",
         "campus_card" | "campus_card_transactions" => "校园卡",
         "campus_fitness" | "campus_fitness_score" => "体测",
+        "campus_evaluations" => "评教",
+        "campus_profile" => "学籍档案",
+        "campus_lms_courses"
+        | "campus_lms_activities"
+        | "campus_lms_activity"
+        | "campus_lms_submit" => "思源学堂",
+        "campus_library_floors"
+        | "campus_library_areas"
+        | "campus_library_seats"
+        | "campus_venues"
+        | "campus_venue_slots"
+        | "campus_venue_orders" => "图书馆与场馆",
         _ => "教室与校历",
     }
 }

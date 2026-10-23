@@ -122,6 +122,98 @@ pub fn builtin() -> Vec<ToolDef> {
             }),
             &["name", "campus"],
         ),
+        campus(
+            "campus_evaluations",
+            "列出教学评价（只读，不会提交任何评价）",
+            json!({
+                "term": term,
+                "finished": { "type": "boolean", "description": "true 查看已评，false 查看待评" }
+            }),
+            &[],
+        ),
+        campus(
+            "campus_profile",
+            "查询学籍档案（姓名、学号、学院、专业、班级等）",
+            json!({}),
+            &[],
+        ),
+        campus(
+            "campus_lms_courses",
+            "列出思源学堂课程及各课程的学期、教师信息",
+            json!({}),
+            &[],
+        ),
+        campus(
+            "campus_lms_activities",
+            "列出思源学堂某门课程的全部活动（作业、资料、回放、讨论、问卷等）",
+            json!({
+                "course": { "type": "integer", "minimum": 1, "description": "课程编号，来自 campus_lms_courses" }
+            }),
+            &["course"],
+        ),
+        campus(
+            "campus_lms_activity",
+            "查看思源学堂活动详情：说明、附件、提交与成绩概况",
+            json!({
+                "activity": { "type": "integer", "minimum": 1, "description": "活动编号，来自 campus_lms_activities" }
+            }),
+            &["activity"],
+        ),
+        campus(
+            "campus_lms_submit",
+            "提交思源学堂作业（写操作）。默认只返回预览，不上传也不提交；预览中核对课程、作业和文件，并向用户复述确认后，用户明确要求提交时才带 confirm=true 再次调用。文件必须是用户明确指定的本地绝对路径，仅支持常见文档、代码和媒体类型，最大 100 MB/个、200 MB/次。不要重试结果不明的提交。",
+            json!({
+                "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms_activities" },
+                "comment": { "type": "string", "description": "文字答案或作业说明，可留空" },
+                "files": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": { "type": "string" },
+                    "description": "要上传的本地文件绝对路径，只用用户明确指定且已核对的文件"
+                },
+                "draft": { "type": "boolean", "description": "true 保存为草稿；false 正式提交，默认 false" },
+                "confirm": { "type": "boolean", "description": "默认 false，只预览；用户明确要求提交且预览无误时设为 true" }
+            }),
+            &["activity"],
+        ),
+        campus(
+            "campus_library_floors",
+            "列出图书馆可选楼层",
+            json!({}),
+            &[],
+        ),
+        campus(
+            "campus_library_areas",
+            "列出图书馆某一楼层的区域",
+            json!({
+                "floor": { "type": "string", "description": "楼层编号，来自 campus_library_floors" }
+            }),
+            &["floor"],
+        ),
+        campus(
+            "campus_library_seats",
+            "查询图书馆某区域当前可选座位",
+            json!({
+                "area": { "type": "string", "description": "区域编号，来自 campus_library_areas" }
+            }),
+            &["area"],
+        ),
+        campus("campus_venues", "列出可预约的场馆", json!({}), &[]),
+        campus(
+            "campus_venue_slots",
+            "查询某场馆某日期的可预约时段",
+            json!({
+                "venue": { "type": "integer", "minimum": 1, "description": "场馆编号，来自 campus_venues" },
+                "date": date
+            }),
+            &["venue", "date"],
+        ),
+        campus(
+            "campus_venue_orders",
+            "查询我的场馆预约记录",
+            json!({}),
+            &[],
+        ),
     ]
 }
 
@@ -142,6 +234,29 @@ fn number(args: &Value, key: &str, fallback: u32) -> u32 {
 
 fn required(args: &Value, key: &str) -> Result<String, String> {
     text(args, key).ok_or_else(|| format!("缺少参数 {key}"))
+}
+
+fn id(args: &Value, key: &str) -> Result<u64, String> {
+    args.get(key)
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("缺少有效的编号参数 {key}"))
+}
+
+fn strings(args: &Value, key: &str) -> Result<Vec<String>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|item| !item.trim().is_empty())
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("参数 {key} 必须是文件路径列表"))
+            })
+            .collect(),
+        _ => Err(format!("参数 {key} 必须是文件路径列表")),
+    }
 }
 
 fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
@@ -187,6 +302,34 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
             name: required(args, "name")?,
             campus: required(args, "campus")?,
         },
+        "campus_evaluations" => school::Query::Evaluations {
+            term: text(args, "term"),
+            finished: args
+                .get("finished")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        },
+        "campus_profile" => school::Query::Profile,
+        "campus_lms_courses" => school::Query::LmsCourses,
+        "campus_lms_activities" => school::Query::LmsActivities {
+            course: id(args, "course")?,
+        },
+        "campus_lms_activity" => school::Query::LmsActivity {
+            activity: id(args, "activity")?,
+        },
+        "campus_library_floors" => school::Query::LibraryFloors,
+        "campus_library_areas" => school::Query::LibraryAreas {
+            floor: required(args, "floor")?,
+        },
+        "campus_library_seats" => school::Query::LibrarySeats {
+            area: required(args, "area")?,
+        },
+        "campus_venues" => school::Query::VenueList,
+        "campus_venue_slots" => school::Query::VenueSlots {
+            venue: id(args, "venue")?,
+            date: required(args, "date")?,
+        },
+        "campus_venue_orders" => school::Query::VenueOrders,
         other => return Err(format!("未知的校园工具 {other}")),
     };
     Ok(query)
@@ -223,6 +366,22 @@ impl ToolDef {
                     let timetable = crate::run_timetable(app).await?;
                     Ok(truncate(
                         serde_json::to_string(&timetable).map_err(|_| "无法序列化课表")?,
+                    ))
+                }
+                "campus_lms_submit" => {
+                    let request = school::lms::Homework {
+                        activity: id(&args, "activity")?,
+                        comment: text(&args, "comment").unwrap_or_default(),
+                        files: strings(&args, "files")?,
+                        draft: args.get("draft").and_then(Value::as_bool).unwrap_or(false),
+                    };
+                    let confirm = args
+                        .get("confirm")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    let data = crate::run_lms_homework(app, request, confirm).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化提交结果")?,
                     ))
                 }
                 other => {
@@ -323,6 +482,32 @@ mod tests {
         ));
         assert!(query_for("campus_attendance_records", &json!({})).is_err());
         assert!(query_for("nope", &json!({})).is_err());
+        assert!(matches!(
+            query_for("campus_lms_activities", &json!({"course": 12})).unwrap(),
+            school::Query::LmsActivities { course: 12 }
+        ));
+        assert!(query_for("campus_lms_activities", &json!({"course": 0})).is_err());
+        assert!(matches!(
+            query_for("campus_library_seats", &json!({"area": "A"})).unwrap(),
+            school::Query::LibrarySeats { .. }
+        ));
+        assert!(matches!(
+            query_for("campus_evaluations", &json!({"finished": true})).unwrap(),
+            school::Query::Evaluations { finished: true, .. }
+        ));
+        let defs = builtin();
+        let names: Vec<&str> = defs.iter().map(|def| def.name.as_str()).collect();
+        for name in [
+            "campus_profile",
+            "campus_lms_courses",
+            "campus_lms_activity",
+            "campus_lms_submit",
+            "campus_venues",
+            "campus_venue_slots",
+            "campus_venue_orders",
+        ] {
+            assert!(names.contains(&name), "{name}");
+        }
     }
 
     #[test]

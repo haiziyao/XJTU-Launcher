@@ -1164,6 +1164,26 @@ pub(crate) async fn run_school_query(
     Ok(data)
 }
 
+/// Homework submission is the one Agent write path. `confirm = false` only
+/// previews; files are uploaded and the submission posted only when true.
+pub(crate) async fn run_lms_homework(
+    app: &tauri::AppHandle,
+    request: school::lms::Homework,
+    confirm: bool,
+) -> Result<serde_json::Value, String> {
+    require_school_feature(app, "lms")?;
+    request.validate()?;
+    let state = app.state::<AppState>();
+    let _service_guard = state.school_lock.lock().await;
+    let (account, _) = school_account(app, &state).await?;
+    let client = school::lms::Client::connect(&account)?;
+    if confirm {
+        client.homework_submit(&request).await
+    } else {
+        client.homework_preview(&request).await
+    }
+}
+
 #[tauri::command]
 async fn school_query(
     app: tauri::AppHandle,

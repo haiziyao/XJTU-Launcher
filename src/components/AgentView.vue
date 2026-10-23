@@ -59,6 +59,18 @@ const TOOL_LABELS: Record<string, string> = {
   campus_room_options: '查询教室选项',
   campus_rooms: '查询空闲教室',
   campus_courses: '查询全校课程',
+  campus_evaluations: '查询评教',
+  campus_profile: '查询学籍档案',
+  campus_lms_courses: '查询思源学堂课程',
+  campus_lms_activities: '查询课程活动',
+  campus_lms_activity: '查看活动详情',
+  campus_lms_submit: '提交作业',
+  campus_library_floors: '查询图书馆楼层',
+  campus_library_areas: '查询图书馆区域',
+  campus_library_seats: '查询图书馆座位',
+  campus_venues: '查询场馆',
+  campus_venue_slots: '查询场馆时段',
+  campus_venue_orders: '查询我的场馆预约',
 };
 
 const providers = ref<ModelProviders>({
