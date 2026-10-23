@@ -439,8 +439,8 @@
    the system fonts remain as a fallback for glyphs outside the subset. */
 .platform-windows {
   --font-sans:
-    'XJTU Sans SC', 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI',
-    'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+    'XJTU Sans SC', 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI',
+    'Microsoft YaHei', sans-serif;
   --font-mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
 }
 .platform-windows ::-webkit-scrollbar {

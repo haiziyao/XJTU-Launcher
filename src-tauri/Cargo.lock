@@ -6150,7 +6150,7 @@ dependencies = [
 
 [[package]]
 name = "xjtu-launcher"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aes",
  "aes-gcm",
