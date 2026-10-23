@@ -56,13 +56,27 @@
 
 按钮自身的样式写在组件内；页面只通过外层容器控制间距，不再覆盖图标按钮的尺寸和 hover。需要“默认厂商”这类一次性着色时，可以给组件加类（例如 ProvidersView 的 `class="ui-icon-button accent"` 对应的 `.ui-icon-button.accent`）。
 
+## PageTabs 与 SegmentedTabs
+
+两种标签栏按层级分工，不要互相替代，也不要在页面里重写其中任何一种：
+
+- `PageTabs`：页面级切换，紧跟 `PageHeader`，用于“应用设置”“Agent 设置”“插件市场”这类整页分区。透明底、底部一条细线，选中项用主题色浅底和主题色文字，不再出现灰色胶囊底。
+- `SegmentedTabs`：页面内部的小范围筛选，位于某个分组上方或内容区里，使用时传 `compact`（例如思源学堂课程内的活动分类，带数量、条目多可横向滚动）。它保留浅灰底容器和白底选中胶囊。
+
+```vue
+<PageTabs v-model="tab" :tabs="sections" label="设置分类" />
+<SegmentedTabs v-model="active" class="lms-tabs" compact :tabs="tabs" label="活动分类" />
+```
+
+两者都接收 `{ id, title }[]`、`v-model` 和必填的 `label`（`aria-label`），并支持方向键 / Home / End 切换。页面不再用 `:deep()` 覆盖标签栏颜色、底色或间距。
+
 ## 不属于按钮组件的控件
 
 以下控件保留各自的语义和样式，不要套用上面的组件，也不要在页面里另写一套“看起来像按钮”的样式：
 
 - 导航行：`desktop-nav-item`、`history-open`、`router` 条目、`plugin-tile-main`、`agent-tool-row`、`campus-record`（整行可点或只是数据行）。
 - 选择卡片：`pet-option`、`accent-swatch`、`clock-option`、头像 / 壁纸选择。
-- 开关与标签页：`UiSwitch`、`SegmentedTabs`。
+- 开关：`UiSwitch`。
 - 选择器触发器：`MenuSelect` 的 `menu-field-value`。
 - 布局控件：侧栏折叠 `sidebar-toggle`、窗口按钮、`profile-avatar`。
 - 通知条上的关闭按钮使用 `UiIconButton variant="inherit" size="xs"`，只保留 `notice-close` 作为外边距钩子。

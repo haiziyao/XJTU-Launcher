@@ -97,7 +97,7 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 2026-10-23 修复思源学堂登录：LMS 的 CAS 登录会先经过 `identity1.xjtu.edu.cn` 的 Keycloak broker（`/auth/realms/xjtu/...`）再回到 `login.xjtu.edu.cn`，该主机此前不在传输白名单，登录在重定向阶段即被拒（页面报“校园跳转地址不受支持”）。现在仅把该 HTTPS 主机加入白名单；它只中转登录跳转，不接收账号密码。已用本机真实账号实测：登录成功，课程 58 门、抽查课程活动分别 106 / 13 / 45 条。新增忽略式探针 `live_lms_session_probe`。
 
-2026-10-23 按钮统一：所有文字按钮改由 `UiButton` 渲染，纯图标按钮统一为 `UiIconButton`（xs 20 / sm 24 / md 28，quiet / accent / primary / neutral / danger / inherit）。删除了页面里各自实现的 `history-new`、`icon-button`、`agent-icon-button`、`agent-send-circle`、`text-action` 等样式，`notice-close` 只保留外边距。导航行、选择卡片、开关、标签页和选择器触发器仍使用原生按钮，与组件一起记录在 [按钮与通用控件](UI_COMPONENTS.md)。
+2026-10-23 按钮统一：所有文字按钮改由 `UiButton` 渲染，纯图标按钮统一为 `UiIconButton`（xs 20 / sm 24 / md 28，quiet / accent / primary / neutral / danger / inherit）。删除了页面里各自实现的 `history-new`、`icon-button`、`agent-icon-button`、`agent-send-circle`、`text-action` 等样式，`notice-close` 只保留外边距。页面级标签栏抽成 `PageTabs`（透明底、底部细线、主题色选中），应用设置、Agent 设置与插件市场共用；`SegmentedTabs` 只保留给分组内的紧凑筛选（思源学堂活动分类）。页头操作按钮统一为 `sm` 尺寸。导航行、选择卡片、开关和选择器触发器仍使用原生按钮，与组件一起记录在 [按钮与通用控件](UI_COMPONENTS.md)。
 
 2026-10-23 思源学堂内部页面：按用户要求改为“功能分类”而不是平铺活动。课程列表按学期（学年 + 学期）分组，新近学期在前；进入课程后顶部用分段标签切换分类，不再纵向堆叠所有分组。课程活动按类型分为作业、学习资料、课程回放、在线视频、直播课堂、讨论、问卷与其他活动，每类显示数量；点开活动进入详情页，显示时间、提交与成绩概况、活动说明（HTML 转为文本）、附件列表，并提供“打开”（校园窗口查看）与“下载”（另存为，流式写入所选路径）操作；录播课可取 `/api/lessons/{id}/player-url` 的回放地址并在校园窗口打开。新增 `Query::LmsActivity` 与命令 `lms_open_file`、`lms_save_file`：附件接口先 302 到 `media.xjtu.edu.cn`，只接受该 HTTPS 主机的跳转，下载上限 2 GB。已用真实账号验证：活动详情正常，回放地址可取得，附件实测下载 47 MB 视频成功。作业提交、讨论与问卷正文尚未实现。
 

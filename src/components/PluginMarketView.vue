@@ -24,7 +24,7 @@ import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
-import SegmentedTabs from './ui/SegmentedTabs.vue';
+import PageTabs from './ui/PageTabs.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
@@ -175,7 +175,7 @@ onBeforeUnmount(() => {
         </UiIconButton>
       </template>
     </PageHeader>
-    <SegmentedTabs v-model="tab" :tabs="tabs" label="插件分类" />
+    <PageTabs v-model="tab" :tabs="tabs" label="插件分类" />
     <p v-if="error" class="notice" role="alert">{{ error }}</p>
     <p v-for="warning in warnings" :key="warning" class="notice warning" role="alert">
       {{ warning }}
@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
           ></template>
           <UiButton
             size="sm"
-            :class="{ tinted: !config.disabledPlugins.includes(plugin.id) }"
+            :variant="config.disabledPlugins.includes(plugin.id) ? 'secondary' : 'tinted'"
             :disabled="saving"
             @click="
               config.disabledPlugins.includes(plugin.id)

@@ -4,7 +4,7 @@ import { Bot, LoaderCircle, Plug, Wrench } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type { AgentToolInfo } from '../types';
 import PageHeader from './ui/PageHeader.vue';
-import SegmentedTabs from './ui/SegmentedTabs.vue';
+import PageTabs from './ui/PageTabs.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
@@ -47,10 +47,10 @@ onMounted(() => void loadTools());
   <section class="desktop-page">
     <PageHeader title="Agent 设置">
       <template #actions>
-        <UiButton @click="emit('agent')"><Bot :size="14" />打开 Agent</UiButton>
+        <UiButton size="sm" @click="emit('agent')"><Bot :size="14" />打开 Agent</UiButton>
       </template>
     </PageHeader>
-    <SegmentedTabs v-model="tab" :tabs="tabs" label="Agent 设置分类" />
+    <PageTabs v-model="tab" :tabs="tabs" label="Agent 设置分类" />
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
     </Transition>
