@@ -295,6 +295,14 @@ export const bridge = {
     requireNative();
     return invoke('agent_new', { workspaceId });
   },
+  async agentLastOpened(): Promise<string | null> {
+    requireNative();
+    return invoke('agent_last_opened');
+  },
+  async agentSetLastOpened(id: string | null): Promise<void> {
+    requireNative();
+    return invoke('agent_set_last_opened', { id });
+  },
   async agentWorkspaces(): Promise<AgentWorkspace[]> {
     requireNative();
     return invoke('agent_workspaces');

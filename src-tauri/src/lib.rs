@@ -1618,6 +1618,28 @@ fn agent_list(
     )?)?))
 }
 #[tauri::command]
+fn agent_last_opened(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Option<String>, String> {
+    main_only(&window)?;
+    Ok(agent::store::last_opened(&agent::store::load(
+        &agent::path(&app)?,
+    )?))
+}
+#[tauri::command]
+fn agent_set_last_opened(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    agent::store::set_last_opened(&mut book, id)?;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
 fn agent_get(
     app: tauri::AppHandle,
     window: WebviewWindow,
@@ -1903,6 +1925,8 @@ pub fn run() {
             agent_set_workspace,
             agent_get,
             agent_new,
+            agent_last_opened,
+            agent_set_last_opened,
             agent_delete,
             agent_rename,
             agent_send,

@@ -293,6 +293,18 @@ async function loadSummaries() {
     error.value = errorText(e);
   }
 }
+/** Written after the conversation itself is saved, so a failure here is harmless. */
+function remember(id: string) {
+  void bridge.agentSetLastOpened(id).catch(() => {});
+}
+/** Most recently updated conversation; pinned-first list order is not recency. */
+function mostRecentId() {
+  let latest: AgentSummary | undefined;
+  for (const item of summaries.value) {
+    if (!latest || item.updatedAt > latest.updatedAt) latest = item;
+  }
+  return latest?.id || '';
+}
 async function openConversation(id: string) {
   if (running.value) return;
   try {
@@ -308,6 +320,7 @@ async function openConversation(id: string) {
     expanded.value = new Set();
     error.value = '';
     showHistory.value = false;
+    remember(next.id);
     await scrollDown();
   } catch (e) {
     error.value = errorText(e);
@@ -465,6 +478,7 @@ async function send() {
   if (!conversation.value) {
     try {
       conversation.value = await bridge.agentNew(workspaceId.value || null);
+      remember(conversation.value.id);
     } catch (e) {
       error.value = errorText(e);
       return;
@@ -543,6 +557,15 @@ function shortContent(text: string, limit = 6000) {
 watch(liveText, () => void scrollDown());
 onMounted(async () => {
   await Promise.all([loadProviders(), loadSummaries(), loadPresets(), loadWorkspaces()]);
+  try {
+    // Reopen the conversation from last time; older installs without a marker
+    // fall back to the most recently updated one.
+    const last = await bridge.agentLastOpened().catch(() => null);
+    const target = last && summaries.value.some((item) => item.id === last) ? last : mostRecentId();
+    if (target) await openConversation(target);
+  } catch (e) {
+    error.value = errorText(e);
+  }
   try {
     unlisten = await bridge.onAgent(onEvent);
   } catch (e) {

@@ -116,6 +116,9 @@ pub struct Store {
     pub conversations: Vec<Conversation>,
     #[serde(default)]
     pub workspaces: Vec<Workspace>,
+    /// Conversation the Agent page reopens by default.
+    #[serde(default)]
+    pub last_opened: Option<String>,
 }
 
 fn version() -> u32 {
@@ -128,6 +131,7 @@ impl Default for Store {
             version: 1,
             conversations: Vec::new(),
             workspaces: Vec::new(),
+            last_opened: None,
         }
     }
 }
@@ -270,6 +274,26 @@ pub fn remove(store: &mut Store, id: &str) -> Result<(), String> {
     if store.conversations.len() == before {
         return Err("对话不存在".into());
     }
+    if store.last_opened.as_deref() == Some(id) {
+        store.last_opened = None;
+    }
+    Ok(())
+}
+
+/// Conversation the Agent page reopens on entry; a stale id reads as none.
+pub fn last_opened(store: &Store) -> Option<String> {
+    store
+        .last_opened
+        .as_ref()
+        .filter(|id| store.conversations.iter().any(|item| &item.id == *id))
+        .cloned()
+}
+
+pub fn set_last_opened(store: &mut Store, id: Option<String>) -> Result<(), String> {
+    if let Some(id) = &id {
+        find(store, id)?;
+    }
+    store.last_opened = id;
     Ok(())
 }
 
@@ -326,6 +350,26 @@ mod tests {
         let summaries = summaries(&reloaded);
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].messages, 3);
+    }
+
+    #[test]
+    fn remembers_the_last_opened_conversation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("conversations.json");
+        let mut store = load(&path).unwrap();
+        let first = create(&mut store, None);
+        let second = create(&mut store, None);
+        assert_eq!(last_opened(&store), None);
+        set_last_opened(&mut store, Some(second.id.clone())).unwrap();
+        save(&path, &store).unwrap();
+        let reloaded = load(&path).unwrap();
+        assert_eq!(last_opened(&reloaded), Some(second.id.clone()));
+        let mut store = reloaded;
+        remove(&mut store, &first.id).unwrap();
+        assert_eq!(last_opened(&store), Some(second.id.clone()));
+        remove(&mut store, &second.id).unwrap();
+        assert_eq!(last_opened(&store), None);
+        assert!(set_last_opened(&mut store, Some("missing".into())).is_err());
     }
 
     #[test]
