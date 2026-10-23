@@ -2,6 +2,7 @@
 //! tools exposed by enabled MCP servers.
 use crate::{mcp, school};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use tauri::AppHandle;
 
 /// Tool output above this size is truncated before it reaches the model.
@@ -130,6 +131,36 @@ pub fn builtin() -> Vec<ToolDef> {
                 "finished": { "type": "boolean", "description": "true 查看已评，false 查看待评" }
             }),
             &[],
+        ),
+        campus(
+            "campus_evaluations_preview",
+            "自动填写待评问卷并生成预览（不会提交）。ids 来自 campus_evaluations 的 id；rank 1 最高、5 最低；comments 可按问卷编号为每位老师单独设置文字评语。",
+            json!({
+                "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "items": { "type": "string" },
+                    "description": "问卷编号列表，来自 campus_evaluations"
+                },
+                "rank": { "type": "integer", "minimum": 1, "maximum": 5, "description": "评分档位，1 最高、5 最低，默认 2" },
+                "comment": { "type": "string", "description": "默认文字评语，用于所有必填文字题" },
+                "comments": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "按问卷编号覆盖该老师的文字评语"
+                }
+            }),
+            &["ids"],
+        ),
+        campus(
+            "campus_evaluations_submit",
+            "提交已经生成的评教预览（写操作）。只有用户看到预览并明确要求提交时才带 confirm=true；结果不明的问卷不会被自动重试。",
+            json!({
+                "previewId": { "type": "string", "description": "campus_evaluations_preview 返回的 id" },
+                "confirm": { "type": "boolean", "description": "默认 false；用户明确确认提交时设为 true" }
+            }),
+            &["previewId"],
         ),
         campus(
             "campus_notice_channels",
@@ -275,10 +306,26 @@ fn strings(args: &Value, key: &str) -> Result<Vec<String>, String> {
                 item.as_str()
                     .filter(|item| !item.trim().is_empty())
                     .map(str::to_string)
-                    .ok_or_else(|| format!("参数 {key} 必须是文件路径列表"))
+                    .ok_or_else(|| format!("参数 {key} 必须是字符串列表"))
             })
             .collect(),
-        _ => Err(format!("参数 {key} 必须是文件路径列表")),
+        _ => Err(format!("参数 {key} 必须是字符串列表")),
+    }
+}
+
+fn comments(args: &Value) -> Result<BTreeMap<String, String>, String> {
+    match args.get("comments") {
+        None | Some(Value::Null) => Ok(BTreeMap::new()),
+        Some(Value::Object(items)) => items
+            .iter()
+            .map(|(key, value)| {
+                value
+                    .as_str()
+                    .map(|value| (key.clone(), value.to_string()))
+                    .ok_or_else(|| "参数 comments 必须是问卷编号到评语的映射".to_string())
+            })
+            .collect(),
+        _ => Err("参数 comments 必须是问卷编号到评语的映射".into()),
     }
 }
 
@@ -403,6 +450,44 @@ impl ToolDef {
                         serde_json::to_string(&timetable).map_err(|_| "无法序列化课表")?,
                     ))
                 }
+                "campus_evaluations_preview" => {
+                    let request = school::evaluation::Prepare {
+                        ids: strings(&args, "ids")?,
+                        rank: args
+                            .get("rank")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(2)
+                            .clamp(1, 5) as u8,
+                        comment: text(&args, "comment").unwrap_or_default(),
+                        overrides: BTreeMap::new(),
+                        comments: comments(&args)?,
+                    };
+                    let data = crate::prepare_evaluations(app, request).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化评教预览")?,
+                    ))
+                }
+                "campus_evaluations_submit" => {
+                    let preview_id = required(&args, "previewId")?;
+                    let confirm = args
+                        .get("confirm")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    if !confirm {
+                        return Ok(truncate(
+                            serde_json::json!({
+                                "confirmRequired": true,
+                                "previewId": preview_id,
+                                "message": "尚未提交。请把预览中的课程、评分和评语如实告知用户；用户明确要求提交后，再带 confirm=true 调用。",
+                            })
+                            .to_string(),
+                        ));
+                    }
+                    let data = crate::submit_evaluations(app, preview_id).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化评教结果")?,
+                    ))
+                }
                 "campus_lms_submit" => {
                     let request = school::lms::Homework {
                         activity: id(&args, "activity")?,
@@ -506,6 +591,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn evaluation_comments_are_typed() {
+        let parsed = comments(&json!({"comments": {"q": "老师认真负责"}})).unwrap();
+        assert_eq!(parsed.get("q").map(String::as_str), Some("老师认真负责"));
+        assert!(comments(&json!({})).unwrap().is_empty());
+        assert!(comments(&json!({"comments": {"q": 1}})).is_err());
+        assert!(comments(&json!({"comments": []})).is_err());
+    }
+
+    #[test]
     fn maps_tool_names_to_queries() {
         assert!(matches!(
             query_for("campus_grades", &json!({"term": "2025-2026-1"})).unwrap(),
@@ -534,6 +628,8 @@ mod tests {
         let names: Vec<&str> = defs.iter().map(|def| def.name.as_str()).collect();
         for name in [
             "campus_profile",
+            "campus_evaluations_preview",
+            "campus_evaluations_submit",
             "campus_notice_channels",
             "campus_notices",
             "campus_lms_courses",

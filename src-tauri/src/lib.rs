@@ -1187,6 +1187,55 @@ pub(crate) async fn run_lms_homework(
     }
 }
 
+/// Build an evaluation preview for the Agent. It queries the school but never
+/// submits anything; the returned `id` can be submitted later.
+pub(crate) async fn prepare_evaluations(
+    app: &tauri::AppHandle,
+    request: school::evaluation::Prepare,
+) -> Result<serde_json::Value, String> {
+    require_school_feature(app, "evaluations")?;
+    let state = app.state::<AppState>();
+    let _service_guard = state.school_lock.lock().await;
+    let (account, generation) = school_account(app, &state).await?;
+    let account_id = account.id.clone();
+    let (preview, cookies) = state
+        .evaluations
+        .prepare(account, generation, request)
+        .await?;
+    save_school_session(app, &state, &account_id, generation, cookies).await?;
+    serde_json::to_value(preview).map_err(|_| "无法序列化评教预览".into())
+}
+
+/// Submit a preview that the Agent already showed to the user. The caller must
+/// only reach this after an explicit confirmation.
+pub(crate) async fn submit_evaluations(
+    app: &tauri::AppHandle,
+    preview_id: String,
+) -> Result<serde_json::Value, String> {
+    require_school_feature(app, "evaluations")?;
+    let state = app.state::<AppState>();
+    let _service_guard = state.school_lock.lock().await;
+    let _account_guard = state.auth_lock.lock().await;
+    let path = accounts_path(app)?;
+    let mut book = accounts::load(&path)?;
+    let account = book.active().ok_or("请先登录校园账号")?.clone();
+    let account_id = account.id.clone();
+    let generation = state.generation.load(Ordering::SeqCst);
+    let (outcomes, cookies) = state
+        .evaluations
+        .submit(&preview_id, account, generation, |_| {})
+        .await?;
+    // A local save failure must not turn an accepted submission into a retry.
+    if let Some(cookies) = cookies {
+        if let Some(account) = book.accounts.iter_mut().find(|a| a.id == account_id) {
+            account.cookies = cookies;
+        }
+        let _ = accounts::save(&path, &book);
+    }
+    serde_json::to_value(serde_json::json!({"outcomes": outcomes}))
+        .map_err(|_| "无法序列化评教结果".into())
+}
+
 #[tauri::command]
 async fn school_query(
     app: tauri::AppHandle,

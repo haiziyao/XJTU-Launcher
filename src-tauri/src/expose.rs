@@ -189,7 +189,7 @@ fn category(name: &str) -> &'static str {
         "campus_attendance_streams" | "campus_attendance_records" => "考勤",
         "campus_card" | "campus_card_transactions" => "校园卡",
         "campus_fitness" | "campus_fitness_score" => "体测",
-        "campus_evaluations" => "评教",
+        "campus_evaluations" | "campus_evaluations_preview" | "campus_evaluations_submit" => "评教",
         "campus_profile" => "学籍档案",
         "campus_notice_channels" | "campus_notices" => "校园通知",
         "campus_lms_courses"

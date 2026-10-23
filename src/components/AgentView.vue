@@ -60,6 +60,8 @@ const TOOL_LABELS: Record<string, string> = {
   campus_rooms: '查询空闲教室',
   campus_courses: '查询全校课程',
   campus_evaluations: '查询评教',
+  campus_evaluations_preview: '生成评教预览',
+  campus_evaluations_submit: '提交评教',
   campus_profile: '查询学籍档案',
   campus_notice_channels: '查询通知栏目',
   campus_notices: '读取校园通知',

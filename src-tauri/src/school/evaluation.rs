@@ -90,7 +90,7 @@ pub(super) async fn list(
     }
     Ok(result)
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Prepare {
     pub ids: Vec<String>,
@@ -99,6 +99,10 @@ pub struct Prepare {
     pub comment: String,
     #[serde(default)]
     pub overrides: BTreeMap<String, BTreeMap<String, String>>,
+    /// Per-questionnaire text comment, keyed by questionnaire id; it replaces
+    /// `comment` for every free-text question of that teacher's questionnaire.
+    #[serde(default)]
+    pub comments: BTreeMap<String, String>,
 }
 impl Prepare {
     fn validate(&self) -> Result<(), String> {
@@ -117,6 +121,11 @@ impl Prepare {
                     || q.iter()
                         .any(|(k, v)| k.len() > 256 || v.chars().count() > 4000)
             })
+            || self.comments.len() > 32
+            || self
+                .comments
+                .iter()
+                .any(|(key, value)| key.len() > 4096 || value.chars().count() > 4000)
         {
             return Err("自定义答案数量或长度超出限制".into());
         }
@@ -185,6 +194,9 @@ impl Manager {
         input: Prepare,
     ) -> Result<(Preview, String), String> {
         input.validate()?;
+        if input.comments.keys().any(|id| !input.ids.contains(id)) {
+            return Err("自定义评语包含未选择的问卷".into());
+        }
         let client = Client::connect(account).await?;
         let available = list(&client, None, false).await?;
         let mut courses = Vec::new();
@@ -416,7 +428,12 @@ fn build_answers(
                 (answer, String::new(), label)
             }
             "02" => {
-                let value = custom.unwrap_or(&input.comment).trim().to_string();
+                let value = custom
+                    .map(String::as_str)
+                    .or_else(|| input.comments.get(&id).map(String::as_str))
+                    .unwrap_or(&input.comment)
+                    .trim()
+                    .to_string();
                 if required_answer && value.is_empty() {
                     return Err("问卷含必填文字题，请填写文字意见或逐题答案".into());
                 }
@@ -475,6 +492,7 @@ mod tests {
             rank: 2,
             comment: "My own review".into(),
             overrides: BTreeMap::new(),
+            comments: BTreeMap::new(),
         }
     }
     #[test]
@@ -503,6 +521,45 @@ mod tests {
             build_answers(&questionnaire(), "student", &questions, &options, &missing).is_err()
         );
     }
+    #[test]
+    fn per_questionnaire_comment_overrides_the_default() {
+        let questions = vec![
+            json!({"ZBDM":"one","ZBMC":"Choice","TXDM":"01","DADM":"answer-code","SFBT":"1"}),
+            json!({"ZBDM":"two","ZBMC":"Comment","TXDM":"02","DADM":"text-code","SFBT":"1"}),
+        ];
+        let options = vec![
+            json!({"ZBDM":"one","DAFXDM":"best","DAPX":"1","DAFXMC":"Excellent"}),
+            json!({"ZBDM":"one","DAFXDM":"good","DAPX":"2","DAFXMC":"Good"}),
+        ];
+        let id = Questionnaire::from_row(questionnaire(), false).unwrap().id;
+        let mut input = input();
+        input
+            .comments
+            .insert(id.clone(), "老师讲得很清楚，作业反馈及时".into());
+        let (view, payload) =
+            build_answers(&questionnaire(), "student", &questions, &options, &input).unwrap();
+        assert_eq!(view[1].answer, "老师讲得很清楚，作业反馈及时");
+        let submitted: Vec<Value> =
+            serde_json::from_str(payload["WJYSJG"].as_str().unwrap()).unwrap();
+        assert_eq!(submitted[1]["ZGDA"], "老师讲得很清楚，作业反馈及时");
+        // A per-question override still wins over the per-teacher comment.
+        let mut override_input = input.clone();
+        override_input
+            .overrides
+            .entry(id)
+            .or_default()
+            .insert("two".into(), "逐题答案".into());
+        let (view, _) = build_answers(
+            &questionnaire(),
+            "student",
+            &questions,
+            &options,
+            &override_input,
+        )
+        .unwrap();
+        assert_eq!(view[1].answer, "逐题答案");
+    }
+
     #[test]
     fn rejects_unknown_question_types_and_invalid_selections() {
         let q = vec![json!({"ZBDM":"a","ZBMC":"Unknown","TXDM":"99"})];
