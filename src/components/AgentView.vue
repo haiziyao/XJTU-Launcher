@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import MenuSelect from './ui/MenuSelect.vue';
 import AgentHistory from './AgentHistory.vue';
+import { renderMarkdown } from '../markdown';
 
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -110,6 +111,11 @@ const liveSteps = ref<LiveStep[]>([]);
 const expanded = ref(new Set<string>());
 const error = ref('');
 const scroller = ref<HTMLElement | null>(null);
+/** Message index of the user turn currently at the top of the viewport. */
+const activeTurn = ref(-1);
+/** Only follow streamed text while the reader is already at the bottom. */
+const stickToBottom = ref(true);
+const markdownCache = new Map<string, string>();
 let requestId = '';
 let modelSave: Promise<void> = Promise.resolve();
 let unlisten: (() => void) | undefined;
@@ -179,14 +185,59 @@ const canSend = computed(
   () =>
     !!draft.value.trim() && !running.value && !!providerId.value && modelOptions.value.length > 0,
 );
+/** The streaming reply changes on every token, so it is parsed without caching. */
+const liveHtml = computed(() => (liveText.value ? renderMarkdown(liveText.value) : ''));
+/** One tick per user question; the index stays the message index for jumping. */
+const turns = computed(() =>
+  messages.value
+    .map((message, index) => ({ message, index }))
+    .filter((turn) => turn.message.role === 'user'),
+);
 
 function errorText(value: unknown) {
   return value instanceof Error ? value.message : String(value);
 }
+/** Re-parsing every token would be wasteful, so finished replies are cached. */
+function markdown(text: string) {
+  const cached = markdownCache.get(text);
+  if (cached !== undefined) return cached;
+  const html = renderMarkdown(text);
+  if (markdownCache.size > 200) markdownCache.clear();
+  markdownCache.set(text, html);
+  return html;
+}
+/** Links in a reply leave the webview; the campus window handles school URLs. */
+function openLink(event: MouseEvent) {
+  const anchor = (event.target as HTMLElement | null)?.closest('a');
+  if (!anchor) return;
+  event.preventDefault();
+  const href = anchor.getAttribute('href') || '';
+  if (/^https?:\/\//i.test(href)) void bridge.openUrl(href);
+}
 async function scrollDown() {
   await nextTick();
   const node = scroller.value;
-  if (node) node.scrollTop = node.scrollHeight;
+  if (node && stickToBottom.value) node.scrollTop = node.scrollHeight;
+  trackActiveTurn();
+}
+function trackActiveTurn() {
+  const node = scroller.value;
+  if (!node) return;
+  stickToBottom.value = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  const top = node.getBoundingClientRect().top;
+  let active = -1;
+  for (const turn of turns.value) {
+    const element = node.querySelector<HTMLElement>(`[data-turn="${turn.index}"]`);
+    if (element && element.getBoundingClientRect().top - top <= 32) active = turn.index;
+  }
+  activeTurn.value = active;
+}
+async function jumpToTurn(index: number) {
+  stickToBottom.value = false;
+  await nextTick();
+  const element = scroller.value?.querySelector<HTMLElement>(`[data-turn="${index}"]`);
+  element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  activeTurn.value = index;
 }
 async function loadProviders() {
   try {
@@ -336,6 +387,7 @@ async function openConversation(id: string) {
     usage.value = null;
     expanded.value = new Set();
     error.value = '';
+    stickToBottom.value = true;
     showHistory.value = false;
     remember(next.id);
     await scrollDown();
@@ -356,6 +408,8 @@ function newChat() {
   expanded.value = new Set();
   draft.value = '';
   error.value = '';
+  activeTurn.value = -1;
+  stickToBottom.value = true;
   showHistory.value = false;
 }
 /** Moves the open conversation, or just picks the target for the next one. */
@@ -505,6 +559,7 @@ async function send() {
   messages.value.push({ role: 'user', content: text });
   liveText.value = '';
   liveSteps.value = [];
+  stickToBottom.value = true;
   running.value = true;
   requestId =
     typeof crypto.randomUUID === 'function'
@@ -707,7 +762,7 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <div ref="scroller" class="agent-thread">
+    <div ref="scroller" class="agent-thread" @scroll.passive="trackActiveTurn">
       <div class="agent-column">
         <div v-if="!messages.length && !running" class="agent-empty">
           <h2>有什么可以帮你？</h2>
@@ -733,9 +788,16 @@ onBeforeUnmount(() => {
         </div>
 
         <template v-for="(message, index) in messages" :key="index">
-          <div v-if="message.role === 'user'" class="agent-user">{{ message.content }}</div>
+          <div v-if="message.role === 'user'" class="agent-user" :data-turn="index">
+            {{ message.content }}
+          </div>
           <div v-else-if="message.role === 'assistant'" class="agent-assistant">
-            <div v-if="message.content" class="agent-text">{{ message.content }}</div>
+            <div
+              v-if="message.content"
+              class="agent-text"
+              v-html="markdown(message.content)"
+              @click="openLink"
+            ></div>
             <div v-for="call in message.toolCalls" :key="call.id" class="agent-tool">
               <button
                 class="agent-tool-row"
@@ -772,7 +834,7 @@ onBeforeUnmount(() => {
         </template>
 
         <div v-if="running || liveText || liveSteps.length" class="agent-assistant">
-          <div v-if="liveText" class="agent-text">{{ liveText }}</div>
+          <div v-if="liveText" class="agent-text" v-html="liveHtml" @click="openLink"></div>
           <div v-for="step in liveSteps" :key="step.callId" class="agent-tool">
             <button
               class="agent-tool-row"
@@ -807,6 +869,22 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <nav v-if="turns.length" class="agent-rail" aria-label="对话轮次">
+      <button
+        v-for="(turn, position) in turns"
+        :key="turn.index"
+        type="button"
+        class="agent-rail-tick"
+        :class="{ active: activeTurn === turn.index }"
+        :aria-label="`跳到第 ${position + 1} 轮提问`"
+        :aria-current="activeTurn === turn.index ? 'true' : undefined"
+        @click="jumpToTurn(turn.index)"
+      >
+        <span class="agent-rail-line"></span>
+        <span class="agent-rail-preview">{{ turn.message.content }}</span>
+      </button>
+    </nav>
 
     <div class="agent-composer-wrap">
       <div class="agent-column">
@@ -1148,16 +1226,117 @@ onBeforeUnmount(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  scroll-margin-top: 14px;
 }
+/* Replies sit on a neutral block so they never read as the user's own turn. */
 .agent-assistant {
-  margin: 16px 0 0;
+  margin: 14px auto 0 0;
+  width: fit-content;
+  max-width: 92%;
+  min-width: 0;
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-subtle);
   font-size: 14px;
   line-height: 1.7;
   color: var(--text);
 }
 .agent-text {
-  white-space: pre-wrap;
   word-break: break-word;
+}
+.agent-text :deep(p) {
+  margin: 0 0 8px;
+}
+.agent-text :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.agent-text :deep(h1),
+.agent-text :deep(h2),
+.agent-text :deep(h3),
+.agent-text :deep(h4) {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.agent-text :deep(h1:first-child),
+.agent-text :deep(h2:first-child),
+.agent-text :deep(h3:first-child),
+.agent-text :deep(h4:first-child) {
+  margin-top: 0;
+}
+.agent-text :deep(ul),
+.agent-text :deep(ol) {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.agent-text :deep(li) {
+  margin: 2px 0;
+}
+.agent-text :deep(li > p) {
+  margin: 0;
+}
+.agent-text :deep(code) {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.agent-text :deep(pre) {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  overflow-x: auto;
+}
+.agent-text :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.agent-text :deep(blockquote) {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+.agent-text :deep(a) {
+  color: var(--accent-text);
+  text-decoration: none;
+}
+.agent-text :deep(a:hover) {
+  text-decoration: underline;
+}
+.agent-text :deep(table) {
+  display: block;
+  max-width: 100%;
+  margin: 0 0 8px;
+  border-collapse: collapse;
+  overflow-x: auto;
+  font-size: 13px;
+}
+.agent-text :deep(th),
+.agent-text :deep(td) {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.agent-text :deep(th) {
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+.agent-text :deep(hr) {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.agent-text :deep(pre),
+.agent-text :deep(table) {
+  scrollbar-width: thin;
 }
 .agent-tool {
   margin-top: 6px;
@@ -1231,6 +1410,85 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   color: var(--text-tertiary);
   font-size: 12.5px;
+}
+/* One tick per user question, on the free space right of the column. */
+.agent-rail {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 4px 2px;
+}
+.agent-rail-tick {
+  position: relative;
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.agent-rail-line {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-tertiary);
+  opacity: 0.45;
+  transition:
+    width var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+.agent-rail-tick:hover .agent-rail-line,
+.agent-rail-tick:focus-visible .agent-rail-line {
+  width: 24px;
+  background: var(--accent-outline);
+  opacity: 1;
+}
+.agent-rail-tick.active .agent-rail-line {
+  width: 20px;
+  background: var(--accent);
+  opacity: 1;
+}
+.agent-rail-preview {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  transform: translateY(-50%);
+  display: -webkit-box;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.agent-rail-tick:hover .agent-rail-preview,
+.agent-rail-tick:focus-visible .agent-rail-preview {
+  opacity: 1;
+  visibility: visible;
+}
+@media (max-width: 1040px) {
+  .agent-rail {
+    display: none;
+  }
 }
 .agent-composer-wrap {
   position: relative;
@@ -1512,14 +1770,16 @@ onBeforeUnmount(() => {
   background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-user {
-  background-color: rgba(255, 255, 255, 0.9);
-  background-image: linear-gradient(var(--accent-tint), var(--accent-tint));
+  background-color: rgba(234, 241, 253, 0.85);
+  background-image: none;
 }
 .desktop-shell.has-wallpaper .agent-assistant {
-  padding: 8px 12px;
-  border-radius: 14px;
-  background-color: rgba(255, 255, 255, 0.86);
-  background-image: linear-gradient(var(--accent-wash), var(--accent-wash));
+  border-color: rgba(15, 23, 42, 0.08);
+  background-color: rgba(255, 255, 255, 0.62);
+}
+.desktop-shell.has-wallpaper .agent-rail-preview {
+  border-color: var(--panel-border);
+  background: var(--panel);
 }
 .desktop-shell.has-wallpaper .agent-task {
   border-color: var(--panel-border);

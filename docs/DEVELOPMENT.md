@@ -127,6 +127,8 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 2026-10-23 评教工具：复用已有的 `school/evaluation.rs`（列表 `cxdwpj.do`、问卷 `cxwjzb.do`、选项 `cxxswjzbxq.do`、提交 `WspjwjController/addXsPgysjg.do`），新增 `campus_evaluations_preview` 与 `campus_evaluations_submit`。预览接受待评问卷编号列表（1–32 个）、统一评分档位（1–5，默认 2）、默认评语，以及 `comments`——按问卷编号覆盖评语，键就是 `campus_evaluations` 返回的问卷编号（序列化后的身份数组），可只给某些老师单独改评语，其余沿用默认值；该评语替换该问卷所有自由文本题。预览复用原有 `Manager`：草稿 15 分钟过期、最多 8 份，绑定账号与会话代次，返回每门课、每位老师、评分与最终评语。提交工具必须带预览返回的 `previewId`；`confirm` 缺省时只返回 `confirmRequired`，完全不触碰 `Manager`，带 `confirm=true` 才真正提交；结果不明时标记为未知且不自动重试。Agent 提示词要求先预览并如实复述课程、评分与每位老师的评语，只有用户明确要求提交才调用提交工具，且不得编造针对具体老师的负面评语，用户没有指定时用中性的默认评语。Rust 105 项测试（10 项默认忽略）、前端 15 项测试、Clippy、格式检查与构建通过。未提交任何真实评教；真实 App 中的预览与用户验收仍待进行。
 
+2026-10-23 对话页可读性（按用户要求）：用户提问保持蓝色气泡，Agent 回复改为中性浅色块并加细边（有壁纸时用户为浅蓝、回复为半透明白，两者不再同色）。回复正文改为 Markdown 渲染：新增 `src/markdown.ts`，用 `marked`（GFM、单换行成行）解析，再用 `dompurify` 过滤脚本、样式、表单、iframe 与图片，并去掉 `style` 属性；流式文本不进缓存，已完成的回复按原文缓存。链接不会在 webview 内导航，点击交给 `openUrl`（校园地址走校园窗口，其他地址用系统浏览器）。右侧新增轮次刻度：每条用户提问对应一条横线，当前阅读位置高亮，悬停显示该轮问题（最多 5 行），点击平滑滚到该轮；宽度不足 1040px 时隐藏。另修正流式输出总是把视图拉到底部的问题——只有读者本来就在底部时才跟随，点刻度跳到上面后不再被拽回。前端新增 `jsdom` 测试环境与 5 项 Markdown 用例（格式、换行、脚本 / 图片 / 样式过滤、`javascript:` 链接）；共 20 项测试，格式检查与构建通过。悬停预览已用临时样式在真实 App 截图确认，截图后已移除临时样式。
+
 README 的 `docs/screenshots/mcp.png` 与 `mcp-tools.png` 仍是 14 个工具时的截图，新工具面验收后再重拍；在重拍前不要用它们判断工具数量。Agent / MCP 预览真实作业前，需先在应用内打开思源学堂完成登录，确保账号的 `sites.lms` 保存了会话；否则工具会提示“请先打开思源学堂页面完成登录”。
 
 ## 字体
