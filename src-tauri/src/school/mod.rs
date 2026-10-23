@@ -9,6 +9,7 @@ mod lms;
 mod profile;
 mod queries;
 mod transport;
+mod venue;
 
 /// SSO entry used when a direct session is created; the card service is the
 /// most common reason to need one.
@@ -17,6 +18,7 @@ pub(crate) use library::LOGIN_URL as LIBRARY_LOGIN;
 pub(crate) use lms::LOGIN_URL as LMS_LOGIN;
 pub use queries::{query, Query};
 use serde::Serialize;
+pub(crate) use venue::LOGIN_URL as VENUE_LOGIN;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,8 +127,8 @@ pub fn catalog() -> Vec<Feature> {
             "venues",
             "场馆预约",
             "校园生活",
-            "pending",
-            "app/sessions/venue_session.py",
+            "undergraduate",
+            "app/sessions/venue_session.py; app/venues/venue.py",
         ),
         (
             "profile",

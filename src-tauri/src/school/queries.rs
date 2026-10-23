@@ -68,6 +68,12 @@ pub enum Query {
     LibrarySeats {
         area: String,
     },
+    VenueList,
+    VenueSlots {
+        venue: u64,
+        date: String,
+    },
+    VenueOrders,
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -86,6 +92,7 @@ impl Query {
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
             }
+            Self::VenueList | Self::VenueSlots { .. } | Self::VenueOrders => "venues",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -150,6 +157,11 @@ impl Query {
             }
             Self::LibrarySeats { area } if !super::library::valid_area(area) => {
                 return Err("请选择有效的图书馆区域".into());
+            }
+            Self::VenueSlots { venue, date }
+                if !(1..=9_999_999).contains(venue) || !valid_date(date) =>
+            {
+                return Err("请选择有效的场馆和日期".into());
             }
             _ => {}
         }
@@ -223,6 +235,20 @@ pub async fn query(
         let value = match query {
             Query::LibraryAreas { floor } => client.areas(&floor).await?,
             Query::LibrarySeats { area } => client.seats(&area).await?,
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
+    }
+    if matches!(
+        query,
+        Query::VenueList | Query::VenueSlots { .. } | Query::VenueOrders
+    ) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::venue::Client::connect(&account)?;
+        let value = match query {
+            Query::VenueList => client.venues().await?,
+            Query::VenueSlots { venue, date } => client.slots(venue, &date).await?,
+            Query::VenueOrders => client.orders().await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -401,7 +427,10 @@ pub async fn query(
         | Query::LmsActivities { .. }
         | Query::LibraryFloors
         | Query::LibraryAreas { .. }
-        | Query::LibrarySeats { .. } => unreachable!(),
+        | Query::LibrarySeats { .. }
+        | Query::VenueList
+        | Query::VenueSlots { .. }
+        | Query::VenueOrders => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }
