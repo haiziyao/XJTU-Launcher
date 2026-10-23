@@ -64,6 +64,7 @@ const TOOL_LABELS: Record<string, string> = {
   campus_lms_courses: '查询思源学堂课程',
   campus_lms_activities: '查询课程活动',
   campus_lms_activity: '查看活动详情',
+  campus_lms_submissions: '查看作业提交',
   campus_lms_submit: '提交作业',
   campus_library_floors: '查询图书馆楼层',
   campus_library_areas: '查询图书馆区域',

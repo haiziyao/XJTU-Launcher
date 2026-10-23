@@ -160,6 +160,14 @@ pub fn builtin() -> Vec<ToolDef> {
             &["activity"],
         ),
         campus(
+            "campus_lms_submissions",
+            "查看思源学堂某次作业的我的提交记录、分数与教师批语（只读）",
+            json!({
+                "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms_activities" }
+            }),
+            &["activity"],
+        ),
+        campus(
             "campus_lms_submit",
             "提交思源学堂作业（写操作）。默认只返回预览，不上传也不提交；预览中核对课程、作业和文件，并向用户复述确认后，用户明确要求提交时才带 confirm=true 再次调用。文件必须是用户明确指定的本地绝对路径，仅支持常见文档、代码和媒体类型，最大 100 MB/个、200 MB/次。不要重试结果不明的提交。",
             json!({
@@ -315,6 +323,9 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
             course: id(args, "course")?,
         },
         "campus_lms_activity" => school::Query::LmsActivity {
+            activity: id(args, "activity")?,
+        },
+        "campus_lms_submissions" => school::Query::LmsSubmissions {
             activity: id(args, "activity")?,
         },
         "campus_library_floors" => school::Query::LibraryFloors,
@@ -501,6 +512,7 @@ mod tests {
             "campus_profile",
             "campus_lms_courses",
             "campus_lms_activity",
+            "campus_lms_submissions",
             "campus_lms_submit",
             "campus_venues",
             "campus_venue_slots",

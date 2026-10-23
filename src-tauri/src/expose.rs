@@ -194,6 +194,7 @@ fn category(name: &str) -> &'static str {
         "campus_lms_courses"
         | "campus_lms_activities"
         | "campus_lms_activity"
+        | "campus_lms_submissions"
         | "campus_lms_submit" => "思源学堂",
         "campus_library_floors"
         | "campus_library_areas"

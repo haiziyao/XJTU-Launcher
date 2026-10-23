@@ -64,6 +64,9 @@ pub enum Query {
     LmsActivity {
         activity: u64,
     },
+    LmsSubmissions {
+        activity: u64,
+    },
     LibraryFloors,
     LibraryAreas {
         floor: String,
@@ -91,7 +94,10 @@ impl Query {
             Self::Card | Self::CardTransactions { .. } => "card",
             Self::Fitness | Self::FitnessScore { .. } => "fitness",
             Self::Profile => "profile",
-            Self::LmsCourses | Self::LmsActivities { .. } | Self::LmsActivity { .. } => "lms",
+            Self::LmsCourses
+            | Self::LmsActivities { .. }
+            | Self::LmsActivity { .. }
+            | Self::LmsSubmissions { .. } => "lms",
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
             }
@@ -155,7 +161,9 @@ impl Query {
             Self::LmsActivities { course } if !(1..=9_999_999).contains(course) => {
                 return Err("课程编号无效".into());
             }
-            Self::LmsActivity { activity } if !(1..=9_999_999_999).contains(activity) => {
+            Self::LmsActivity { activity } | Self::LmsSubmissions { activity }
+                if !(1..=9_999_999_999).contains(activity) =>
+            {
                 return Err("活动编号无效".into());
             }
             Self::LibraryAreas { floor } if !super::library::valid_floor(floor) => {
@@ -293,7 +301,10 @@ pub async fn query(
     }
     if matches!(
         query,
-        Query::LmsCourses | Query::LmsActivities { .. } | Query::LmsActivity { .. }
+        Query::LmsCourses
+            | Query::LmsActivities { .. }
+            | Query::LmsActivity { .. }
+            | Query::LmsSubmissions { .. }
     ) {
         let account = account.ok_or("请先登录校园账号")?;
         let client = super::lms::Client::connect(&account)?;
@@ -301,6 +312,7 @@ pub async fn query(
             Query::LmsCourses => client.courses().await?,
             Query::LmsActivities { course } => client.activities(course).await?,
             Query::LmsActivity { activity } => client.activity(activity).await?,
+            Query::LmsSubmissions { activity } => client.submissions(activity).await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -436,6 +448,7 @@ pub async fn query(
         | Query::LmsCourses
         | Query::LmsActivities { .. }
         | Query::LmsActivity { .. }
+        | Query::LmsSubmissions { .. }
         | Query::LibraryFloors
         | Query::LibraryAreas { .. }
         | Query::LibrarySeats { .. }

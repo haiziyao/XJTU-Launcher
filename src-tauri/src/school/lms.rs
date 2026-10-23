@@ -224,6 +224,50 @@ impl Client {
         Ok(detail)
     }
 
+    /// Read the current user's submissions for one homework, including the
+    /// teacher's score and comments. This is read-only.
+    pub async fn submissions(&self, activity: u64) -> Result<Value, String> {
+        let detail = self.get(&format!("/api/activities/{activity}")).await?;
+        if text(detail.get("type")) != "homework" {
+            return Err("该活动不是作业，没有提交记录".into());
+        }
+        let group = detail
+            .get("submit_by_group")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let path = if group {
+            let group_id = detail
+                .get("group_id")
+                .and_then(Value::as_u64)
+                .or_else(|| detail.pointer("/data/group_id").and_then(Value::as_u64))
+                .filter(|id| *id > 0)
+                .ok_or("这是一次小组作业，但思源学堂没有返回小组编号")?;
+            format!("/api/activities/{activity}/groups/{group_id}/submission_list")
+        } else {
+            let profile = self.get("/api/profile").await?;
+            let user = profile
+                .get("id")
+                .and_then(Value::as_u64)
+                .filter(|id| *id > 0)
+                .ok_or("无法获取思源学堂用户编号")?;
+            format!("/api/activities/{activity}/students/{user}/submission_list")
+        };
+        let value = self.get(&path).await?;
+        let list = value
+            .get("list")
+            .and_then(Value::as_array)
+            .ok_or("思源学堂提交记录格式已变化")?;
+        Ok(json!({
+            "activity": activity,
+            "title": text(detail.get("title")),
+            "courseId": detail.get("course_id").and_then(Value::as_u64),
+            "end": text(detail.get("end_time")),
+            "closed": detail.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
+            "submitByGroup": group,
+            "submissions": list.iter().filter_map(submission).collect::<Vec<_>>(),
+        }))
+    }
+
     async fn player(&self, id: u64) -> Result<String, String> {
         let value = self
             .get(&format!("/api/lessons/{id}/player-url?from_page=course"))
@@ -736,6 +780,53 @@ fn activity(value: &Value) -> Option<Value> {
     }))
 }
 
+fn submission(value: &Value) -> Option<Value> {
+    let id = value.get("id")?.as_u64()?;
+    if id == 0 {
+        return None;
+    }
+    let files = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|items| items.iter().filter_map(upload).collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    let correction = value
+        .get("submission_correct")
+        .filter(|item| item.is_object())
+        .map(|item| {
+            json!({
+                "score": number(item.get("score")),
+                "instructorScore": number(item.get("instructor_score")),
+                "comment": plain_text(&text(item.get("comment"))),
+                "updatedAt": text(item.get("updated_at")),
+                "files": item
+                    .get("uploads")
+                    .and_then(Value::as_array)
+                    .map(|items| items.iter().filter_map(upload).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+            })
+        });
+    Some(json!({
+        "id": id,
+        "status": text(value.get("status")),
+        "score": number(value.get("score")),
+        "rubricScore": number(value.get("rubric_score")),
+        "submittedAt": text(value.get("submitted_at")),
+        "updatedAt": text(value.get("updated_at")),
+        "createdAt": text(value.get("created_at")),
+        "latest": value.get("is_latest_version").and_then(Value::as_bool).unwrap_or(false),
+        "resubmitted": value.get("is_resubmitted").and_then(Value::as_bool).unwrap_or(false),
+        "canRetract": value.get("can_retract").and_then(Value::as_bool).unwrap_or(false),
+        "mode": text(value.get("mode")),
+        "comment": plain_text(&text(value.get("comment"))),
+        "instructorComment": plain_text(&text(value.get("instructor_comment"))),
+        "files": files("uploads"),
+        "correction": correction,
+    }))
+}
+
 fn upload(value: &Value) -> Option<Value> {
     let id = value.get("id")?.as_u64()?;
     if id == 0 {
@@ -909,6 +1000,46 @@ mod tests {
             "第一行\n第二行 &尾"
         );
         assert_eq!(plain_text("<img src='x'>文字"), "文字");
+    }
+
+    #[test]
+    fn submissions_are_flattened_for_the_agent() {
+        let value = json!({
+            "list": [
+                {
+                    "id": 7,
+                    "status": "submitted",
+                    "score": 88,
+                    "comment": "<p>答案</p>",
+                    "instructor_comment": "不错",
+                    "submitted_at": "2026-10-01 10:00:00",
+                    "uploads": [{"id": 3, "name": "a.pdf", "size": 12}],
+                    "submission_correct": {
+                        "score": 88,
+                        "instructor_score": 90,
+                        "comment": "<b>思路清晰</b>",
+                        "uploads": []
+                    }
+                },
+                {"id": 0}
+            ]
+        });
+        let list: Vec<_> = value["list"]
+            .as_array()
+            .expect("list")
+            .iter()
+            .filter_map(submission)
+            .collect();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0]["comment"], "答案");
+        assert_eq!(list[0]["instructorComment"], "不错");
+        assert_eq!(list[0]["score"].as_f64(), Some(88.0));
+        assert_eq!(list[0]["files"][0]["name"], "a.pdf");
+        assert_eq!(list[0]["correction"]["comment"], "思路清晰");
+        assert_eq!(
+            list[0]["correction"]["instructorScore"].as_f64(),
+            Some(90.0)
+        );
     }
 
     #[test]
@@ -1170,6 +1301,71 @@ mod tests {
             }
             Err(error) => println!("login error: {error}"),
         }
+    }
+
+    /// Manual probe: discovers how to read the current user id and the
+    /// submission list for one homework. It prints counts and status only.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_lms_submissions_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        let cookies = match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await
+        {
+            Ok(cookies) => cookies,
+            Err(error) => {
+                println!("login error: {error}");
+                return;
+            }
+        };
+        let client = Client::with_cookies(&cookies).expect("client");
+        let courses = client.courses().await.expect("courses");
+        let courses = courses["courses"].as_array().cloned().unwrap_or_default();
+        // Scan a few courses so a graded submission is likely to appear; print
+        // only counts and field names, never submission text.
+        for course in courses.iter().take(10) {
+            let course_id = course["id"].as_u64().unwrap_or(0);
+            let Ok(list) = client.activities(course_id).await else {
+                continue;
+            };
+            for item in list["activities"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .filter(|item| item["type"] == "homework")
+                .take(5)
+            {
+                let id = item["id"].as_u64().unwrap_or(0);
+                match client.submissions(id).await {
+                    Ok(value) => {
+                        let count = value["submissions"].as_array().map(Vec::len).unwrap_or(0);
+                        println!(
+                            "homework {id} group={} submissions={count}",
+                            value["submitByGroup"]
+                        );
+                        if count > 0 {
+                            println!(
+                                "first submission keys={:?}",
+                                value["submissions"][0]
+                                    .as_object()
+                                    .map(|object| object.keys().cloned().collect::<Vec<_>>())
+                            );
+                            return;
+                        }
+                    }
+                    Err(error) => println!("homework {id} error: {error}"),
+                }
+            }
+        }
+        println!("no submitted homework found");
     }
 
     /// Manual probe: checks activity details, the replay URL and one real

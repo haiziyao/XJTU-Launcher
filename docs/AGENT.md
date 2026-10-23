@@ -18,13 +18,13 @@
 | MCP 后端 | 已实现：配置存 `~/.xjtu-launcher/mcp.json`，stdio 与 Streamable HTTP 两种传输的 JSON-RPC 客户端，启停 / 探测 / 目录安装命令 |
 | Agent 设置插件 | 已实现：内置插件 `cn.xjtu.agent-settings`，标签为模型服务 / 接入工具 / 角色预设 / 全局记忆 / 市场；模型配置已从应用设置移出 |
 | 插件市场 | 恢复三分区，MCP 标签页已移除 |
-| Agent 运行时 | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（26 个校园工具，含思源学堂作业提交 + MCP），角色提示词、Skill 自动/手动加载、全局记忆注入与 `remember` 工具，单条对话串行、可取消，对话持久化 |
+| Agent 运行时 | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（27 个校园工具，含思源学堂作业提交 + MCP），角色提示词、Skill 自动/手动加载、全局记忆注入与 `remember` 工具，单条对话串行、可取消，对话持久化 |
 | Agent 对话页 | 已实现：单列对话、左上角“对话管理”抽屉（覆盖式，不挤压页面；置顶、按最近时间排序、搜索 / 重命名 / 置顶 / 删除、工作区）、新对话、模型选择（按厂商获取的列表）、上下文用量圆环、余额、`+` 角色与预设任务、`@` Skill、流式文本、可折叠工具行、停止生成 |
 | 角色 / Skills / 预设任务 | 已实现：存于 `~/.xjtu-launcher/agent/presets.json`；Skill 目录注入提示词，模型可用 `use_skill` 加载，用户也可以在输入框用 `/` 指定 |
 | 全局记忆 | 已实现：存于 `~/.xjtu-launcher/agent/memory.json`，自动注入系统提示词，可在 Agent 设置中增删改，模型也可通过 `remember` 工具写入 |
 | MCP HTTP 传输 | 未实机验证；stdio 用过 node mock 服务器验证连接、`tools/list`、`tools/call` |
 | 真实模型调用 | 尚未用真实 API Key 验证；需要用户自己的 Key，不写入日志、截图和仓库 |
-| 自动测试 | Rust 98 项通过（8 项默认忽略：联网探测与需 node 的 stdio 联调）、前端 15 项通过；模型流式与工具调用未做端到端自动测试 |
+| 自动测试 | Rust 98 项通过（9 项默认忽略：联网探测与需 node 的 stdio 联调）、前端 15 项通过；模型流式与工具调用未做端到端自动测试 |
 
 2026-10-23 补充（对话管理）：对话仍保存在 `~/.xjtu-launcher/agent/conversations.json`；该文件新增 `workspaces` 数组，对话新增可选 `workspaceId`。工作区是对话的分组，可在对话抽屉中创建，从某个工作区点“新建”创建的对话会归入该工作区。抽屉以覆盖层形式从左侧展开，不改变对话页布局。
 
