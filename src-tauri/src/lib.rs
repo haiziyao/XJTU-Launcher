@@ -787,6 +787,57 @@ async fn refresh_lms_session(
     Ok(true)
 }
 
+/// The library seat system is plain HTTP on the campus network and cannot be
+/// reached through WebVPN, so this login only runs in direct mode.
+#[tauri::command]
+async fn refresh_library_session(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    main_only(&window)?;
+    let path = accounts_path(&app)?;
+    let (account_id, username, password) = {
+        let _guard = state.auth_lock.lock().await;
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("请先登录校园账号")?;
+        if record.mode != network::AccessMode::Direct {
+            return Err("图书馆座位仅支持校园网直连，请连接校园网后重试".into());
+        }
+        let saved = record
+            .password
+            .as_ref()
+            .ok_or("此账号未保存密码，无法自动登录图书馆")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            zeroize::Zeroizing::new(saved.0.clone()),
+        )
+    };
+    let generation = state.generation.load(Ordering::SeqCst);
+    let cookies = auth::direct_login(school::LIBRARY_LOGIN, &username, &password).await?;
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新打开".into());
+    }
+    let mut book = accounts::load(&path)?;
+    let account = book
+        .accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?;
+    account.sites.insert(
+        "library".into(),
+        accounts::SiteSession {
+            cookies: Some(cookies),
+            token: None,
+            system_type: None,
+        },
+    );
+    accounts::save(&path, &book)?;
+    Ok(true)
+}
+
 /// Sidebar self-check: try the campus host through a direct connection first,
 /// then through WebVPN, so the pet can report which network is in effect.
 #[tauri::command]
@@ -974,7 +1025,10 @@ pub(crate) async fn run_school_query(
     query.validate()?;
     let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
-    if matches!(query, school::Query::Calendar) {
+    if matches!(
+        query,
+        school::Query::Calendar | school::Query::LibraryFloors
+    ) {
         return school::query(None, query).await.map(|(data, _)| data);
     }
     let (account, generation) = school_account(app, &state).await?;
@@ -1780,6 +1834,7 @@ pub fn run() {
             refresh_direct_session,
             refresh_profile_session,
             refresh_lms_session,
+            refresh_library_session,
             check_network,
             open_external
         ])

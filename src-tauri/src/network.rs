@@ -43,6 +43,19 @@ pub fn trusted(url: &Url) -> bool {
         )
 }
 
+/// The library seat system and the sports venue system only answer over plain
+/// HTTP on fixed ports. Keep this exception to their exact origins; it is
+/// allowed for direct requests only, never for WebVPN encoding.
+pub fn service_http(url: &Url) -> bool {
+    url.scheme() == "http"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && matches!(
+            (url.host_str(), url.port()),
+            (Some("rg.lib.xjtu.edu.cn"), Some(8086)) | (Some("202.117.17.144"), Some(8080))
+        )
+}
+
 pub fn vpn_url(url: &Url) -> Result<Url, String> {
     if !trusted(url) {
         return Err("校园请求地址不受支持".into());
@@ -132,7 +145,7 @@ fn encode_vpn_url(url: &Url) -> Result<Url, String> {
 }
 
 pub fn original_url(url: &Url) -> Result<Url, String> {
-    if !trusted(url) {
+    if !trusted(url) && !service_http(url) {
         return Err("校园跳转地址不受支持".into());
     }
     if url.host_str() != Some(VPN_HOST) || !url.path().starts_with("/https/") {
@@ -193,7 +206,8 @@ impl Transport {
         String::from_utf8(data).map_err(|_| "无法保存校园会话".into())
     }
     pub fn address(url: &Url, mode: AccessMode) -> Result<Url, String> {
-        if !trusted(url) {
+        // Plain-HTTP services have no WebVPN mapping; they must be reached directly.
+        if !trusted(url) && !(mode == AccessMode::Direct && service_http(url)) {
             return Err("校园请求地址不受支持".into());
         }
         if mode == AccessMode::Webvpn {
@@ -379,6 +393,26 @@ mod tests {
             assert!(vpn_url(&Url::parse(bad).unwrap()).is_err());
         }
     }
+    #[test]
+    fn plain_http_services_are_limited_to_their_exact_origins() {
+        let lib = Url::parse("http://rg.lib.xjtu.edu.cn:8086/qseat?sp=A101").unwrap();
+        let venue = Url::parse("http://202.117.17.144:8080/web/index.html").unwrap();
+        assert!(service_http(&lib));
+        assert!(service_http(&venue));
+        assert!(Transport::address(&lib, AccessMode::Direct).is_ok());
+        assert!(Transport::address(&lib, AccessMode::Webvpn).is_err());
+        for bad in [
+            "https://rg.lib.xjtu.edu.cn:8086/qseat",
+            "http://rg.lib.xjtu.edu.cn/qseat",
+            "http://rg.lib.xjtu.edu.cn.evil.test:8086/qseat",
+            "http://202.117.17.144:8081/web/index.html",
+            "http://u:p@rg.lib.xjtu.edu.cn:8086/qseat",
+            "http://202.117.17.144/web/index.html",
+        ] {
+            assert!(!service_http(&Url::parse(bad).unwrap()), "{bad}");
+        }
+    }
+
     #[test]
     fn lms_is_the_only_learning_site_on_the_backend_allowlist() {
         assert!(trusted(

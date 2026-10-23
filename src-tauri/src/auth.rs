@@ -219,7 +219,7 @@ async fn direct_login_page(
         return Err("保存的校园密码无效，请重新登录".into());
     }
     let service = Url::parse(service).map_err(|_| "直连服务地址无效")?;
-    if !network::trusted(&service) {
+    if !network::trusted(&service) && !network::service_http(&service) {
         return Err("直连服务地址不受支持".into());
     }
     let degree = "undergraduate";

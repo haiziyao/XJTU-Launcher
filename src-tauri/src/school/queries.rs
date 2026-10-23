@@ -61,6 +61,13 @@ pub enum Query {
     LmsActivities {
         course: u64,
     },
+    LibraryFloors,
+    LibraryAreas {
+        floor: String,
+    },
+    LibrarySeats {
+        area: String,
+    },
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -76,6 +83,9 @@ impl Query {
             Self::Fitness | Self::FitnessScore { .. } => "fitness",
             Self::Profile => "profile",
             Self::LmsCourses | Self::LmsActivities { .. } => "lms",
+            Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
+                "library"
+            }
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -134,6 +144,12 @@ impl Query {
             }
             Self::LmsActivities { course } if !(1..=9_999_999).contains(course) => {
                 return Err("课程编号无效".into());
+            }
+            Self::LibraryAreas { floor } if !super::library::valid_floor(floor) => {
+                return Err("请选择有效的图书馆楼层".into());
+            }
+            Self::LibrarySeats { area } if !super::library::valid_area(area) => {
+                return Err("请选择有效的图书馆区域".into());
             }
             _ => {}
         }
@@ -194,6 +210,22 @@ pub async fn query(
     query.validate()?;
     if matches!(query, Query::Calendar) {
         return calendar().await.map(|v| (v, None));
+    }
+    if matches!(query, Query::LibraryFloors) {
+        return Ok((super::library::floors(), None));
+    }
+    if matches!(
+        query,
+        Query::LibraryAreas { .. } | Query::LibrarySeats { .. }
+    ) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::library::Client::connect(&account)?;
+        let value = match query {
+            Query::LibraryAreas { floor } => client.areas(&floor).await?,
+            Query::LibrarySeats { area } => client.seats(&area).await?,
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
     }
     if matches!(
         query,
@@ -364,7 +396,12 @@ pub async fn query(
         Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
         Query::Card | Query::CardTransactions { .. } => unreachable!(),
         Query::Fitness | Query::FitnessScore { .. } => unreachable!(),
-        Query::Profile | Query::LmsCourses | Query::LmsActivities { .. } => unreachable!(),
+        Query::Profile
+        | Query::LmsCourses
+        | Query::LmsActivities { .. }
+        | Query::LibraryFloors
+        | Query::LibraryAreas { .. }
+        | Query::LibrarySeats { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }
