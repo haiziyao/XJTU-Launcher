@@ -56,6 +56,7 @@ pub enum Query {
     FitnessScore {
         year: String,
     },
+    Profile,
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -69,6 +70,7 @@ impl Query {
             Self::AttendanceStreams { .. } | Self::AttendanceRecords { .. } => "attendance",
             Self::Card | Self::CardTransactions { .. } => "card",
             Self::Fitness | Self::FitnessScore { .. } => "fitness",
+            Self::Profile => "profile",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -213,6 +215,10 @@ pub async fn query(
         };
         return Ok((value, None));
     }
+    if matches!(query, Query::Profile) {
+        let account = account.ok_or("请先登录校园账号")?;
+        return Ok((super::profile::query(&account).await?, None));
+    }
     if matches!(query, Query::Card | Query::CardTransactions { .. }) {
         let account = account.ok_or("请先登录校园账号")?;
         let client = super::card::Client::connect(&account).await?;
@@ -340,6 +346,7 @@ pub async fn query(
         Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
         Query::Card | Query::CardTransactions { .. } => unreachable!(),
         Query::Fitness | Query::FitnessScore { .. } => unreachable!(),
+        Query::Profile => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }

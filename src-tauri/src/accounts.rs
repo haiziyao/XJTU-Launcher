@@ -25,6 +25,19 @@ impl Drop for SavedPassword {
     }
 }
 
+/// A service that keeps its own login: cookie jar plus, for the profile
+/// system, a bearer token read from the OAuth landing URL.
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SiteSession {
+    #[serde(default)]
+    pub cookies: Option<String>,
+    #[serde(default)]
+    pub token: Option<String>,
+    #[serde(default)]
+    pub system_type: Option<String>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Account {
@@ -40,6 +53,9 @@ pub struct Account {
     /// Separate CAS session for services that refuse WebVPN (card, fitness, profile).
     #[serde(default)]
     pub direct_cookies: Option<String>,
+    /// Per-service sessions keyed by feature id (for example `profile`).
+    #[serde(default)]
+    pub sites: std::collections::HashMap<String, SiteSession>,
     #[serde(default)]
     pub password: Option<SavedPassword>,
 }
@@ -161,6 +177,23 @@ impl Book {
                 || a.direct_cookies
                     .as_ref()
                     .is_some_and(|cookies| cookies.len() > 2 * 1024 * 1024)
+                || a.sites.len() > 8
+                || a.sites.iter().any(|(key, site)| {
+                    key.is_empty()
+                        || key.len() > 64
+                        || site
+                            .cookies
+                            .as_ref()
+                            .is_some_and(|cookies| cookies.len() > 2 * 1024 * 1024)
+                        || site
+                            .token
+                            .as_ref()
+                            .is_some_and(|token| token.len() > 16 * 1024)
+                        || site
+                            .system_type
+                            .as_ref()
+                            .is_some_and(|kind| kind.len() > 64)
+                })
             {
                 return Err("校园账号数据格式损坏".into());
             }
@@ -329,6 +362,7 @@ mod tests {
             token: format!("token-{user}"),
             cookies: "[]".into(),
             direct_cookies: None,
+            sites: Default::default(),
             password: None,
         }
     }

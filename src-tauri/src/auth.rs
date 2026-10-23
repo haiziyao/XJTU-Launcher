@@ -204,6 +204,17 @@ fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
 /// holds that CAS session plus whatever the service sets on the way back.
 /// Captcha and two-step verification are reported instead of guessed.
 pub async fn direct_login(service: &str, username: &str, password: &str) -> Result<String, String> {
+    let (transport, _) = direct_login_page(service, username, password).await?;
+    transport.snapshot()
+}
+
+/// The profile system starts at an OAuth landing page rather than a cookie
+/// service, so the caller needs the final page as well as the cookie jar.
+async fn direct_login_page(
+    service: &str,
+    username: &str,
+    password: &str,
+) -> Result<(Transport, Page), String> {
     if username.trim().is_empty() || password.is_empty() || password.len() > 512 {
         return Err("保存的校园密码无效，请重新登录".into());
     }
@@ -289,13 +300,57 @@ pub async fn direct_login(service: &str, username: &str, password: &str) -> Resu
             .follow(response, AccessMode::Direct, degree)
             .await?;
         if page.url.host_str() != Some("login.xjtu.edu.cn") {
-            return transport.snapshot();
+            return Ok((transport, page));
         }
         if has_error(&page.html) {
             return Err("校园账号或密码不正确，请重新登录校园账号".into());
         }
     }
     Err("直连登录需要验证码，请稍后重试或手动登录".into())
+}
+
+const HELLO_LOGIN: &str = "https://org.xjtu.edu.cn/openplatform/oauth/authorize?appId=966&redirectUri=http%3A%2F%2Fhello.xjtu.edu.cn%2Fyingxin%2Flogin%2Fxjtu%2Foauth%2Fpc&responseType=code&scope=user_info&state=pc";
+
+/// Signs in to the profile (hello) system and returns its cookie jar, bearer
+/// token and the JWT-provided system type. The token is not logged.
+pub async fn hello_login(
+    username: &str,
+    password: &str,
+) -> Result<(String, String, String), String> {
+    let (transport, mut page) = direct_login_page(HELLO_LOGIN, username, password).await?;
+    if page.url.host_str() != Some("hello.xjtu.edu.cn") {
+        // Some CAS responses land on the OAuth consent page first; ask once more.
+        page = transport
+            .page(
+                &Url::parse(HELLO_LOGIN).map_err(|_| "个人信息登录地址无效")?,
+                AccessMode::Direct,
+                "undergraduate",
+            )
+            .await?;
+    }
+    let token = network::hello_token(&page.url).ok_or("个人信息系统未返回访问令牌")?;
+    let system_type = jwt_system_type(&token);
+    Ok((transport.snapshot()?, token, system_type))
+}
+
+/// The profile JWT carries the target app in `systemType`; fall back to the
+/// student app when the payload is absent or malformed.
+fn jwt_system_type(token: &str) -> String {
+    let Some(payload) = token.split('.').nth(1) else {
+        return "yingxin_student_pc".into();
+    };
+    let Ok(bytes) = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')) else {
+        return "yingxin_student_pc".into();
+    };
+    let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+        return "yingxin_student_pc".into();
+    };
+    value
+        .get("systemType")
+        .and_then(Value::as_str)
+        .filter(|kind| !kind.is_empty() && kind.len() <= 64)
+        .unwrap_or("yingxin_student_pc")
+        .to_string()
 }
 
 pub struct Login {
@@ -575,6 +630,7 @@ impl Login {
                         token,
                         cookies: self.transport.snapshot()?,
                         direct_cookies: None,
+                        sites: Default::default(),
                     });
                     self.phase = Phase::Success;
                     self.page = None;
@@ -971,6 +1027,17 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn profile_jwt_system_type_falls_back_safely() {
+        let payload = URL_SAFE_NO_PAD.encode(r#"{"systemType":"yingxin_teacher_pc"}"#);
+        assert_eq!(
+            jwt_system_type(&format!("h.{payload}.s")),
+            "yingxin_teacher_pc"
+        );
+        for token in ["", "onlyone", "h..s", "h.bm90LWpzb24.s"] {
+            assert_eq!(jwt_system_type(token), "yingxin_student_pc");
+        }
+    }
     #[test]
     fn campus_public_key_accepts_unwrapped_base64_and_crlf() {
         use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey};

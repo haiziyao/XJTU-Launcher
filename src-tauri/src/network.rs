@@ -71,6 +71,43 @@ pub fn browser_address(url: &Url, mode: AccessMode) -> Result<Url, String> {
     }
 }
 
+/// The profile system returns its bearer token on an HTTP landing URL that the
+/// HTTPS-only transport would otherwise reject. Accept only that host, port and
+/// a token-shaped value; the caller stores the token and never fetches the URL.
+pub fn hello_token(url: &Url) -> Option<String> {
+    let port_ok = match url.scheme() {
+        "http" => url.port_or_known_default() == Some(80),
+        "https" => url.port_or_known_default() == Some(443),
+        _ => false,
+    };
+    if url.host_str() != Some("hello.xjtu.edu.cn")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || !port_ok
+    {
+        return None;
+    }
+    url.query_pairs()
+        .find(|(key, _)| key == "token")
+        .map(|(_, value)| value.into_owned())
+        .filter(|value| {
+            !value.is_empty()
+                && value.len() <= 8 * 1024
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+}
+
+/// Drops every other query parameter so the token is the only value the login
+/// flow carries forward.
+fn hello_landing(token: &str) -> Result<Url, String> {
+    let mut landing = Url::parse("http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc")
+        .map_err(|_| "个人信息回调地址无效")?;
+    landing.query_pairs_mut().append_pair("token", token);
+    Ok(landing)
+}
+
 fn encode_vpn_url(url: &Url) -> Result<Url, String> {
     if url.host_str() == Some(VPN_HOST) {
         return Ok(url.clone());
@@ -199,6 +236,15 @@ impl Transport {
                     .url()
                     .join(location)
                     .map_err(|_| "校园跳转地址无效")?;
+                // The profile system returns its token on an HTTP landing URL.
+                // Capture it before the HTTPS-only transport policy rejects it.
+                if let Some(token) = hello_token(&next) {
+                    return Ok(Page {
+                        url: hello_landing(&token)?,
+                        html: String::new(),
+                        status: StatusCode::OK,
+                    });
+                }
                 let logical = original_url(&next)?;
                 if crate::campus::callback(&logical, degree).is_some() {
                     return Ok(Page {
@@ -332,6 +378,30 @@ mod tests {
             assert!(vpn_url(&Url::parse(bad).unwrap()).is_err());
         }
     }
+    #[test]
+    fn hello_token_requires_the_profile_host_and_a_token_shape() {
+        let good = Url::parse(
+            "http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?token=abc.DEF_123-&uuid=x",
+        )
+        .unwrap();
+        assert_eq!(hello_token(&good).as_deref(), Some("abc.DEF_123-"));
+        assert_eq!(
+            hello_landing("abc.DEF_123-").unwrap().as_str(),
+            "http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?token=abc.DEF_123-"
+        );
+        for bad in [
+            "https://hello.xjtu.edu.cn.evil.test/?token=abc",
+            "http://hello.xjtu.edu.cn:8080/?token=abc",
+            "http://u:p@hello.xjtu.edu.cn/?token=abc",
+            "http://hello.xjtu.edu.cn/?token=",
+            "http://hello.xjtu.edu.cn/?token=abc%20def",
+            "http://hello.xjtu.edu.cn/?other=abc",
+            "http://login.xjtu.edu.cn/?token=abc",
+        ] {
+            assert!(hello_token(&Url::parse(bad).unwrap()).is_none(), "{bad}");
+        }
+    }
+
     #[test]
     fn cookies_are_isolated_and_session_cookies_survive_encrypted_snapshot() {
         let a = Transport::new(None).unwrap();

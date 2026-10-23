@@ -231,6 +231,7 @@ mod tests {
                 token: "test-token".into(),
                 cookies: "[]".into(),
                 direct_cookies: None,
+                sites: Default::default(),
                 password: Some(accounts::SavedPassword("test-password".into())),
             })
             .unwrap();

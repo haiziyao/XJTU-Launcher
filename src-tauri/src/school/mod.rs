@@ -4,6 +4,7 @@ mod attendance;
 mod card;
 pub mod evaluation;
 mod fitness;
+mod profile;
 mod queries;
 mod transport;
 
@@ -121,8 +122,8 @@ pub fn catalog() -> Vec<Feature> {
             "profile",
             "学籍档案",
             "校园生活",
-            "pending",
-            "app/sessions/hello_session.py",
+            "undergraduate",
+            "app/sessions/hello_session.py; hello/profile.py",
         ),
     ]
     .into_iter()
