@@ -38,6 +38,7 @@ pub fn trusted(url: &Url) -> bool {
                     | "ncard.xjtu.edu.cn"
                     | "tyxylp.xjtu.edu.cn"
                     | "hello.xjtu.edu.cn"
+                    | "lms.xjtu.edu.cn"
             )
         )
 }
@@ -378,6 +379,19 @@ mod tests {
             assert!(vpn_url(&Url::parse(bad).unwrap()).is_err());
         }
     }
+    #[test]
+    fn lms_is_the_only_learning_site_on_the_backend_allowlist() {
+        assert!(trusted(
+            &Url::parse("https://lms.xjtu.edu.cn/api/my-courses").unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("http://lms.xjtu.edu.cn/api/my-courses").unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("https://lms.xjtu.edu.cn:8080/").unwrap()
+        ));
+    }
+
     #[test]
     fn hello_token_requires_the_profile_host_and_a_token_shape() {
         let good = Url::parse(

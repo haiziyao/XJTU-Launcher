@@ -4,6 +4,7 @@ mod attendance;
 mod card;
 pub mod evaluation;
 mod fitness;
+mod lms;
 mod profile;
 mod queries;
 mod transport;
@@ -11,6 +12,7 @@ mod transport;
 /// SSO entry used when a direct session is created; the card service is the
 /// most common reason to need one.
 pub(crate) use card::LOGIN_URL as CARD_LOGIN;
+pub(crate) use lms::LOGIN_URL as LMS_LOGIN;
 pub use queries::{query, Query};
 use serde::Serialize;
 
@@ -82,7 +84,13 @@ pub fn catalog() -> Vec<Feature> {
             "undergraduate",
             "attendance/attendance.py",
         ),
-        ("lms", "思源学堂", "学习与教务", "pending", "lms/lms.py"),
+        (
+            "lms",
+            "思源学堂",
+            "学习与教务",
+            "undergraduate",
+            "lms/lms.py",
+        ),
         (
             "notices",
             "通知订阅",

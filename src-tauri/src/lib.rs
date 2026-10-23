@@ -740,6 +740,53 @@ async fn refresh_profile_session(
     Ok(true)
 }
 
+/// 思源学堂 keeps a separate CAS cookie session of its own.
+#[tauri::command]
+async fn refresh_lms_session(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    main_only(&window)?;
+    let path = accounts_path(&app)?;
+    let (account_id, username, password) = {
+        let _guard = state.auth_lock.lock().await;
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("请先登录校园账号")?;
+        let saved = record
+            .password
+            .as_ref()
+            .ok_or("此账号未保存密码，无法自动登录思源学堂")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            zeroize::Zeroizing::new(saved.0.clone()),
+        )
+    };
+    let generation = state.generation.load(Ordering::SeqCst);
+    let cookies = auth::direct_login(school::LMS_LOGIN, &username, &password).await?;
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新打开".into());
+    }
+    let mut book = accounts::load(&path)?;
+    let account = book
+        .accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?;
+    account.sites.insert(
+        "lms".into(),
+        accounts::SiteSession {
+            cookies: Some(cookies),
+            token: None,
+            system_type: None,
+        },
+    );
+    accounts::save(&path, &book)?;
+    Ok(true)
+}
+
 /// Sidebar self-check: try the campus host through a direct connection first,
 /// then through WebVPN, so the pet can report which network is in effect.
 #[tauri::command]
@@ -1732,6 +1779,7 @@ pub fn run() {
             query_timetable,
             refresh_direct_session,
             refresh_profile_session,
+            refresh_lms_session,
             check_network,
             open_external
         ])

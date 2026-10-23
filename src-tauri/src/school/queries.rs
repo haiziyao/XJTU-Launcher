@@ -57,6 +57,10 @@ pub enum Query {
         year: String,
     },
     Profile,
+    LmsCourses,
+    LmsActivities {
+        course: u64,
+    },
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -71,6 +75,7 @@ impl Query {
             Self::Card | Self::CardTransactions { .. } => "card",
             Self::Fitness | Self::FitnessScore { .. } => "fitness",
             Self::Profile => "profile",
+            Self::LmsCourses | Self::LmsActivities { .. } => "lms",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -126,6 +131,9 @@ impl Query {
                 if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) =>
             {
                 return Err("请选择有效的体测学年".into());
+            }
+            Self::LmsActivities { course } if !(1..=9_999_999).contains(course) => {
+                return Err("课程编号无效".into());
             }
             _ => {}
         }
@@ -218,6 +226,16 @@ pub async fn query(
     if matches!(query, Query::Profile) {
         let account = account.ok_or("请先登录校园账号")?;
         return Ok((super::profile::query(&account).await?, None));
+    }
+    if matches!(query, Query::LmsCourses | Query::LmsActivities { .. }) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::lms::Client::connect(&account)?;
+        let value = match query {
+            Query::LmsCourses => client.courses().await?,
+            Query::LmsActivities { course } => client.activities(course).await?,
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
     }
     if matches!(query, Query::Card | Query::CardTransactions { .. }) {
         let account = account.ok_or("请先登录校园账号")?;
@@ -346,7 +364,7 @@ pub async fn query(
         Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
         Query::Card | Query::CardTransactions { .. } => unreachable!(),
         Query::Fitness | Query::FitnessScore { .. } => unreachable!(),
-        Query::Profile => unreachable!(),
+        Query::Profile | Query::LmsCourses | Query::LmsActivities { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }

@@ -319,11 +319,7 @@ mod tests {
     }
     #[test]
     fn browser_routing_does_not_expand_backend_authentication_allowlist() {
-        for host in [
-            "syxt.xjtu.edu.cn",
-            "identity1.xjtu.edu.cn",
-            "lms.xjtu.edu.cn",
-        ] {
+        for host in ["syxt.xjtu.edu.cn", "identity1.xjtu.edu.cn"] {
             let url = Url::parse(&format!("https://{host}/path?a=1#section")).unwrap();
             assert_eq!(
                 network::browser_address(&url, AccessMode::Direct).unwrap(),
