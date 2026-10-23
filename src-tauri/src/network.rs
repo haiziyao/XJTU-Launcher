@@ -56,6 +56,17 @@ pub fn service_http(url: &Url) -> bool {
         )
 }
 
+/// The profile OAuth callback lands on plain HTTP before it redirects to the
+/// token URL. Allow that one origin as a direct-mode hop; the token itself is
+/// read from the redirect location and the landing page is never stored.
+pub fn hello_http(url: &Url) -> bool {
+    url.scheme() == "http"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(80)
+        && url.host_str() == Some("hello.xjtu.edu.cn")
+}
+
 pub fn vpn_url(url: &Url) -> Result<Url, String> {
     if !trusted(url) {
         return Err("校园请求地址不受支持".into());
@@ -145,8 +156,11 @@ fn encode_vpn_url(url: &Url) -> Result<Url, String> {
 }
 
 pub fn original_url(url: &Url) -> Result<Url, String> {
-    if !trusted(url) && !service_http(url) {
-        return Err("校园跳转地址不受支持".into());
+    if !trusted(url) && !service_http(url) && !hello_http(url) {
+        return Err(format!(
+            "校园跳转地址不受支持（{}）",
+            url.host_str().unwrap_or("未知主机")
+        ));
     }
     if url.host_str() != Some(VPN_HOST) || !url.path().starts_with("/https/") {
         return Ok(url.clone());
@@ -207,7 +221,8 @@ impl Transport {
     }
     pub fn address(url: &Url, mode: AccessMode) -> Result<Url, String> {
         // Plain-HTTP services have no WebVPN mapping; they must be reached directly.
-        if !trusted(url) && !(mode == AccessMode::Direct && service_http(url)) {
+        if !trusted(url) && !(mode == AccessMode::Direct && (service_http(url) || hello_http(url)))
+        {
             return Err("校园请求地址不受支持".into());
         }
         if mode == AccessMode::Webvpn {
@@ -424,6 +439,24 @@ mod tests {
         assert!(!trusted(
             &Url::parse("https://lms.xjtu.edu.cn:8080/").unwrap()
         ));
+    }
+
+    #[test]
+    fn the_hello_oauth_landing_is_a_direct_only_http_hop() {
+        let landing =
+            Url::parse("http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?code=abc").unwrap();
+        assert!(hello_http(&landing));
+        assert!(Transport::address(&landing, AccessMode::Direct).is_ok());
+        assert!(Transport::address(&landing, AccessMode::Webvpn).is_err());
+        assert!(original_url(&landing).is_ok());
+        for bad in [
+            "https://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc",
+            "http://hello.xjtu.edu.cn:8080/",
+            "http://hello.xjtu.edu.cn.evil.test/",
+            "http://u:p@hello.xjtu.edu.cn/",
+        ] {
+            assert!(!hello_http(&Url::parse(bad).unwrap()), "{bad}");
+        }
     }
 
     #[test]

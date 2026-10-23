@@ -214,13 +214,23 @@ const vpnBlocked = (id: string) =>
   props.accessMode === 'webvpn' && !hasDirect.value && DIRECT_ONLY.includes(id);
 const campusBlocked = (id: string) => props.accessMode === 'webvpn' && CAMPUS_ONLY.includes(id);
 const available = (id: string) => READY.includes(id);
+/** Why a tool cannot open, shown next to its description and on the badge. */
+const reason = (id: string): string => {
+  const state = backend(id);
+  if (!state) return '';
+  if (state === 'pending') return '后台尚未接入';
+  if (!available(id)) return '页面尚未实现';
+  if (campusBlocked(id)) return '仅支持校园网直连，WebVPN 下不可用';
+  if (vpnBlocked(id)) return 'WebVPN 下不可用，需要先建立直连会话';
+  return '';
+};
 const badge = (id: string) => {
   if (campusBlocked(id)) return '需校园网';
-  if (vpnBlocked(id)) return 'VPN 下不可用';
+  if (vpnBlocked(id)) return '需直连';
   if (available(id)) return '可用';
   const state = backend(id);
   if (!state) return '…';
-  return state === 'pending' ? '待接入' : '界面待实现';
+  return state === 'pending' ? '待接入' : '未实现';
 };
 
 /** Direct-only tools log in on demand; a failed login explains itself. */
@@ -252,7 +262,7 @@ function range(days: number): [string, string] {
 async function open(id: string) {
   if (!available(id)) return;
   if (campusBlocked(id)) {
-    error.value = '图书馆和场馆系统只支持校园网直连，请连接校园网后重试';
+    error.value = '当前是 WebVPN 环境：图书馆和场馆系统只支持校园网直连，请连接校园网后重试';
     return;
   }
   error.value = '';
@@ -378,7 +388,7 @@ onMounted(async () => {
           v-for="item in pinnedTools"
           :key="item.id"
           :title="item.name"
-          :description="item.description"
+          :description="[item.description, reason(item.id)].filter(Boolean).join(' · ')"
           :class="{ actionable: available(item.id) }"
           @dblclick="rowDblClick($event, () => open(item.id))"
         >
@@ -386,7 +396,12 @@ onMounted(async () => {
             ><IconTile :size="32" :tone="item.tone"
               ><component :is="item.icon" :size="16" /></IconTile
           ></template>
-          <span class="badge" :class="{ accent: available(item.id) }">{{ badge(item.id) }}</span>
+          <span
+            class="badge"
+            :title="reason(item.id) || undefined"
+            :class="{ accent: available(item.id) }"
+            >{{ badge(item.id) }}</span
+          >
           <button
             class="btn ghost icon small"
             :title="`将${item.name}移回原位置`"
@@ -395,8 +410,13 @@ onMounted(async () => {
           >
             <ArrowDown :size="14" />
           </button>
-          <button class="btn small tinted" :disabled="!available(item.id)" @click="open(item.id)">
-            {{ available(item.id) ? '打开' : '未开放' }}
+          <button
+            class="btn small tinted"
+            :disabled="!available(item.id)"
+            :title="available(item.id) ? undefined : reason(item.id)"
+            @click="open(item.id)"
+          >
+            {{ available(item.id) ? '打开' : '不可用' }}
           </button>
         </SettingRow>
       </SettingGroup>
@@ -405,7 +425,7 @@ onMounted(async () => {
           v-for="item in section.tools"
           :key="item.id"
           :title="item.name"
-          :description="item.description"
+          :description="[item.description, reason(item.id)].filter(Boolean).join(' · ')"
           :class="{ actionable: available(item.id) }"
           @dblclick="rowDblClick($event, () => open(item.id))"
         >
@@ -413,7 +433,12 @@ onMounted(async () => {
             ><IconTile :size="32" :tone="item.tone"
               ><component :is="item.icon" :size="16" /></IconTile
           ></template>
-          <span class="badge" :class="{ accent: available(item.id) }">{{ badge(item.id) }}</span>
+          <span
+            class="badge"
+            :title="reason(item.id) || undefined"
+            :class="{ accent: available(item.id) }"
+            >{{ badge(item.id) }}</span
+          >
           <button
             class="btn ghost icon small"
             :title="`将${item.name}置顶到常用`"
@@ -422,8 +447,13 @@ onMounted(async () => {
           >
             <ArrowUp :size="14" />
           </button>
-          <button class="btn small tinted" :disabled="!available(item.id)" @click="open(item.id)">
-            {{ available(item.id) ? '打开' : '未开放' }}
+          <button
+            class="btn small tinted"
+            :disabled="!available(item.id)"
+            :title="available(item.id) ? undefined : reason(item.id)"
+            @click="open(item.id)"
+          >
+            {{ available(item.id) ? '打开' : '不可用' }}
           </button>
         </SettingRow>
       </SettingGroup>

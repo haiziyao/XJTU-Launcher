@@ -91,7 +91,7 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 插件市场轮次结果（历史）：前端 9 项测试通过，Rust 44 项通过、2 项联网探测默认忽略，Clippy 和格式检查通过。真实 HTTP 联调覆盖目录、下载、摘要失败、安装、来源保存和移除。独立 macOS App 已构建并打开，确认原生窗口及插件市场入口；Windows、正式签名更新和完整页面交互仍待验收。
 
-0.3.3 校园后台轮次：Rust 80 项通过、3 项联网探测默认忽略，Clippy（`-D warnings`）与 `cargo fmt --check` 通过，`npm run build` 通过。新增覆盖账号 `sites` 校验、hello JWT 落地与 systemType 兜底、LMS / 图书馆 / 场馆字段映射与错误页面识别、HTTP 来源白名单与后端白名单。四套新后端均未做真实账号联调，图书馆与场馆需校园网；对应页面随后按同一校园子页样式实现，前端 15 项测试与构建通过。本批未替换独立发布的 App。
+0.3.3 校园后台轮次：Rust 81 项通过、3 项联网探测默认忽略，Clippy（`-D warnings`）与 `cargo fmt --check` 通过，`npm run build` 通过。新增覆盖账号 `sites` 校验、hello JWT 落地与 systemType 兜底、hello OAuth 的 HTTP 中转放行、LMS / 图书馆 / 场馆字段映射与错误页面识别、HTTP 来源白名单与后端白名单。四套新后端均未做真实账号联调，图书馆与场馆需校园网；对应页面按同一校园子页样式实现，并在不可用时标注具体原因（WebVPN、未接后台或未实现），前端 15 项测试与构建通过。本批未替换独立发布的 App。
 
 ## 字体
 
