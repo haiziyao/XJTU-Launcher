@@ -12,6 +12,8 @@ import type {
   AgentPresets,
   AgentSummary,
   AgentToolInfo,
+  ExposeStatus,
+  ExposeTool,
   MarketCatalog,
   McpCatalog,
   McpServer,
@@ -373,6 +375,26 @@ export const bridge = {
   async agentTools(): Promise<AgentToolInfo[]> {
     requireNative();
     return invoke('agent_tools');
+  },
+  async exposeStatus(): Promise<ExposeStatus> {
+    requireNative();
+    return invoke('expose_status');
+  },
+  async exposeTools(): Promise<ExposeTool[]> {
+    requireNative();
+    return invoke('expose_tools');
+  },
+  async setExposeEnabled(enabled: boolean): Promise<ExposeStatus> {
+    requireNative();
+    return invoke('expose_set_enabled', { enabled });
+  },
+  async setExposePort(port: number): Promise<ExposeStatus> {
+    requireNative();
+    return invoke('expose_set_port', { port });
+  },
+  async probeExpose(): Promise<void> {
+    requireNative();
+    return invoke('expose_probe');
   },
   async onAgent(callback: (event: AgentEvent) => void): Promise<() => void> {
     requireNative();

@@ -2,6 +2,7 @@ mod agent;
 mod campus;
 mod campus_browser;
 mod config;
+mod expose;
 mod market;
 mod mcp;
 mod personal_image;
@@ -1868,13 +1869,98 @@ async fn agent_tools(
     Ok(state.agent.tool_infos(&app).await)
 }
 
+#[tauri::command]
+fn expose_status(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, expose::State>,
+) -> Result<expose::Status, String> {
+    main_only(&window)?;
+    let config = config::load(&config_path(&app)?)?;
+    Ok(state.status(config.mcp_server_enabled, config.mcp_server_port))
+}
+
+#[tauri::command]
+fn expose_tools(window: WebviewWindow) -> Result<Vec<expose::Tool>, String> {
+    main_only(&window)?;
+    Ok(expose::tools())
+}
+
+#[tauri::command]
+fn expose_set_enabled(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, expose::State>,
+    enabled: bool,
+) -> Result<expose::Status, String> {
+    main_only(&window)?;
+    let port = config::load(&config_path(&app)?)?.mcp_server_port;
+    let state = state.inner();
+    if enabled {
+        expose::start(&app, state, port)?;
+    } else {
+        expose::stop(state);
+    }
+    Ok(state.status(enabled, port))
+}
+
+/// Restart the listener on a new port. If the new port cannot be bound, the
+/// previous listener is restored so a working endpoint is not lost.
+#[tauri::command]
+fn expose_set_port(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, expose::State>,
+    port: u16,
+) -> Result<expose::Status, String> {
+    main_only(&window)?;
+    if !(1024..=65535).contains(&port) {
+        return Err("端口需在 1024-65535 之间".into());
+    }
+    let config = config::load(&config_path(&app)?)?;
+    if !config.mcp_server_enabled {
+        return Err("请先打开 MCP 模式".into());
+    }
+    let state = state.inner();
+    let previous = state.running_port();
+    expose::stop(state);
+    match expose::start(&app, state, port) {
+        Ok(()) => Ok(state.status(true, port)),
+        Err(error) => {
+            if let Some(previous) = previous {
+                let _ = expose::start(&app, state, previous);
+            }
+            Err(error)
+        }
+    }
+}
+
+/// Runs one cheap campus query so the page can say whether the current school
+/// session actually works, rather than inferring it from the address alone.
+/// The answer is only success or the error; query details belong in the tools.
+#[tauri::command]
+async fn expose_probe(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
+    main_only(&window)?;
+    run_school_query(&app, school::Query::Terms).await?;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .manage(updates::State::default())
+        .manage(expose::State::default())
         .setup(|app| {
             vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
             campus_browser::install_menu(app.handle())?;
+            // Resume the endpoint only if the user left it on; a bind failure is
+            // kept in the shared state so the personal page can show the reason.
+            if let Ok(config) = config_path(app.handle()).and_then(|path| config::load(&path)) {
+                if config.mcp_server_enabled {
+                    let state = app.state::<expose::State>();
+                    let _ = expose::start(app.handle(), state.inner(), config.mcp_server_port);
+                }
+            }
             Ok(())
         })
         .on_menu_event(|app, event| campus_browser::menu_event(app, event.id().as_ref()))
@@ -1932,6 +2018,11 @@ pub fn run() {
             agent_send,
             agent_cancel,
             agent_tools,
+            expose_status,
+            expose_tools,
+            expose_set_enabled,
+            expose_set_port,
+            expose_probe,
             agent_presets,
             agent_save_preset,
             agent_remove_preset,

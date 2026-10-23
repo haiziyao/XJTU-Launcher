@@ -120,6 +120,159 @@
   line-height: 1.55;
 }
 
+/* Personal: local MCP endpoint. Detail lines sit under the row's icon column. */
+.connect-detail {
+  display: grid;
+  gap: 8px;
+  padding: 2px 16px 16px 62px;
+}
+.connect-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setting-card > .connect-error {
+  padding: 10px 16px;
+}
+.connect-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.connect-label {
+  flex-shrink: 0;
+  width: 32px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.connect-line code {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--control-bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--control-border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connect-line .btn {
+  flex-shrink: 0;
+}
+.connect-port {
+  flex-shrink: 0;
+  width: 96px;
+}
+.connect-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.tool-panel {
+  margin-top: 2px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--control-bg-subtle);
+  overflow: hidden;
+}
+.tool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px 6px 12px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.tool-probe {
+  margin: 0 12px 8px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.tool-probe.ok {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.tool-probe.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.tool-group-title {
+  margin: 0;
+  padding: 6px 12px 4px;
+  border-top: 1px solid var(--divider);
+  background: var(--control-sunken);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--divider);
+  cursor: pointer;
+}
+.tool-row:hover {
+  background: var(--surface-hover);
+}
+.tool-row input[type='checkbox'] {
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.tool-copy {
+  flex: 1;
+  min-width: 0;
+}
+.tool-copy code {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.tool-copy small {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.tool-state {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tool-state.ok {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.tool-state.warn {
+  color: #8f4c0c;
+  background: #fdf1e5;
+}
+.tool-state.muted {
+  color: var(--text-tertiary);
+  background: var(--control-sunken);
+}
+
 /* Inline editable text */
 .inline-edit-form {
   display: flex;

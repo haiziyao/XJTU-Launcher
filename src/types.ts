@@ -22,6 +22,26 @@ export interface AppConfig {
   homeClock: string;
   /** Home sections kept visible. */
   homeSections: string[];
+  /** Loopback MCP endpoint on the personal page. */
+  mcpServerEnabled: boolean;
+  /** Loopback port chosen by the user. */
+  mcpServerPort: number;
+  /** Built-in tools kept out of that endpoint. */
+  mcpServerDisabledTools: string[];
+}
+
+export interface ExposeStatus {
+  running: boolean;
+  enabled: boolean;
+  address: string;
+  error: string | null;
+}
+
+export interface ExposeTool {
+  name: string;
+  description: string;
+  /** Display group in the tool list. */
+  category: string;
 }
 
 export interface Link {

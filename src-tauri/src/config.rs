@@ -43,6 +43,16 @@ pub struct AppConfig {
     /// Home sections the user keeps visible; order comes from `widgets`.
     #[serde(default = "default_home_sections")]
     pub home_sections: Vec<String>,
+    /// Local MCP endpoint on the personal page; off until the user turns it on.
+    #[serde(default)]
+    pub mcp_server_enabled: bool,
+    /// Loopback port chosen by the user. Never falls back to another port.
+    #[serde(default = "default_mcp_port")]
+    pub mcp_server_port: u16,
+    /// Built-in tools the user keeps out of that endpoint. Unknown names are
+    /// ignored so a config written by an older build still loads.
+    #[serde(default)]
+    pub mcp_server_disabled_tools: Vec<String>,
 }
 
 fn default_home_clock() -> String {
@@ -61,6 +71,14 @@ fn default_sidebar_width() -> u32 {
 
 fn default_show_seconds() -> bool {
     true
+}
+
+/// The examples include this module without the rest of the crate, so the
+/// default lives here rather than in `expose`.
+pub const DEFAULT_MCP_PORT: u16 = 39217;
+
+fn default_mcp_port() -> u16 {
+    DEFAULT_MCP_PORT
 }
 
 fn default_pet() -> String {
@@ -91,6 +109,9 @@ impl Default for AppConfig {
             campus_pinned: Vec::new(),
             home_clock: default_home_clock(),
             home_sections: default_home_sections(),
+            mcp_server_enabled: false,
+            mcp_server_port: default_mcp_port(),
+            mcp_server_disabled_tools: Vec::new(),
         }
     }
 }
@@ -103,6 +124,15 @@ fn bad_image(value: &Option<String>, formats: &[&str]) -> bool {
                 .iter()
                 .any(|f| s.starts_with(&format!("data:image/{f};base64,")))
     })
+}
+
+// Campus tool ids are lowercase slugs, the same shape as plugin ids.
+fn valid_tool_name(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
 // The accent is a #rrggbb colour; older configs still use the original names.
@@ -126,13 +156,18 @@ impl AppConfig {
             || !["xixi", "anan", "jiaojiao", "tongtong", "dada", "xuexue"]
                 .contains(&self.pet.as_str())
             || self.campus_pinned.len() > 24
-            || self.campus_pinned.iter().any(|id| {
-                id.is_empty()
-                    || id.len() > 64
-                    || !id
-                        .bytes()
-                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-            })
+            || self.campus_pinned.iter().any(|id| !valid_tool_name(id))
+            || !(1024..=65535).contains(&self.mcp_server_port)
+            || self.mcp_server_disabled_tools.len() > 64
+            || self
+                .mcp_server_disabled_tools
+                .iter()
+                .any(|name| !valid_tool_name(name))
+            || {
+                let unique: std::collections::HashSet<_> =
+                    self.mcp_server_disabled_tools.iter().collect();
+                unique.len() != self.mcp_server_disabled_tools.len()
+            }
             || !["plain", "bold", "mono", "card"].contains(&self.home_clock.as_str())
             || self.home_sections.len() > HOME_SECTIONS.len()
             || self
@@ -227,6 +262,29 @@ mod tests {
         assert!(config.plugin_server.is_none());
         assert!(config.check_plugin_updates);
         assert!(config.check_app_updates);
+        assert!(!config.mcp_server_enabled);
+        assert_eq!(config.mcp_server_port, 39217);
+        assert!(config.mcp_server_disabled_tools.is_empty());
+    }
+
+    #[test]
+    fn mcp_tool_selection_must_be_slug_list() {
+        let mut config = AppConfig {
+            mcp_server_disabled_tools: vec!["campus_card".into()],
+            ..AppConfig::default()
+        };
+        config.validate().unwrap();
+        config.mcp_server_disabled_tools = vec!["campus_card".into(), "campus_card".into()];
+        assert!(config.validate().is_err());
+        config.mcp_server_disabled_tools = vec!["Campus Card".into()];
+        assert!(config.validate().is_err());
+        config.mcp_server_disabled_tools.clear();
+        config.mcp_server_enabled = true;
+        config.validate().unwrap();
+        config.mcp_server_port = 1023;
+        assert!(config.validate().is_err());
+        config.mcp_server_port = 65535;
+        config.validate().unwrap();
     }
 
     #[test]

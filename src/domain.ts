@@ -26,6 +26,9 @@ export const defaultConfig = (): AppConfig => ({
   campusPinned: [],
   homeClock: 'plain',
   homeSections: ['greeting', 'clock', 'timetable', 'links', 'plugins'],
+  mcpServerEnabled: false,
+  mcpServerPort: 39217,
+  mcpServerDisabledTools: [],
 });
 
 export const campusLinks = [
