@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 /**
  * Stored campus results. The page shows the last value first and refreshes in
  * the background; entries are scoped to the active account by the backend.
+ * Writes happen in the query that produced the result (pass its name to
+ * `bridge.schoolQuery`), so a slow answer cannot land under another account.
  */
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -27,14 +29,6 @@ export async function readCached<T>(name: string, params?: unknown): Promise<T |
   } catch {
     // Caching is best effort; a miss behaves like an empty store.
     return null;
-  }
-}
-
-export async function writeCached(name: string, params: unknown, value: unknown): Promise<void> {
-  try {
-    await invoke('cache_write', { key: cacheName(name, params), value });
-  } catch {
-    // Writing must never break the page that just loaded.
   }
 }
 

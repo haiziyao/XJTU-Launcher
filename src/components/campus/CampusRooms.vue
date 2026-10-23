@@ -6,7 +6,7 @@ import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
-import { applyCached, writeCached } from '../../cache';
+import { applyCached, cacheName } from '../../cache';
 import type { Option, RoomOptions, Rooms } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -44,8 +44,10 @@ async function loadOptions() {
       campus.value ||= value.campuses[0]?.id ?? '';
       building.value ||= value.buildings[0]?.id ?? '';
     });
-    options.value = (await bridge.schoolQuery({ type: 'roomOptions' })) as RoomOptions;
-    void writeCached('roomOptions', undefined, options.value);
+    options.value = (await bridge.schoolQuery(
+      { type: 'roomOptions' },
+      'roomOptions',
+    )) as RoomOptions;
     campus.value ||= options.value.campuses[0]?.id ?? '';
     building.value ||= options.value.buildings[0]?.id ?? '';
   } catch (e) {
@@ -69,8 +71,10 @@ async function search() {
   loading.value = true;
   error.value = '';
   try {
-    rooms.value = (await bridge.schoolQuery({ type: 'rooms', ...params })) as Rooms;
-    void writeCached('rooms', params, rooms.value);
+    rooms.value = (await bridge.schoolQuery(
+      { type: 'rooms', ...params },
+      cacheName('rooms', params),
+    )) as Rooms;
   } catch (e) {
     console.error('[campus] rooms', e);
     error.value = e instanceof Error ? e.message : String(e);

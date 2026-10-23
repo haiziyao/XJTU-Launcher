@@ -7,7 +7,7 @@ import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
-import { applyCached, writeCached } from '../../cache';
+import { applyCached, cacheName } from '../../cache';
 import type { LibraryArea, LibraryAreas, LibraryFloor, LibrarySeats } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -42,9 +42,11 @@ async function loadFloors() {
     // Stored floors already let the rest of the page load from its own entries,
     // so the fresh list only reloads areas when the floor actually changed.
     if (stored && floor.value) void loadAreas();
-    const fresh = (await bridge.schoolQuery({ type: 'libraryFloors' })) as LibraryFloor[];
+    const fresh = (await bridge.schoolQuery(
+      { type: 'libraryFloors' },
+      'libraryFloors',
+    )) as LibraryFloor[];
     floors.value = fresh;
-    void writeCached('libraryFloors', undefined, fresh);
     campus.value ||= fresh[0]?.campus ?? '';
     const next = fresh.find((item) => item.campus === campus.value)?.code ?? '';
     if (next && next !== floor.value) {
@@ -76,9 +78,9 @@ async function loadAreas() {
       { type: 'libraryAreas', floor: floor.value },
       'library',
       () => bridge.refreshLibrarySession(),
+      cacheName('libraryAreas', params),
     );
     areas.value = result.areas;
-    void writeCached('libraryAreas', params, result);
     if (areas.value[0]) {
       area.value = areas.value[0].code;
       await loadSeats();

@@ -50,7 +50,10 @@ export const bridge = {
     invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
-  schoolQuery: (query: SchoolQuery) => invoke<unknown>('school_query', { query }),
+  // The backend stores the answer under the account that ran the query when a
+  // cache name is given, so an answer that arrives after a switch stays put.
+  schoolQuery: (query: SchoolQuery, cacheName?: string) =>
+    invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null }),
   lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
   lmsSaveFile: (uploadId: number, path: string) =>
     invoke<number>('lms_save_file', { uploadId, path }),

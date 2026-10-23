@@ -456,6 +456,8 @@ async fn remove_account(
     }
     state.auth.cancel_all();
     accounts::save(&path, &book)?;
+    // Stored campus results go with the account; failures must not block removal.
+    cache::purge(&app, &account_id);
     if was_active {
         state.generation.fetch_add(1, Ordering::SeqCst);
     }
@@ -533,19 +535,22 @@ pub(crate) async fn run_timetable(app: &tauri::AppHandle) -> Result<campus::Time
     }
     let state = app.state::<AppState>();
     let generation = state.generation.load(Ordering::SeqCst);
-    let session = {
+    let (session, account_id) = {
         let _guard = state.auth_lock.lock().await;
         let path = accounts_path(app)?;
         let book = accounts::load(&path)?;
         if let Some(account) = book.active() {
-            vault::Session {
-                degree: account.degree.clone(),
-                token: account.token.clone(),
-                mode: account.mode,
-                cookies: Some(account.cookies.clone()),
-            }
+            (
+                vault::Session {
+                    degree: account.degree.clone(),
+                    token: account.token.clone(),
+                    mode: account.mode,
+                    cookies: Some(account.cookies.clone()),
+                },
+                Some(account.id.clone()),
+            )
         } else if !path.exists() {
-            vault::session()?.ok_or("请先连接校园账户")?
+            (vault::session()?.ok_or("请先连接校园账户")?, None)
         } else {
             return Err("请先连接校园账户".into());
         }
@@ -553,6 +558,10 @@ pub(crate) async fn run_timetable(app: &tauri::AppHandle) -> Result<campus::Time
     let timetable = campus::timetable(&session).await?;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账户状态已变化，请重新查询".into());
+    }
+    if let Ok(value) = serde_json::to_value(&timetable) {
+        let scope = account_id.unwrap_or_else(|| cache::active_scope(app));
+        cache::write_for(app, &scope, "timetable", &value);
     }
     Ok(timetable)
 }
@@ -1125,6 +1134,7 @@ async fn save_school_session(
 pub(crate) async fn run_school_query(
     app: &tauri::AppHandle,
     query: school::Query,
+    cache_key: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     require_school_feature(app, query.feature())?;
     query.validate()?;
@@ -1134,13 +1144,22 @@ pub(crate) async fn run_school_query(
         query,
         school::Query::Calendar | school::Query::LibraryFloors
     ) {
-        return school::query(None, query).await.map(|(data, _)| data);
+        let data = school::query(None, query).await.map(|(data, _)| data)?;
+        if let Some(key) = cache_key {
+            // Public data still goes under the current account so reads line up.
+            cache::write_for(app, &cache::active_scope(app), key, &data);
+        }
+        return Ok(data);
     }
     let (account, generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
     let (data, cookies) = school::query(Some(account), query).await?;
     if let Some(cookies) = cookies {
         save_school_session(app, &state, &account_id, generation, cookies).await?;
+    }
+    if let Some(key) = cache_key {
+        // Under the account this query ran for, even if the active one changed.
+        cache::write_for(app, &account_id, key, &data);
     }
     Ok(data)
 }
@@ -1150,9 +1169,10 @@ async fn school_query(
     app: tauri::AppHandle,
     window: WebviewWindow,
     query: school::Query,
+    cache_key: Option<String>,
 ) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    run_school_query(&app, query).await
+    run_school_query(&app, query, cache_key.as_deref()).await
 }
 
 #[tauri::command]
@@ -1942,7 +1962,7 @@ fn expose_set_port(
 #[tauri::command]
 async fn expose_probe(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
     main_only(&window)?;
-    run_school_query(&app, school::Query::Terms).await?;
+    run_school_query(&app, school::Query::Terms, None).await?;
     Ok(())
 }
 
@@ -1985,7 +2005,6 @@ pub fn run() {
             school_catalog,
             school_query,
             cache::cache_read,
-            cache::cache_write,
             lms_open_file,
             lms_save_file,
             school_prepare_evaluations,

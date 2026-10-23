@@ -21,13 +21,13 @@ const expired = (error: unknown) =>
   /失效|重新登录/.test(error instanceof Error ? error.message : String(error));
 
 /** Query a direct-only service, renewing its session once when it expired. */
-export async function directQuery<T>(query: SchoolQuery): Promise<T> {
+export async function directQuery<T>(query: SchoolQuery, cache?: string): Promise<T> {
   try {
-    return (await bridge.schoolQuery(query)) as T;
+    return (await bridge.schoolQuery(query, cache)) as T;
   } catch (error) {
     if (!expired(error)) throw error;
     await ensureDirectSession();
-    return (await bridge.schoolQuery(query)) as T;
+    return (await bridge.schoolQuery(query, cache)) as T;
   }
 }
 
@@ -42,9 +42,10 @@ export async function siteQuery<T>(
   query: SchoolQuery,
   site: string,
   refresh: () => Promise<boolean>,
+  cache?: string,
 ): Promise<T> {
   try {
-    return (await bridge.schoolQuery(query)) as T;
+    return (await bridge.schoolQuery(query, cache)) as T;
   } catch (error) {
     if (!missingSession(error)) throw error;
     let pending = sitePending.get(site);
@@ -55,6 +56,6 @@ export async function siteQuery<T>(
       sitePending.set(site, pending);
     }
     await pending;
-    return (await bridge.schoolQuery(query)) as T;
+    return (await bridge.schoolQuery(query, cache)) as T;
   }
 }

@@ -45,7 +45,7 @@ import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
-import { applyCached, writeCached } from './cache';
+import { applyCached } from './cache';
 import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
@@ -302,7 +302,6 @@ async function refreshTimetable() {
     const result = await bridge.timetable('cn.xjtu.timetable');
     if (!disposed && generation === accountGeneration && timetableEnabled.value) {
       timetable.value = result;
-      void writeCached('timetable', undefined, result);
     }
   } catch (e) {
     if (!disposed && generation === accountGeneration) scheduleError.value = errorText(e);

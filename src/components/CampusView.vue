@@ -33,7 +33,7 @@ import CampusLms from './campus/CampusLms.vue';
 import CampusLibrary from './campus/CampusLibrary.vue';
 import CampusVenue from './campus/CampusVenue.vue';
 import { bridge } from '../bridge';
-import { applyCached, writeCached } from '../cache';
+import { applyCached, cacheName } from '../cache';
 import { directQuery, ensureDirectSession } from '../campusSession';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -280,15 +280,12 @@ async function open(id: string) {
   try {
     if (id === 'card') await loadCard();
     else if (id === 'grades') {
-      grades.value = (await bridge.schoolQuery({ type: 'grades' })) as Grades;
-      void writeCached('grades', undefined, grades.value);
+      grades.value = (await bridge.schoolQuery({ type: 'grades' }, 'grades')) as Grades;
     } else if (id === 'exams') {
-      exams.value = (await bridge.schoolQuery({ type: 'exams' })) as Exams;
-      void writeCached('exams', undefined, exams.value);
+      exams.value = (await bridge.schoolQuery({ type: 'exams' }, 'exams')) as Exams;
     } else if (id === 'attendance') await loadStreams();
     else if (id === 'calendar') {
-      calendar.value = (await bridge.schoolQuery({ type: 'calendar' })) as CalendarList;
-      void writeCached('calendar', undefined, calendar.value);
+      calendar.value = (await bridge.schoolQuery({ type: 'calendar' }, 'calendar')) as CalendarList;
     }
   } catch (e) {
     console.error('[campus] open', tool.value, e);
@@ -332,23 +329,23 @@ async function loadCard() {
   await applyCached<CardInfo>('card', undefined, (v) => (info.value = v));
   await applyCached<CardTransactions>('cardTransactions', params, (v) => (transactions.value = v));
   const [card, list] = await Promise.all([
-    directQuery<CardInfo>({ type: 'card' }),
-    directQuery<CardTransactions>({ type: 'cardTransactions', start, end, page: page.value }),
+    directQuery<CardInfo>({ type: 'card' }, 'card'),
+    directQuery<CardTransactions>(
+      { type: 'cardTransactions', start, end, page: page.value },
+      cacheName('cardTransactions', params),
+    ),
   ]);
   info.value = card;
   transactions.value = list;
-  void writeCached('card', undefined, card);
-  void writeCached('cardTransactions', params, list);
 }
 
 async function loadStreams() {
   const params = { page: page.value };
   await applyCached<AttendanceStreams>('attendanceStreams', params, (v) => (streams.value = v));
-  streams.value = (await bridge.schoolQuery({
-    type: 'attendanceStreams',
-    page: page.value,
-  })) as AttendanceStreams;
-  void writeCached('attendanceStreams', params, streams.value);
+  streams.value = (await bridge.schoolQuery(
+    { type: 'attendanceStreams', page: page.value },
+    cacheName('attendanceStreams', params),
+  )) as AttendanceStreams;
 }
 
 async function turn(delta: number) {
