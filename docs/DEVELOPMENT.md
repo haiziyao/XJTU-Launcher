@@ -106,6 +106,8 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 2026-10-23 个人页 MCP 模式补强：按用户要求把端口改为可在页面编辑（默认 `39217`，范围 1024–65535；点“应用”先停旧监听再绑定新端口，绑定失败时回到原端口并显示原因，成功后才写入 `mcpServerPort`）。“查看工具”按课程与成绩、考勤、校园卡、体测、教室与校历分组；分类在 `expose.rs` 生成，页面与 `tools/list` 保持一致。“检查可达性”原来会带出“返回 73 个学期”这类查询细节，现在只显示“校园会话可用”或具体失败原因。工具当前都是查询，但文案与传输层不再写成永久只读，后续评教、预订等写操作可按同一接口加入。Rust 90 项测试（含新增的端口占用 / 释放复用测试）与 6 项联网探测（默认忽略）通过，Clippy（`-D warnings`）和 `cargo fmt --check` 通过。真实 App 验证：把 `mcpServerPort` 保存为 `39218` 后重启，监听切到 `39218`，`initialize`、`tools/list`（14 个工具）正常；改回 `39217` 后监听恢复。页面“应用”按钮的点击链路未完成端到端人工验证（macOS 自动化被其他前台应用抢占），留待验收。同日按反馈补上展开动画：MCP 详情和工具清单改为 `0fr → 1fr` 网格行高过渡（`src/pages.css` 的 `.expand`），关闭时不再瞬间弹跳，也不会在收起过程中闪出“服务未启动 / 重试”；关闭状态用 `inert` 屏蔽不可见控件。动画帧未截图验证，待用户手感确认。
 
+2026-10-23 README 重写：按用户反馈补齐功能描述，改为「校园账号与课表 / 学习 / 校园生活 / Agent / 本机 MCP 接口 / 插件与市场 / 桌面体验」分节；MCP 单独成节，写明端口、14 个工具、分类与逐项开关，并配两张截图；下载区补充系统要求。截图来自真实 Tauri App，存放于 `docs/screenshots/`（`home`、`campus`、`mcp`、`mcp-tools`）：拍摄时临时把显示名称、头像、壁纸与主题色换成中性值，未包含账号、学号、课程、余额或个人聊天内容，拍完已恢复原配置并重启应用。页面切换与滚动使用临时 dev-only 脚本，截图后已删除，源码未保留改动。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。
