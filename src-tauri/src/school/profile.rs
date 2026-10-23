@@ -7,7 +7,11 @@ use crate::{
 use serde_json::{json, Value};
 use url::Url;
 
-const PROFILE_URL: &str = "https://hello.xjtu.edu.cn/yingxin/user/afterLogin?synAccessSource=pc";
+/// The service is reached over plain HTTP first; its HTTPS endpoint fails to
+/// connect on the campus network today. Both are direct-only.
+const PROFILE_URL: &str = "http://hello.xjtu.edu.cn/yingxin/user/afterLogin?synAccessSource=pc";
+const PROFILE_URL_HTTPS: &str =
+    "https://hello.xjtu.edu.cn/yingxin/user/afterLogin?synAccessSource=pc";
 const REFERER: &str = "http://hello.xjtu.edu.cn/yingxin-pc/";
 
 fn text(value: Option<&Value>) -> String {
@@ -86,16 +90,13 @@ fn body(payload: &Value) -> Result<Value, String> {
     }))
 }
 
-pub async fn query(account: &Account) -> Result<Value, String> {
-    let site = account.sites.get("profile").ok_or("请先完成学籍档案登录")?;
-    let token = site
-        .token
-        .as_deref()
-        .filter(|token| !token.is_empty())
-        .ok_or("请先完成学籍档案登录")?;
-    let saved = site.cookies.as_deref().unwrap_or(&account.cookies);
-    let transport = Transport::new(Some(saved))?;
-    let url = Url::parse(PROFILE_URL).map_err(|_| "学籍接口地址无效")?;
+async fn fetch(
+    transport: &Transport,
+    site: &crate::accounts::SiteSession,
+    token: &str,
+    address: &str,
+) -> Result<Value, String> {
+    let url = Url::parse(address).map_err(|_| "学籍接口地址无效")?;
     let response = transport
         .client
         .get(Transport::address(&url, AccessMode::Direct)?)
@@ -113,11 +114,31 @@ pub async fn query(account: &Account) -> Result<Value, String> {
     if !response.status().is_success() {
         return Err("学籍登录已失效，请刷新学籍档案后重试".into());
     }
-    let payload: Value = response
+    response
         .json()
         .await
-        .map_err(|_| "学籍服务返回了非预期数据")?;
-    body(&payload)
+        .map_err(|_| "学籍服务返回了非预期数据".into())
+}
+
+pub async fn query(account: &Account) -> Result<Value, String> {
+    let site = account.sites.get("profile").ok_or("请先完成学籍档案登录")?;
+    let token = site
+        .token
+        .as_deref()
+        .filter(|token| !token.is_empty())
+        .ok_or("请先完成学籍档案登录")?;
+    let saved = site.cookies.as_deref().unwrap_or(&account.cookies);
+    let transport = Transport::new(Some(saved))?;
+    // Try the plain-HTTP endpoint first, then HTTPS, matching the campus site's
+    // current behaviour.
+    let mut last = String::new();
+    for address in [PROFILE_URL, PROFILE_URL_HTTPS] {
+        match fetch(&transport, site, token, address).await {
+            Ok(payload) => return body(&payload),
+            Err(error) => last = error,
+        }
+    }
+    Err(last)
 }
 
 #[cfg(test)]

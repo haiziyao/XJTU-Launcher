@@ -45,7 +45,7 @@
 
 2026-10-23 补充：账号现在可以同时保存两套会话。教务、考勤继续使用登录时保存的直连/WebVPN 会话；校园卡、体测等只接受直连的服务改用账号内新增的 `directCookies`（`auth.json`，旧账号缺省为空）。外部网络下首次打开这些工具（或点击侧边栏宠物触发自检）时，Rust 用已保存密码从校园卡登录地址发起一次 CAS 服务登录，成功后保存这套直连 Cookie；需要验证码或手机验证的账号无法自动完成，仍显示“VPN 下不可用”并可手动登录。直连查询遇到失效会续期一次再重试。
 
-2026-10-23（0.3.3 开发中）：`auth.json` 的账号增加按服务保存的 `sites`（旧文件缺省为空），目前用于 `profile`（hello JWT）、`lms`、`library`、`venue`。对应新增 `refresh_profile_session`、`refresh_lms_session`、`refresh_library_session`、`refresh_venue_session` 四个命令，均由已保存密码自动登录；需要验证码、手机验证或未保存密码时返回错误。图书馆和场馆只接受校园网直连，WebVPN 模式下直接提示不可用。传输层新增了**仅限三个固定 HTTP 来源**的放行：`http://rg.lib.xjtu.edu.cn:8086`、`http://202.117.17.144:8080`，以及学籍 OAuth 回调的中转地址 `http://hello.xjtu.edu.cn`（只取重定向地址里的 token，不保存落地页）；三者都只允许直连，其余 HTTP 地址仍被拒绝。
+2026-10-23（0.3.3 开发中）：`auth.json` 的账号增加按服务保存的 `sites`（旧文件缺省为空），目前用于 `profile`（hello JWT）、`lms`、`library`、`venue`。对应新增 `refresh_profile_session`、`refresh_lms_session`、`refresh_library_session`、`refresh_venue_session` 四个命令，均由已保存密码自动登录；需要验证码、手机验证或未保存密码时返回错误。图书馆和场馆只接受校园网直连，WebVPN 模式下直接提示不可用。传输层新增了**仅限三个固定 HTTP 来源**的放行：`http://rg.lib.xjtu.edu.cn:8086`、`http://202.117.17.144:8080`，以及学籍服务的 `http://hello.xjtu.edu.cn`（OAuth 中转与学籍 API；学籍接口先走 HTTP，失败再试 HTTPS，与校园系统当前行为一致）；三者都只允许直连，其余 HTTP 地址仍被拒绝。hello 的 token 仍只从重定向地址取出，不保存落地页。
 
 `src-tauri/src/school/` 编译入 Rust，主窗口可调用：
 
