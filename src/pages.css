@@ -532,13 +532,14 @@
   }
 }
 
-/* Campus tool rows shared by the 畅行校园 sub-views. */
+/* Campus tool rows shared by the 畅行校园 sub-views. Rows that sit directly in
+   a setting card get their separator from .setting-card > * + *::before, so
+   they must not draw a second, full-width line of their own. */
 .campus-record {
   display: grid;
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
 }
 .campus-record.two {
   grid-template-columns: minmax(0, 1fr) auto;
@@ -589,7 +590,6 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
 }
 .campus-form-actions {
   display: flex;
@@ -597,7 +597,6 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid var(--divider);
 }
 .campus-field-row {
   display: flex;

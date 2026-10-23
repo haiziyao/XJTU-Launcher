@@ -393,7 +393,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--divider);
 }
 .login-remember strong {
   font-size: 12px;

@@ -142,7 +142,6 @@ onMounted(() => void load());
   display: grid;
   gap: 8px;
   padding: 14px 12px;
-  border-bottom: 1px solid var(--border);
 }
 .memory-form textarea {
   border: 1px solid var(--border);
@@ -164,10 +163,6 @@ onMounted(() => void load());
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.memory-row:last-child {
-  border-bottom: 0;
 }
 .memory-text {
   flex: 1;

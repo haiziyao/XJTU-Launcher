@@ -185,7 +185,6 @@ onMounted(loadFloors);
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
   color: var(--text-secondary);
   font-size: 12.5px;
 }
@@ -198,11 +197,10 @@ onMounted(loadFloors);
   flex-wrap: wrap;
   gap: 6px;
   padding: 12px 16px;
-  border-top: 1px solid var(--divider);
 }
 .library-seat {
   padding: 4px 8px;
-  border: 1px solid var(--divider);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-tertiary);
   font-size: 11.5px;

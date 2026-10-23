@@ -215,7 +215,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
   cursor: pointer;
 }
 .eval-row input {
@@ -240,7 +239,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
   padding: 12px 16px;
-  border-top: 1px solid var(--divider);
 }
 .eval-course strong {
   font-size: 13px;

@@ -461,12 +461,6 @@ onBeforeUnmount(() => {
   </div>
 </template>
 <style scoped>
-.mcp-item {
-  border-bottom: 1px solid var(--border);
-}
-.mcp-item:last-child {
-  border-bottom: 0;
-}
 .mcp-target {
   max-width: 280px;
   overflow: hidden;

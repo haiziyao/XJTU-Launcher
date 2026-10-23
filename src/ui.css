@@ -398,6 +398,9 @@ select.text-field {
   text-align: left;
   position: relative;
 }
+/* The single row separator for cards: one inset hairline between any two direct
+   children. Custom row classes placed inside a card must not draw their own
+   border-top/bottom, or the row ends up with two lines of different widths. */
 .setting-card > * + *::before {
   content: '';
   position: absolute;

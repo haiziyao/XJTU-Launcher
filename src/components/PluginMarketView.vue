@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
   background: var(--accent-wash);
 }
 .installed-item {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--divider);
 }
 .installed-name {
   display: flex;

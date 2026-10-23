@@ -168,7 +168,6 @@ onMounted(load);
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
   color: var(--text-secondary);
   font-size: 12.5px;
 }

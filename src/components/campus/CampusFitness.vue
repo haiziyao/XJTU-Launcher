@@ -100,7 +100,6 @@ onMounted(loadYears);
 <style scoped>
 .fitness-note {
   padding: 10px 16px;
-  border-top: 1px solid var(--divider);
   color: var(--text-tertiary);
   font-size: 12px;
 }

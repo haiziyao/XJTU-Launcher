@@ -26,7 +26,9 @@
   --surface-pressed: rgba(15, 23, 42, 0.08);
   --border: #e4e6ea;
   --border-strong: #d4d7dc;
-  --divider: #eceef1;
+  /* Row hairlines inside cards. Translucent so they stay equally quiet over
+     white and tinted surfaces; structural edges use --border instead. */
+  --divider: rgba(15, 23, 42, 0.05);
 
   --accent: #1f6fe5;
   --accent-hover: #1a63cf;

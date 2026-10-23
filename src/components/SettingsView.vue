@@ -275,11 +275,6 @@ const sections = [
   box-shadow: none;
   background: var(--accent-soft);
 }
-/* 应用设置 is a flat page with many rows; full-strength separators turn it into
-   a stack of bright lines, so keep the row dividers faint here. */
-.settings-page :deep(.setting-card > * + *::before) {
-  border-top-color: rgba(15, 23, 42, 0.05);
-}
 .settings-page :deep(.source-settings .setting-card),
 .settings-page :deep(.update-settings .setting-card) {
   border: 0;
