@@ -123,7 +123,7 @@ cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D w
 
 2026-10-23 思源学堂提交记录：新增只读工具 `campus_lms_submissions`，Agent 与 MCP 现有 27 个校园工具。数据来自 `GET /api/profile`（当前用户编号）与 `GET /api/activities/{id}/students/{uid}/submission_list`，小组作业改用 `/groups/{gid}/submission_list`；返回每次提交的分数、状态、文字内容、附件、提交时间，以及教师批改分数、批语与批改附件。协议由参考项目的只读实现核对后独立用 Rust 重写，没有复制其代码。真实账号已验证：一个未提交作业返回空列表，一个有提交记录的作业返回 1 条记录且字段可读；探测过程只打印数量与字段名，没有输出提交内容。Rust 99 项测试通过、9 项默认忽略。
 
-2026-10-23 校园通知：参考项目的通知模块只作为行为参考，新增独立实现的 `notices.rs`。栏目是封闭列表（教务处教学通知 / 考试安排 / 课程安排 / 竞赛大创、学生处、研究生院培养工作、网络信息中心），只请求 `*.xjtu.edu.cn` 的 HTTPS 页面，不携带任何账号 Cookie；页面上限 2 MB、超时 20 秒、单次最多 50 条。解析兼容三种列表模板（`<span>` 日期、`[分类]` 前缀、`25 2026/06` 的拆分日期），只接受 `/info/` 或 `content.jsp` 的通知链接，按日期倒序返回标题、分类、日期与链接。新增只读工具 `campus_notice_channels` 与 `campus_notices`，Agent 与 MCP 共 29 个校园工具；`school_catalog` 中通知后端从 `pending` 改为 `public`，但页面仍未实现。已用真实网络读取全部 7 个栏目，均能返回 5 条最新通知；Rust 103 项测试通过、10 项默认忽略。
+2026-10-23 校园通知：参考项目的通知模块只作为行为参考，新增独立实现的 `notices.rs`。栏目是封闭列表（教务处教学通知 / 考试安排 / 课程安排 / 竞赛大创、学生处、研究生院培养工作、网络信息中心），只请求 `*.xjtu.edu.cn` 的 HTTPS 页面，不携带任何账号 Cookie；页面上限 2 MB、超时 20 秒、单次最多 50 条。解析兼容三种列表模板（`<span>` 日期、`[分类]` 前缀、`25 2026/06` 的拆分日期），只接受 `/info/` 或 `content.jsp` 的通知链接，按日期倒序返回标题、分类、日期与链接。新增只读工具 `campus_notice_channels` 与 `campus_notices`，Agent 与 MCP 共 29 个校园工具；`school_catalog` 中通知后端从 `pending` 改为 `public`，但页面仍未实现。已用真实网络读取全部 7 个栏目，均能返回 5 条最新通知；Rust 103 项测试通过、10 项默认忽略。真实 App 验证：重启后 MCP `tools/list` 返回 29 个工具，`campus_notices` 通过 MCP 取到教务处考试安排；`campus_lms_submissions` 在当前账号未保存思源学堂会话时返回“请先打开思源学堂页面完成登录”。
 
 README 的 `docs/screenshots/mcp.png` 与 `mcp-tools.png` 仍是 14 个工具时的截图，新工具面验收后再重拍；在重拍前不要用它们判断工具数量。Agent / MCP 预览真实作业前，需先在应用内打开思源学堂完成登录，确保账号的 `sites.lms` 保存了会话；否则工具会提示“请先打开思源学堂页面完成登录”。
 
