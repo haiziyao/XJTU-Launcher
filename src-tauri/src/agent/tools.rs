@@ -55,6 +55,45 @@ pub fn builtin() -> Vec<ToolDef> {
     let date = json!({ "type": "string", "description": "日期，格式 YYYY-MM-DD" });
     vec![
         campus("campus_timetable", "查询当前学期的课程表", json!({}), &[]),
+        campus(
+            "campus_timetable_customizations",
+            "列出本机对课表的修改：改过的教务课程、隐藏的课程和自建课程。",
+            json!({
+                "semester": { "type": "string", "description": "可选，默认当前已同步的学期" }
+            }),
+            &[],
+        ),
+        campus(
+            "campus_timetable_edit",
+            "修改课表（写操作，只影响本机）。save 新增自建课程或修改现有课程；hide 隐藏课程；reset 恢复默认或删除自建课程。先不带 confirm 调用查看预览，用户明确同意后再带 confirm=true。",
+            json!({
+                "action": {
+                    "type": "string",
+                    "enum": ["save", "hide", "reset"],
+                    "description": "save 新增或修改；hide 隐藏；reset 恢复默认或删除自建课程"
+                },
+                "id": { "type": "string", "description": "campus_timetable 返回的课程 id；action=save 且新增自建课程时省略" },
+                "semester": { "type": "string", "description": "可选，默认当前已同步的学期" },
+                "course": {
+                    "type": "object",
+                    "description": "save 时的课程内容",
+                    "properties": {
+                        "name": { "type": "string", "description": "课程名称" },
+                        "teacher": { "type": "string", "description": "教师，可留空" },
+                        "location": { "type": "string", "description": "地点，可留空" },
+                        "day": { "type": "integer", "minimum": 1, "maximum": 7, "description": "星期，1 为周一" },
+                        "start": { "type": "integer", "minimum": 1, "maximum": 20, "description": "开始节次" },
+                        "end": { "type": "integer", "minimum": 1, "maximum": 20, "description": "结束节次" },
+                        "weeks": { "description": "周次，例如 1-16 或 1-8,10-16；也可传周次数组", "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "integer" } }] },
+                        "color": { "type": "integer", "minimum": 0, "maximum": 5, "description": "颜色编号 0-5，省略时按名称取色" }
+                    },
+                    "required": ["name", "day", "start", "end", "weeks"],
+                    "additionalProperties": false
+                },
+                "confirm": { "type": "boolean", "description": "默认 false，只返回预览；用户明确同意后才设为 true" }
+            }),
+            &["action"],
+        ),
         campus("campus_terms", "列出可选学期", json!({}), &[]),
         campus(
             "campus_grades",
@@ -329,6 +368,68 @@ fn comments(args: &Value) -> Result<BTreeMap<String, String>, String> {
     }
 }
 
+fn small(args: &Value, key: &str) -> Result<u8, String> {
+    args.get(key)
+        .and_then(Value::as_u64)
+        .filter(|value| *value <= u64::from(u8::MAX))
+        .map(|value| value as u8)
+        .ok_or_else(|| format!("缺少有效的整数参数 {key}"))
+}
+
+fn timetable_request(args: &Value) -> Result<crate::timetable_custom::Request, String> {
+    use crate::timetable_custom::{Action, Draft, Request, Weeks};
+    let action = match required(args, "action")?.as_str() {
+        "save" => Action::Save,
+        "hide" => Action::Hide,
+        "reset" => Action::Reset,
+        other => return Err(format!("不支持的操作 {other}，只能是 save、hide 或 reset")),
+    };
+    let course = match args.get("course") {
+        None | Some(Value::Null) => None,
+        Some(value) if value.is_object() => {
+            let weeks = match value.get("weeks") {
+                Some(Value::String(text)) => Weeks::Text(text.clone()),
+                Some(Value::Array(items)) => Weeks::List(
+                    items
+                        .iter()
+                        .map(|item| {
+                            item.as_u64()
+                                .and_then(|value| u8::try_from(value).ok())
+                                .ok_or_else(|| {
+                                    "参数 course.weeks 必须是 1 到 60 的整数列表".to_string()
+                                })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                _ => return Err("参数 course.weeks 必须是文本或整数列表".into()),
+            };
+            Some(Draft {
+                name: required(value, "name")?,
+                teacher: text(value, "teacher").unwrap_or_default(),
+                location: text(value, "location").unwrap_or_default(),
+                day: small(value, "day")?,
+                start: small(value, "start")?,
+                end: small(value, "end")?,
+                weeks,
+                color: match value.get("color") {
+                    None | Some(Value::Null) => None,
+                    Some(_) => Some(small(value, "color")?),
+                },
+            })
+        }
+        Some(_) => return Err("参数 course 必须是对象".into()),
+    };
+    if action == Action::Save && course.is_none() {
+        return Err("save 需要 course 内容".into());
+    }
+    Ok(Request {
+        semester: text(args, "semester").unwrap_or_default(),
+        action,
+        id: text(args, "id").unwrap_or_default(),
+        course,
+    })
+}
+
 fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
     let query = match name {
         "campus_terms" => school::Query::Terms,
@@ -448,6 +549,25 @@ impl ToolDef {
                     let timetable = crate::run_timetable(app).await?;
                     Ok(truncate(
                         serde_json::to_string(&timetable).map_err(|_| "无法序列化课表")?,
+                    ))
+                }
+                "campus_timetable_customizations" => {
+                    let data = crate::timetable_customizations(app, text(&args, "semester"))?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data)
+                            .map_err(|_| "无法序列化课表修改记录")?,
+                    ))
+                }
+                "campus_timetable_edit" => {
+                    let confirm = args
+                        .get("confirm")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    let data =
+                        crate::apply_timetable_edit(app, timetable_request(&args)?, confirm)?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data)
+                            .map_err(|_| "无法序列化课表修改结果")?,
                     ))
                 }
                 "campus_evaluations_preview" => {
@@ -600,6 +720,44 @@ mod tests {
     }
 
     #[test]
+    fn timetable_edits_are_typed() {
+        let request = timetable_request(&json!({
+            "action": "save",
+            "course": {
+                "name": "自习",
+                "day": 3,
+                "start": 3,
+                "end": 4,
+                "weeks": "1-4,6"
+            }
+        }))
+        .unwrap();
+        let course = request.course.unwrap();
+        assert_eq!(course.name, "自习");
+        assert!(
+            matches!(&course.weeks, crate::timetable_custom::Weeks::Text(text) if text == "1-4,6")
+        );
+        assert!(request.id.is_empty());
+
+        let listed = timetable_request(&json!({
+            "action": "save",
+            "course": {"name": "自习", "day": 3, "start": 3, "end": 4, "weeks": [1, 2]}
+        }))
+        .unwrap();
+        assert!(
+            matches!(&listed.course.unwrap().weeks, crate::timetable_custom::Weeks::List(weeks) if weeks == &vec![1, 2])
+        );
+
+        assert!(timetable_request(&json!({"action": "delete"})).is_err());
+        assert!(timetable_request(&json!({"action": "save"})).is_err());
+        assert!(timetable_request(&json!({"action": "hide"})).is_ok());
+        assert!(timetable_request(
+            &json!({"action": "save", "course": {"name": "x", "day": 1, "start": 1, "end": 2}})
+        )
+        .is_err());
+    }
+
+    #[test]
     fn maps_tool_names_to_queries() {
         assert!(matches!(
             query_for("campus_grades", &json!({"term": "2025-2026-1"})).unwrap(),
@@ -628,6 +786,8 @@ mod tests {
         let names: Vec<&str> = defs.iter().map(|def| def.name.as_str()).collect();
         for name in [
             "campus_profile",
+            "campus_timetable_customizations",
+            "campus_timetable_edit",
             "campus_evaluations_preview",
             "campus_evaluations_submit",
             "campus_notice_channels",

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   academicWeek,
+  courseHue,
   coursesForDay,
   defaultConfig,
+  formatWeeks,
   moveItem,
   orderedPlugins,
+  parseWeeks,
   visiblePlugins,
 } from './domain';
 import type { Plugin, Timetable } from './types';
@@ -32,6 +35,38 @@ describe('campus schedule dates', () => {
       'every',
     ]);
     expect(coursesForDay(table, new Date(2026, 8, 15))).toEqual([]);
+  });
+});
+
+describe('week text in the timetable editor', () => {
+  it('reads ranges, lists and odd or even marks', () => {
+    expect(parseWeeks('1-4').weeks).toEqual([1, 2, 3, 4]);
+    expect(parseWeeks('1-8,10-12').weeks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12]);
+    expect(parseWeeks('1-8(单)').weeks).toEqual([1, 3, 5, 7]);
+    expect(parseWeeks('2-8双').weeks).toEqual([2, 4, 6, 8]);
+    expect(parseWeeks('1，3、5周').weeks).toEqual([1, 3, 5]);
+    expect(parseWeeks(' 3 ').weeks).toEqual([3]);
+  });
+
+  it('explains what is wrong instead of guessing', () => {
+    expect(parseWeeks('').error).toBe('请填写周次，例如 1-16');
+    expect(parseWeeks('1-2-3').error).toBe('周次格式不受支持');
+    expect(parseWeeks('三').error).toBe('周次格式不受支持');
+    expect(parseWeeks('0-4').error).toBe('周次必须在 1 到 60 之间');
+    expect(parseWeeks('8-4').error).toBe('周次必须在 1 到 60 之间');
+  });
+
+  it('formats runs back into text and round-trips', () => {
+    expect(formatWeeks([1, 2, 3, 4, 5])).toBe('1-5');
+    expect(formatWeeks([1, 2, 3, 5, 7, 8])).toBe('1-3,5,7-8');
+    expect(formatWeeks([4, 2, 3, 3])).toBe('2-4');
+    expect(formatWeeks([])).toBe('');
+    expect(parseWeeks(formatWeeks([1, 3, 5, 9, 10])).weeks).toEqual([1, 3, 5, 9, 10]);
+  });
+
+  it('keeps a name on one hue', () => {
+    expect(courseHue('高等数学')).toBe(courseHue('高等数学'));
+    expect(courseHue('高等数学')).toBeLessThan(6);
   });
 });
 

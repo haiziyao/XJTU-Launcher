@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { CalendarDays, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from 'lucide-vue-next';
-import { academicWeek } from '../domain';
-import type { Timetable } from '../types';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+} from 'lucide-vue-next';
+import { bridge } from '../bridge';
+import { academicWeek, courseHue } from '../domain';
+import type { Course, Timetable, TimetableEdit } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import EmptyState from './ui/EmptyState.vue';
+import TimetableEditor from './TimetableEditor.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 const props = defineProps<{
@@ -13,7 +23,7 @@ const props = defineProps<{
   loading: boolean;
   error: string;
 }>();
-const emit = defineEmits<{ refresh: []; account: [] }>();
+const emit = defineEmits<{ refresh: []; account: []; updated: [timetable: Timetable] }>();
 const week = ref(1);
 const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const maxWeek = computed(() => {
@@ -41,11 +51,49 @@ const today = new Date().getDay() || 7;
 const isCurrentWeek = computed(
   () => !!props.timetable && academicWeek(props.timetable.startDate) === week.value,
 );
-// Same course always gets the same soft color.
-function hue(name: string) {
-  let sum = 0;
-  for (const ch of name) sum = (sum + ch.charCodeAt(0)) % 997;
-  return sum % 6;
+const editorOpen = ref(false);
+/** The course the editor edits; `null` while adding a new one. */
+const editing = ref<Course | null>(null);
+const saving = ref(false);
+const editError = ref('');
+function openEditor(course: Course | null) {
+  editing.value = course;
+  editError.value = '';
+  editorOpen.value = true;
+}
+// A cancelled save drops its error with it; only a restore failure stays on the
+// page, because nothing else would show it.
+function closeEditor() {
+  editorOpen.value = false;
+  editError.value = '';
+}
+function courseTitle(course: Course) {
+  return [
+    [course.name, course.location, course.teacher].filter(Boolean).join(' · '),
+    course.custom ? '自建课程' : course.edited ? '已修改' : '',
+    '点击修改',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+// The backend applies the edit and returns the merged table, so the page never
+// has to guess how an override interacts with the school's copy.
+async function applyEdit(edit: Omit<TimetableEdit, 'semester'>) {
+  if (saving.value || !props.timetable) return;
+  saving.value = true;
+  editError.value = '';
+  try {
+    const merged = await bridge.editTimetable({ semester: props.timetable.semester, ...edit });
+    emit('updated', merged);
+    editorOpen.value = false;
+  } catch (error) {
+    editError.value = String(error);
+  } finally {
+    saving.value = false;
+  }
+}
+function restore(course: Course) {
+  if (course.id) void applyEdit({ action: 'reset', id: course.id });
 }
 </script>
 <template>
@@ -55,6 +103,9 @@ function hue(name: string) {
         第 {{ week }} 周 · 本周 {{ courses.length }} 节课
       </template>
       <template #actions>
+        <UiButton v-if="timetable" variant="tinted" size="sm" @click="openEditor(null)">
+          <Plus :size="14" />添加课程
+        </UiButton>
         <div v-if="timetable" class="week-control">
           <UiIconButton label="上一周" size="sm" :disabled="week <= 1" @click="week--">
             <ChevronLeft :size="15" />
@@ -78,7 +129,9 @@ function hue(name: string) {
       </template>
     </PageHeader>
     <Transition name="drop">
-      <p v-if="error && timetable" class="notice" role="alert">{{ error }}</p>
+      <p v-if="(error || (!editorOpen && editError)) && timetable" class="notice" role="alert">
+        {{ error || editError }}
+      </p>
     </Transition>
     <Transition name="fade" mode="out-in">
       <EmptyState
@@ -118,25 +171,49 @@ function hue(name: string) {
             <div class="day-heading">{{ day }}</div>
             <Transition name="fade" mode="out-in">
               <div :key="week" class="day-courses">
-                <article
+                <button
                   v-for="(course, i) in onDay(index + 1)"
-                  :key="course.name + i"
+                  :key="course.id || course.name + i"
+                  type="button"
                   class="course-cell"
-                  :class="`hue-${hue(course.name)}`"
+                  :class="`hue-${course.color ?? courseHue(course.name)}`"
                   :style="{ gridRow: course.start + ' / span ' + (course.end - course.start + 1) }"
-                  :title="
-                    [course.name, course.location, course.teacher].filter(Boolean).join(' · ')
-                  "
+                  :title="courseTitle(course)"
+                  @click="openEditor(course)"
                 >
                   <strong>{{ course.name }}</strong
                   ><small>{{ course.location || '地点待定' }}</small
                   ><small v-if="course.teacher">{{ course.teacher }}</small>
-                </article>
+                </button>
               </div>
             </Transition>
           </div>
         </div>
+        <div v-if="timetable.hidden?.length" class="hidden-courses">
+          <span class="hidden-label">已隐藏的课程</span>
+          <button
+            v-for="course in timetable.hidden"
+            :key="course.id"
+            type="button"
+            class="hidden-course"
+            :title="`恢复 ${course.name}`"
+            :aria-label="`恢复 ${course.name}`"
+            :disabled="saving"
+            @click="restore(course)"
+          >
+            <span>{{ course.name }}</span
+            ><RotateCcw :size="12" />
+          </button>
+        </div>
       </div>
     </Transition>
+    <TimetableEditor
+      v-if="editorOpen"
+      :course="editing"
+      :busy="saving"
+      :error="editError"
+      @submit="applyEdit"
+      @cancel="closeEditor"
+    />
   </section>
 </template>

@@ -41,6 +41,7 @@ import type {
   AuthEvent,
   PluginList,
   Timetable,
+  TimetableEdit,
 } from './types';
 
 export const native = isTauri();
@@ -247,6 +248,11 @@ export const bridge = {
   async timetable(pluginId: string): Promise<Timetable> {
     requireNative();
     return invoke('query_timetable', { pluginId });
+  },
+  /** Applies one local edit and returns the merged timetable to show. */
+  async editTimetable(request: TimetableEdit): Promise<Timetable> {
+    requireNative();
+    return invoke('edit_timetable', { request });
   },
   async openUrl(url: string): Promise<void> {
     requireNative();

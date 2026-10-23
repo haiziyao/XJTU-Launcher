@@ -3,8 +3,9 @@
 //! This is the opposite direction from `mcp.rs`: instead of connecting to
 //! external MCP servers, it offers the launcher's campus tools to coding
 //! agents. There is no request authentication by user decision, so the listener
-//! is bound to 127.0.0.1 only. Today every tool is a query; write tools can be
-//! added later without changing the transport.
+//! is bound to 127.0.0.1 only. Most tools are queries; the write tools (homework
+//! upload, evaluation submission, local timetable edits) only act after an
+//! explicit `confirm=true`, so a mistaken call cannot submit or overwrite.
 use crate::{agent::tools, config, config_path};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, Limited};
@@ -184,7 +185,12 @@ pub fn tools() -> Vec<Tool> {
 /// Kept in the backend so the page and `tools/list` describe the same tools.
 fn category(name: &str) -> &'static str {
     match name {
-        "campus_timetable" | "campus_terms" | "campus_grades" | "campus_exams"
+        "campus_timetable"
+        | "campus_timetable_customizations"
+        | "campus_timetable_edit"
+        | "campus_terms"
+        | "campus_grades"
+        | "campus_exams"
         | "campus_courses" => "课程与成绩",
         "campus_attendance_streams" | "campus_attendance_records" => "考勤",
         "campus_card" | "campus_card_transactions" => "校园卡",

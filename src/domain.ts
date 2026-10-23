@@ -56,6 +56,60 @@ export function academicWeek(start: string, date = new Date()): number {
   return Math.floor((today - beginning) / 604800000) + 1;
 }
 
+// Same course always gets the same soft color.
+export function courseHue(name: string): number {
+  let sum = 0;
+  for (const ch of name) sum = (sum + ch.charCodeAt(0)) % 997;
+  return sum % 6;
+}
+
+/**
+ * Reads the week text the school writes ("1-16,18", "1-8单"). It mirrors Rust
+ * `campus::parse_weeks`, so the editor accepts exactly what the backend stores.
+ */
+export function parseWeeks(text: string): { weeks: number[]; error: string | null } {
+  const found = new Set<number>();
+  const normalized = text.replace(/[，、;；]/g, ',').replace(/周/g, '');
+  for (const part of normalized
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    const odd = part.includes('单');
+    const even = part.includes('双');
+    const clean = part.replace(/[()（）单双\s]/g, '');
+    const bounds = clean.split('-');
+    if (bounds.length > 2) return { weeks: [], error: '周次格式不受支持' };
+    const start = Number(bounds[0]);
+    const end = Number(bounds[bounds.length - 1]);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) {
+      return { weeks: [], error: '周次格式不受支持' };
+    }
+    if (start === 0 || start > end || end > 60) {
+      return { weeks: [], error: '周次必须在 1 到 60 之间' };
+    }
+    for (let week = start; week <= end; week++) {
+      if ((odd && week % 2 === 0) || (even && week % 2 === 1)) continue;
+      found.add(week);
+    }
+  }
+  const weeks = [...found].sort((a, b) => a - b);
+  return weeks.length ? { weeks, error: null } : { weeks: [], error: '请填写周次，例如 1-16' };
+}
+
+/** Turns weeks back into the compact text the editor shows. */
+export function formatWeeks(weeks: number[]): string {
+  const sorted = [...new Set(weeks)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let index = 0;
+  while (index < sorted.length) {
+    let end = index;
+    while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) end++;
+    parts.push(end === index ? String(sorted[index]) : `${sorted[index]}-${sorted[end]}`);
+    index = end + 1;
+  }
+  return parts.join(',');
+}
+
 export function coursesForDay(timetable: Timetable, date = new Date()): Course[] {
   const week = academicWeek(timetable.startDate, date);
   const day = date.getDay() || 7;

@@ -79,24 +79,45 @@ struct Semester {
     end_date: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Timetable {
-    semester: String,
-    start_date: String,
-    end_date: String,
-    courses: Vec<Course>,
+    pub(crate) semester: String,
+    pub(crate) start_date: String,
+    pub(crate) end_date: String,
+    pub(crate) courses: Vec<Course>,
+    /// School courses the user hid. They are not part of the week grid, but the
+    /// page offers a way to bring them back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) hidden: Vec<Course>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Course {
-    name: String,
-    teacher: String,
-    location: String,
-    day: u8,
-    start: u8,
-    end: u8,
-    weeks: Vec<u8>,
+    /// Stable within one semester: a digest of the school's original fields.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) teacher: String,
+    pub(crate) location: String,
+    pub(crate) day: u8,
+    pub(crate) start: u8,
+    pub(crate) end: u8,
+    pub(crate) weeks: Vec<u8>,
+    /// Hue 0–5 chosen by the user; absent means the name picks the colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) color: Option<u8>,
+    /// Added on this machine rather than fetched from the school.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) custom: bool,
+    /// A school course whose fields come from a local override.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) edited: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Deserialize)]
@@ -153,6 +174,7 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
                 return Err("课表节次超出支持范围".into());
             }
             Ok(Course {
+                id: String::new(),
                 name: c.course_name,
                 teacher: c.teacher_name.unwrap_or_default(),
                 location: c.classroom_name.unwrap_or_default(),
@@ -160,6 +182,9 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
                 start: c.start_section,
                 end: c.end_section,
                 weeks: parse_weeks(&c.week_ranges)?,
+                color: None,
+                custom: false,
+                edited: false,
             })
         })
         .collect()
@@ -227,6 +252,7 @@ pub async fn timetable(session: &crate::vault::Session) -> Result<Timetable, Str
         start_date: semester.start_date,
         end_date: semester.end_date,
         courses,
+        hidden: Vec::new(),
     })
 }
 

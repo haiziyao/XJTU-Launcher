@@ -655,6 +655,7 @@ onBeforeUnmount(() => {
                 :error="scheduleError"
                 @refresh="refreshTimetable"
                 @account="route = 'accounts'"
+                @updated="timetable = $event"
               />
               <CampusView
                 v-else-if="activePlugin?.page.type === 'campus'"

@@ -115,7 +115,14 @@ pub fn cache_read(
     key: String,
 ) -> Result<Option<Value>, String> {
     crate::main_only(&window)?;
-    Ok(read(&app, &key))
+    let value = read(&app, &key);
+    // The stored timetable is the school's own copy. Local edits are applied to
+    // every copy that leaves the backend, including this first paint, so the
+    // page does not briefly show the school version after a restart.
+    match value {
+        Some(value) if key == "timetable" => Ok(Some(crate::merge_cached_timetable(&app, value))),
+        value => Ok(value),
+    }
 }
 
 #[cfg(test)]
