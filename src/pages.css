@@ -5,6 +5,12 @@
 .narrow-page {
   max-width: 720px;
 }
+/* The personal page is narrower than the content area. Left-aligning it made it
+   look pinned to the sidebar, and every sidebar drag slid the page by the same
+   amount; centring keeps both margins equal and only shifts it by half. */
+.narrow-page.is-centered {
+  margin-inline: auto;
+}
 .subpage {
   max-width: 720px;
 }

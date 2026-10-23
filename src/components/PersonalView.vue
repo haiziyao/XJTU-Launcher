@@ -49,7 +49,7 @@ async function applyCrop(crop: ImageCrop) {
 onBeforeUnmount(closeCrop);
 </script>
 <template>
-  <section class="desktop-page narrow-page">
+  <section class="desktop-page narrow-page is-centered">
     <PageHeader title="个人" description="本机个人资料与主页外观" />
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
