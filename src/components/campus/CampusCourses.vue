@@ -6,6 +6,7 @@ import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
+import { applyCached, writeCached } from '../../cache';
 import type { Courses, Terms } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -26,7 +27,12 @@ async function loadTerms() {
   loading.value = true;
   error.value = '';
   try {
+    await applyCached<Terms>('terms', undefined, (value) => {
+      terms.value = value;
+      term.value ||= value.rows[0]?.id ?? '';
+    });
     terms.value = (await bridge.schoolQuery({ type: 'terms' })) as Terms;
+    void writeCached('terms', undefined, terms.value);
     term.value = terms.value.rows[0]?.id ?? '';
   } catch (e) {
     console.error('[campus] terms', e);
@@ -38,15 +44,18 @@ async function loadTerms() {
 
 async function search() {
   if (!name.value.trim()) return;
+  const params = { term: term.value || null, name: name.value.trim() };
+  await applyCached<Courses>('courses', params, (value) => (courses.value = value));
   loading.value = true;
   error.value = '';
   try {
     courses.value = (await bridge.schoolQuery({
       type: 'courses',
-      term: term.value || null,
-      name: name.value.trim(),
+      term: params.term,
+      name: params.name,
       campus: '',
     })) as Courses;
+    void writeCached('courses', params, courses.value);
   } catch (e) {
     console.error('[campus] courses', e);
     error.value = e instanceof Error ? e.message : String(e);

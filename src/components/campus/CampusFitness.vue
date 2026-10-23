@@ -6,6 +6,7 @@ import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { directQuery } from '../../campusSession';
+import { applyCached, writeCached } from '../../cache';
 import type { FitnessScore, FitnessYears } from '../../types';
 
 const years = ref<FitnessYears | null>(null);
@@ -22,7 +23,9 @@ async function loadYears() {
   loading.value = true;
   error.value = '';
   try {
+    await applyCached<FitnessYears>('fitness', undefined, (value) => (years.value = value));
     years.value = await directQuery<FitnessYears>({ type: 'fitness' });
+    void writeCached('fitness', undefined, years.value);
     const preferred = years.value.rows.find((item) => item.checked) ?? years.value.rows[0];
     if (preferred) {
       year.value = preferred.year;
@@ -38,6 +41,8 @@ async function loadYears() {
 
 async function loadScore() {
   if (!year.value) return;
+  const params = { year: year.value };
+  await applyCached<FitnessScore>('fitnessScore', params, (value) => (score.value = value));
   loading.value = true;
   error.value = '';
   try {
@@ -45,6 +50,7 @@ async function loadScore() {
       type: 'fitnessScore',
       year: year.value,
     });
+    void writeCached('fitnessScore', params, score.value);
   } catch (e) {
     console.error('[campus] fitness score', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -55,6 +61,7 @@ async function loadScore() {
 
 function changeYear(value: string) {
   year.value = value;
+  score.value = null;
   void loadScore();
 }
 

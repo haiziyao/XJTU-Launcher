@@ -7,6 +7,7 @@ import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
+import { applyCached, writeCached } from '../../cache';
 import type { LibraryArea, LibraryAreas, LibraryFloor, LibrarySeats } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -33,10 +34,23 @@ async function loadFloors() {
   loading.value = true;
   error.value = '';
   try {
-    floors.value = (await bridge.schoolQuery({ type: 'libraryFloors' })) as LibraryFloor[];
-    campus.value = floors.value[0]?.campus ?? '';
-    floor.value = floors.value.find((item) => item.campus === campus.value)?.code ?? '';
-    if (floor.value) await loadAreas();
+    const stored = await applyCached<LibraryFloor[]>('libraryFloors', undefined, (value) => {
+      floors.value = value;
+      campus.value ||= value[0]?.campus ?? '';
+      floor.value ||= value.find((item) => item.campus === campus.value)?.code ?? '';
+    });
+    // Stored floors already let the rest of the page load from its own entries,
+    // so the fresh list only reloads areas when the floor actually changed.
+    if (stored && floor.value) void loadAreas();
+    const fresh = (await bridge.schoolQuery({ type: 'libraryFloors' })) as LibraryFloor[];
+    floors.value = fresh;
+    void writeCached('libraryFloors', undefined, fresh);
+    campus.value ||= fresh[0]?.campus ?? '';
+    const next = fresh.find((item) => item.campus === campus.value)?.code ?? '';
+    if (next && next !== floor.value) {
+      floor.value = next;
+      await loadAreas();
+    }
   } catch (e) {
     console.error('[campus] library floors', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -47,18 +61,24 @@ async function loadFloors() {
 
 async function loadAreas() {
   if (!floor.value) return;
+  const params = { floor: floor.value };
   areas.value = [];
   seats.value = null;
   area.value = '';
   loading.value = true;
   error.value = '';
   try {
+    await applyCached<LibraryAreas>('libraryAreas', params, (result) => {
+      areas.value = result.areas;
+      area.value = result.areas[0]?.code ?? '';
+    });
     const result = await siteQuery<LibraryAreas>(
       { type: 'libraryAreas', floor: floor.value },
       'library',
       () => bridge.refreshLibrarySession(),
     );
     areas.value = result.areas;
+    void writeCached('libraryAreas', params, result);
     if (areas.value[0]) {
       area.value = areas.value[0].code;
       await loadSeats();

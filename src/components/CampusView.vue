@@ -33,6 +33,7 @@ import CampusLms from './campus/CampusLms.vue';
 import CampusLibrary from './campus/CampusLibrary.vue';
 import CampusVenue from './campus/CampusVenue.vue';
 import { bridge } from '../bridge';
+import { applyCached, writeCached } from '../cache';
 import { directQuery, ensureDirectSession } from '../campusSession';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -272,15 +273,23 @@ async function open(id: string) {
   tool.value = id;
   error.value = '';
   page.value = 1;
+  // Show the stored result while the fresh request runs; the loaders replace
+  // it as soon as the campus systems answer.
+  await prime(id);
   loading.value = true;
   try {
     if (id === 'card') await loadCard();
-    else if (id === 'grades')
+    else if (id === 'grades') {
       grades.value = (await bridge.schoolQuery({ type: 'grades' })) as Grades;
-    else if (id === 'exams') exams.value = (await bridge.schoolQuery({ type: 'exams' })) as Exams;
-    else if (id === 'attendance') await loadStreams();
-    else if (id === 'calendar')
+      void writeCached('grades', undefined, grades.value);
+    } else if (id === 'exams') {
+      exams.value = (await bridge.schoolQuery({ type: 'exams' })) as Exams;
+      void writeCached('exams', undefined, exams.value);
+    } else if (id === 'attendance') await loadStreams();
+    else if (id === 'calendar') {
       calendar.value = (await bridge.schoolQuery({ type: 'calendar' })) as CalendarList;
+      void writeCached('calendar', undefined, calendar.value);
+    }
   } catch (e) {
     console.error('[campus] open', tool.value, e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -308,21 +317,38 @@ function rowActivate(event: MouseEvent, action: () => void) {
   action();
 }
 
+/** Stored results for the tools that load data before their sub-view exists. */
+async function prime(id: string) {
+  if (id === 'grades') return applyCached<Grades>('grades', undefined, (v) => (grades.value = v));
+  if (id === 'exams') return applyCached<Exams>('exams', undefined, (v) => (exams.value = v));
+  if (id === 'calendar')
+    return applyCached<CalendarList>('calendar', undefined, (v) => (calendar.value = v));
+  return false;
+}
+
 async function loadCard() {
   const [start, end] = range(30);
+  const params = { start, end, page: page.value };
+  await applyCached<CardInfo>('card', undefined, (v) => (info.value = v));
+  await applyCached<CardTransactions>('cardTransactions', params, (v) => (transactions.value = v));
   const [card, list] = await Promise.all([
     directQuery<CardInfo>({ type: 'card' }),
     directQuery<CardTransactions>({ type: 'cardTransactions', start, end, page: page.value }),
   ]);
   info.value = card;
   transactions.value = list;
+  void writeCached('card', undefined, card);
+  void writeCached('cardTransactions', params, list);
 }
 
 async function loadStreams() {
+  const params = { page: page.value };
+  await applyCached<AttendanceStreams>('attendanceStreams', params, (v) => (streams.value = v));
   streams.value = (await bridge.schoolQuery({
     type: 'attendanceStreams',
     page: page.value,
   })) as AttendanceStreams;
+  void writeCached('attendanceStreams', params, streams.value);
 }
 
 async function turn(delta: number) {

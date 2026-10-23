@@ -1,4 +1,5 @@
 mod agent;
+mod cache;
 mod campus;
 mod campus_browser;
 mod config;
@@ -40,7 +41,7 @@ struct AppState {
     agent: agent::Manager,
 }
 
-fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
         .app_data_dir()
@@ -48,7 +49,7 @@ fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .join("campus-accounts.enc"))
 }
 
-fn main_only(window: &WebviewWindow) -> Result<(), String> {
+pub(crate) fn main_only(window: &WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
     } else {
@@ -1983,6 +1984,8 @@ pub fn run() {
             updates::restart_after_update,
             school_catalog,
             school_query,
+            cache::cache_read,
+            cache::cache_write,
             lms_open_file,
             lms_save_file,
             school_prepare_evaluations,

@@ -6,6 +6,7 @@ import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { bridge } from '../../bridge';
+import { applyCached, writeCached } from '../../cache';
 import type { Option, RoomOptions, Rooms } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -38,9 +39,15 @@ async function loadOptions() {
   loading.value = true;
   error.value = '';
   try {
+    await applyCached<RoomOptions>('roomOptions', undefined, (value) => {
+      options.value = value;
+      campus.value ||= value.campuses[0]?.id ?? '';
+      building.value ||= value.buildings[0]?.id ?? '';
+    });
     options.value = (await bridge.schoolQuery({ type: 'roomOptions' })) as RoomOptions;
-    campus.value = options.value.campuses[0]?.id ?? '';
-    building.value = options.value.buildings[0]?.id ?? '';
+    void writeCached('roomOptions', undefined, options.value);
+    campus.value ||= options.value.campuses[0]?.id ?? '';
+    building.value ||= options.value.buildings[0]?.id ?? '';
   } catch (e) {
     console.error('[campus] room options', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -51,17 +58,19 @@ async function loadOptions() {
 
 async function search() {
   if (!campus.value || !building.value) return;
+  const params = {
+    campus: campus.value,
+    building: building.value,
+    date: date.value,
+    start: Number(start.value),
+    end: Number(end.value),
+  };
+  await applyCached<Rooms>('rooms', params, (value) => (rooms.value = value));
   loading.value = true;
   error.value = '';
   try {
-    rooms.value = (await bridge.schoolQuery({
-      type: 'rooms',
-      campus: campus.value,
-      building: building.value,
-      date: date.value,
-      start: Number(start.value),
-      end: Number(end.value),
-    })) as Rooms;
+    rooms.value = (await bridge.schoolQuery({ type: 'rooms', ...params })) as Rooms;
+    void writeCached('rooms', params, rooms.value);
   } catch (e) {
     console.error('[campus] rooms', e);
     error.value = e instanceof Error ? e.message : String(e);

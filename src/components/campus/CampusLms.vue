@@ -8,6 +8,7 @@ import SegmentedTabs from '../ui/SegmentedTabs.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
+import { applyCached, writeCached } from '../../cache';
 import UiButton from '../ui/UiButton.vue';
 import type {
   LmsActivities,
@@ -166,6 +167,11 @@ function issue(text: string) {
 }
 
 async function loadCourses() {
+  await applyCached<LmsCourses>(
+    'lmsCourses',
+    undefined,
+    (value) => (courses.value = value.courses),
+  );
   loading.value = true;
   error.value = '';
   try {
@@ -173,6 +179,7 @@ async function loadCourses() {
       bridge.refreshLmsSession(),
     );
     courses.value = result.courses;
+    void writeCached('lmsCourses', undefined, result);
   } catch (e) {
     console.error('[campus] lms courses', e);
     issue(e instanceof Error ? e.message : String(e));
@@ -186,6 +193,12 @@ async function openCourse(course: LmsCourse) {
   activity.value = null;
   detail.value = null;
   activities.value = [];
+  const params = { course: course.id };
+  await applyCached<LmsActivities>(
+    'lmsActivities',
+    params,
+    (value) => (activities.value = value.activities),
+  );
   loading.value = true;
   error.value = '';
   notice.value = '';
@@ -196,6 +209,7 @@ async function openCourse(course: LmsCourse) {
       () => bridge.refreshLmsSession(),
     );
     activities.value = result.activities;
+    void writeCached('lmsActivities', params, result);
     active.value = categories.value[0]?.id || '';
   } catch (e) {
     console.error('[campus] lms activities', e);

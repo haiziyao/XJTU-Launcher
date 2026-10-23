@@ -6,6 +6,7 @@ import EmptyState from '../ui/EmptyState.vue';
 import UiAvatar from '../ui/UiAvatar.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
+import { applyCached, writeCached } from '../../cache';
 import type { ProfileInfo } from '../../types';
 
 const profile = ref<ProfileInfo | null>(null);
@@ -41,12 +42,14 @@ const contacts = computed(() => {
 });
 
 async function load() {
+  await applyCached<ProfileInfo>('profile', undefined, (value) => (profile.value = value));
   loading.value = true;
   error.value = '';
   try {
     profile.value = await siteQuery<ProfileInfo>({ type: 'profile' }, 'profile', () =>
       bridge.refreshProfileSession(),
     );
+    void writeCached('profile', undefined, profile.value);
   } catch (e) {
     console.error('[campus] profile', e);
     error.value = e instanceof Error ? e.message : String(e);

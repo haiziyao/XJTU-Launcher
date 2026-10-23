@@ -6,6 +6,7 @@ import SettingRow from '../ui/SettingRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
+import { applyCached, writeCached } from '../../cache';
 import type { Venue, VenueList, VenueOrder, VenueOrders, VenueSlot, VenueSlots } from '../../types';
 
 import UiButton from '../ui/UiButton.vue';
@@ -35,12 +36,18 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
+    await Promise.all([
+      applyCached<VenueList>('venueList', undefined, (value) => (venues.value = value.venues)),
+      applyCached<VenueOrders>('venueOrders', undefined, (value) => (orders.value = value.orders)),
+    ]);
     const [list, booked] = await Promise.all([
       siteQuery<VenueList>({ type: 'venueList' }, 'venue', () => bridge.refreshVenueSession()),
       siteQuery<VenueOrders>({ type: 'venueOrders' }, 'venue', () => bridge.refreshVenueSession()),
     ]);
     venues.value = list.venues;
     orders.value = booked.orders;
+    void writeCached('venueList', undefined, list);
+    void writeCached('venueOrders', undefined, booked);
   } catch (e) {
     console.error('[campus] venues', e);
     error.value = e instanceof Error ? e.message : String(e);

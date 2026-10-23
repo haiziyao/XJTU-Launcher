@@ -45,6 +45,7 @@ import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
+import { applyCached, writeCached } from './cache';
 import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
@@ -299,13 +300,25 @@ async function refreshTimetable() {
   scheduleError.value = '';
   try {
     const result = await bridge.timetable('cn.xjtu.timetable');
-    if (!disposed && generation === accountGeneration && timetableEnabled.value)
+    if (!disposed && generation === accountGeneration && timetableEnabled.value) {
       timetable.value = result;
+      void writeCached('timetable', undefined, result);
+    }
   } catch (e) {
     if (!disposed && generation === accountGeneration) scheduleError.value = errorText(e);
   } finally {
     scheduleLoading.value = false;
   }
+}
+/** Show the stored timetable first, then refresh it in the background. */
+async function primeTimetable() {
+  if (!timetableEnabled.value || !account.value.connected) return;
+  const generation = accountGeneration;
+  await applyCached<Timetable>('timetable', undefined, (value) => {
+    if (!disposed && generation === accountGeneration && timetableEnabled.value && !timetable.value)
+      timetable.value = value;
+  });
+  if (!disposed && generation === accountGeneration) void refreshTimetable();
 }
 onMounted(async () => {
   if (!native) return;
@@ -340,6 +353,7 @@ onMounted(async () => {
         } catch (e) {
           error.value = errorText(e);
         }
+        if (!disposed && generation === accountGeneration) void primeTimetable();
       } else if (event.state === 'error') error.value = event.message;
     });
     if (disposed) stop();
@@ -348,6 +362,8 @@ onMounted(async () => {
     error.value = errorText(e);
   }
   ready.value = true;
+  // Home can show today's courses right away from the stored timetable.
+  void primeTimetable();
   // Run the same self-check as the sidebar pet once per launch.
   setTimeout(() => void checkNetwork(), 1500);
   void initializeUpdates(config.value.checkAppUpdates).catch((e) => (error.value = errorText(e)));
