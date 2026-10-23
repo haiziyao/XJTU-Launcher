@@ -2,26 +2,30 @@
 
 > 当前为 `dev` 开发分支。开发入口：[文档索引](docs/README.md) · [开发指南](docs/DEVELOPMENT.md) · [约定手册](docs/CONVENTIONS.md)。
 
-面向西安交通大学学生的桌面校园工作台，把校园账号、课表、常用网站和插件集中在一个应用中。
+面向西安交通大学学生的桌面校园工作台，把校园账号、课表、Agent、常用网站和插件集中在一个应用中。
 
-使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS 和 Windows**。当前版本为 **0.1.0 开发版**，已在 macOS 构建运行，Windows 尚待实机验收。
+使用 **Rust + Tauri 2 + Vue 3 + TypeScript** 开发，目标平台为 **macOS 和 Windows**。当前版本为 **0.3.1**，可从 [Releases](https://github.com/haiziyao/XJTU-Launcher/releases/latest) 下载 macOS（Apple Silicon / Intel）与 Windows 安装包；macOS 自动更新已实测通过，Windows 尚待实机验收。
+
+校园协议与接口行为大量参考自 [XJTUToolBox](https://github.com/yan-xiaoo/XJTUToolBox)，详见文末[致谢](#致谢)。
 
 ## 当前功能
 
-| 模块 | 已实现 |
-| --- | --- |
-| 桌面工作台 | 原生窗口、可收起和拖动调整宽度的侧栏、主题色、可点击的侧栏宠物（自检校园会话）、个人头像与全窗口壁纸 |
-| 校园账号 | 本地多账号、账号密码登录、验证码与短信验证、WebVPN 回退、可选保存密码 |
-| 课表 | 读取当前账号课表，查看今日课程与完整课表 |
-| 校园导航 | 在独立校园窗口中复用账号会话，按需通过 WebVPN 访问 |
-| 插件市场 | 校园功能、远端市场、已安装三个分区；导入、下载、更新、移除及排序 |
-| 插件管理 | 启用与侧栏显示分别控制；修改插件服务地址前需确认 |
-| 模型设置 | 多厂商、API 地址、模型和 API Key，包含 DeepSeek 预设 |
-| 软件更新 | Tauri Updater 检查、下载和安装流程；正式更新服务仍待配置 |
+| 模块       | 已实现                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 桌面工作台 | 原生窗口、可收起和拖动调整宽度的侧栏、主题色、可点击的侧栏宠物（自检校园会话）、个人头像与全窗口壁纸；内置“主页主题”插件调整时钟风格和主页元素 |
+| 校园账号   | 本地多账号、账号密码登录、验证码与短信验证、WebVPN 回退、可选保存密码                                                                          |
+| 课表       | 读取当前账号课表，查看今日课程与完整课表                                                                                                       |
+| 畅行校园   | 成绩、考试、考勤、校园卡、体测、空闲教室、全校课程、校历、评教（预览后由用户确认提交）；常用工具可置顶                                         |
+| 校园导航   | 在独立校园窗口中复用账号会话，按需通过 WebVPN 访问                                                                                             |
+| 插件市场   | 校园功能、远端市场、已安装三个分区；导入、下载、更新、移除及排序                                                                               |
+| 插件管理   | 只保留启用开关，侧栏入口跟随启用状态；修改插件服务地址前需确认                                                                                 |
+| Agent      | 流式对话、工具调用（校园 + MCP）、对话历史与工作区、角色 / Skill / 预设任务、上下文用量与余额（DeepSeek）                                      |
+| 模型设置   | 多厂商、API 地址与 API Key（可查看/替换），按厂商获取模型列表；具体模型在 Agent 对话框中选择，支持连通性测试                                   |
+| 软件更新   | Tauri Updater 检查、下载和安装；macOS 0.1.1 → 0.3.1 实测通过，系统代码签名尚未配置                                                             |
 
 校园登录和真实课表已通过用户实测。部分校园网站仍可能要求重新认证。
 
-**尚未完成：** Agent 运行时、MCP、Skill、长期记忆、Web 社区同步，以及更多校园功能页面。本科成绩、考试、空教室和评教等已有部分 Rust 适配，但尚未完成页面接入与真实业务验收。模型设置可保存配置，当前还不能在 Agent 中对话。
+**尚未完成：** Windows 实机验收、系统代码签名与公证、图书馆 / 场馆 / 学籍 / LMS 页面、Web 社区同步，以及更多 MCP / Skill 场景。部分校园业务（如空闲教室、全校课程）仍需真实账号逐项验收。
 
 ## 启动应用
 
@@ -53,7 +57,7 @@ Windows 安装包在 Windows 上构建，产物位于 `src-tauri/target/release/
 
 1. 点击左下角个人头像，进入“校园账号”，添加并登录学校账号。应用会检测直连可用性，必要时进入 WebVPN 流程。
 2. 打开课表或校园导航；账号信息与选择保存的密码保留在本机。
-3. 在插件市场中管理功能。“启用”控制插件是否可用，“侧栏显示”仅控制导航入口。
+3. 在插件市场中管理功能的启用状态，启用后侧栏出现对应入口。
 4. 在应用设置中调整外观、模型服务、插件来源和软件更新。
 
 校园账号、密码、会话与模型 API Key 按本地明文 JSON 保存于 `~/.xjtu-launcher/auth.json`；日常读写不使用系统钥匙串。旧加密数据仅在迁移时读取旧凭据。普通界面配置和插件使用系统应用数据目录。
@@ -95,6 +99,16 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-## 参考
+## 致谢
 
-校园业务优先参考 [XJTUToolBox](https://github.com/yan-xiaoo/XJTUToolBox) 的协议与交互，再按本项目的 Rust / Tauri 架构适配。参考项目不作为运行时依赖；涉及实际代码复用时需遵守原项目许可证。
+特别感谢 [**XJTUToolBox（仙交百宝箱）**](https://github.com/yan-xiaoo/XJTUToolBox)：这是一个基于 PyQt5 的优秀校园工具箱，覆盖课表、考勤、评教、成绩、思源学堂等场景。本项目的校园协议、接口行为与交互思路大量参考自该项目，没有它就没有今天的 XJTU Launcher。强烈推荐前往仓库 Star、关注并参与贡献：[yan-xiaoo/XJTUToolBox](https://github.com/yan-xiaoo/XJTUToolBox)。
+
+XJTUToolBox 以 **GPL-3.0** 许可证发布；本项目按其公开行为独立用 Rust 重新实现，不复制其源码，也不将其作为运行时依赖。若未来直接复用其代码，将按其许可证要求处理。
+
+同时感谢 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/)、[lucide](https://lucide.dev/)、[Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC) 等开源项目。
+
+## 许可证
+
+本项目以 [MIT](LICENSE) 许可证开源，Copyright (c) 2026 haiziyao。
+
+内嵌的 Noto Sans SC 字体按其 SIL Open Font License 1.1 分发，许可证文本见 `src/assets/fonts/OFL.txt`。
