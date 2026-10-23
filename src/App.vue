@@ -11,30 +11,50 @@ import {
   LayoutGrid,
   LoaderCircle,
   MessagesSquare,
+  Route,
   Settings,
+  Palette,
+  Settings2,
+  Wifi,
+  WifiOff,
   X,
 } from 'lucide-vue-next';
 import { initializeMarket } from './market';
 import { initializeUpdates } from './updates';
 import { bridge, native } from './bridge';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
-import type { AccountStatus, AppConfig, PluginList, Timetable } from './types';
+import type {
+  AccountStatus,
+  AppConfig,
+  NetworkCheck,
+  PetState,
+  PluginList,
+  Timetable,
+} from './types';
+import SidebarPet from './components/SidebarPet.vue';
+import { normalizePet } from './pets';
 import HomeView from './components/HomeView.vue';
 import AccountsView from './components/AccountsView.vue';
 import PersonalView from './components/PersonalView.vue';
 import SettingsView from './components/SettingsView.vue';
 import CommunityView from './components/CommunityView.vue';
 import AgentView from './components/AgentView.vue';
+import AgentSettingsView from './components/AgentSettingsView.vue';
+import HomeThemeView from './components/HomeThemeView.vue';
 import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
+import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
+import { applyAccent, normalizeAccent } from './theme';
 import './ui.css';
 import './pages.css';
 import './desktop-shell.css';
+import './pet-toast.css';
+import './pet-art.css';
 
 const route = ref('home');
 const navigation = ref<HTMLElement | null>(null);
@@ -49,15 +69,16 @@ const primaryNav = [
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
 }
-const settingsSection = ref<'appearance' | 'home' | 'models' | 'plugins' | 'updates'>('appearance');
-function openSettings(
-  section: 'appearance' | 'home' | 'models' | 'plugins' | 'updates' = 'appearance',
-) {
+const settingsSection = ref<'appearance' | 'home' | 'plugins' | 'updates'>('appearance');
+function openSettings(section: 'appearance' | 'home' | 'plugins' | 'updates' = 'appearance') {
   settingsSection.value = section;
   route.value = 'settings';
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
+const petVariant = computed(() => normalizePet(config.value.pet));
+// Accent tokens live on the document root so teleported dialogs inherit them too.
+watch(() => config.value.accent, applyAccent, { immediate: true });
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
@@ -67,13 +88,31 @@ const ready = ref(false);
 const error = ref('');
 const saving = ref(false);
 const now = ref(new Date());
+const petState = ref<PetState>('idle');
+const petMessage = ref('');
+const toast = ref<{ id: number; message: string; tone: ToastTone } | null>(null);
+let petTimer: ReturnType<typeof setTimeout> | undefined;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let toastId = 0;
+type ToastTone = NetworkCheck['tone'];
+function showToast(message: string, tone: ToastTone) {
+  if (toastTimer) clearTimeout(toastTimer);
+  toastId += 1;
+  toast.value = { id: toastId, message, tone };
+  // The network result is a glance-only message; it clears itself.
+  toastTimer = setTimeout(() => (toast.value = null), 3000);
+}
 const macNative = native && /Mac/.test(navigator.userAgent);
+const windowsNative = native && /Windows/.test(navigator.userAgent);
+// The embedded macOS title bar paints the window buttons over the rail's top-left.
+const sidebarCollapsedWidth = macNative ? 76 : 56;
 const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, config.value));
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
 );
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
+const showWallpaper = computed(() => !!config.value.wallpaper);
 watch(enabledPlugins, () => {
   if (
     !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
@@ -107,6 +146,16 @@ async function reloadAccount() {
   const generation = ++accountGeneration;
   timetable.value = null;
   scheduleError.value = '';
+  try {
+    const next = await bridge.account();
+    if (!disposed && generation === accountGeneration) account.value = next;
+  } catch (e) {
+    error.value = errorText(e);
+  }
+}
+/** A direct session was added; refresh flags without dropping the timetable. */
+async function refreshAccountStatus() {
+  const generation = ++accountGeneration;
   try {
     const next = await bridge.account();
     if (!disposed && generation === accountGeneration) account.value = next;
@@ -166,9 +215,10 @@ async function persist(next: AppConfig) {
 const {
   width: sidebarWidth,
   collapsed: sidebarCollapsed,
+  collapsedWidth,
   resizing,
   ...resize
-} = useSidebarResize(config, configLoaded, persist);
+} = useSidebarResize(config, configLoaded, persist, sidebarCollapsedWidth);
 function toggleSidebar() {
   resize.cancel();
   void persist({ ...config.value, sidebarCollapsed: !config.value.sidebarCollapsed });
@@ -179,6 +229,40 @@ function onKey(event: KeyboardEvent) {
     toggleSidebar();
   }
 }
+// Clicking the sidebar pet checks whether the campus host answers directly and,
+// if not, through WebVPN, then reports which network the app is on.
+async function checkNetwork() {
+  if (petState.value === 'checking') return;
+  if (petTimer) clearTimeout(petTimer);
+  if (toastTimer) clearTimeout(toastTimer);
+  toast.value = null;
+  petState.value = 'checking';
+  petMessage.value = '';
+  const started = performance.now();
+  let next: PetState = 'warn';
+  let tone: ToastTone = 'neutral';
+  let message = '';
+  try {
+    const result = await bridge.checkNetwork();
+    message = result.message;
+    tone = result.tone;
+    next = result.tone === 'campus' || result.tone === 'vpn' ? 'ok' : 'warn';
+  } catch (e) {
+    message = errorText(e);
+  }
+  // Keep the thinking pose on screen long enough to read.
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(0, 900 - (performance.now() - started))),
+  );
+  if (disposed) return;
+  petMessage.value = message;
+  petState.value = next;
+  showToast(message, tone);
+  petTimer = setTimeout(() => {
+    petState.value = 'idle';
+    petMessage.value = '';
+  }, 3000);
+}
 async function openLink(url: string) {
   try {
     await bridge.openUrl(url);
@@ -186,17 +270,12 @@ async function openLink(url: string) {
     error.value = errorText(e);
   }
 }
-function toggleVisibility(id: string) {
-  void persist({
-    ...config.value,
-    hiddenPlugins: config.value.hiddenPlugins.includes(id)
-      ? config.value.hiddenPlugins.filter((p) => p !== id)
-      : [...config.value.hiddenPlugins, id],
-  });
-}
 async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
+}
+async function setPinnedTools(ids: string[]) {
+  void persist({ ...config.value, campusPinned: ids });
 }
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
@@ -235,7 +314,11 @@ onMounted(async () => {
   const results = await Promise.allSettled([bridge.config(), bridge.plugins(), bridge.account()]);
   if (disposed) return;
   if (results[0].status === 'fulfilled') {
-    config.value = results[0].value;
+    config.value = {
+      ...results[0].value,
+      accent: normalizeAccent(results[0].value.accent),
+      pet: normalizePet(results[0].value.pet),
+    };
     configLoaded.value = true;
   } else error.value = errorText(results[0].reason);
   if (results[1].status === 'fulfilled') pluginList.value = results[1].value;
@@ -263,6 +346,8 @@ onMounted(async () => {
     error.value = errorText(e);
   }
   ready.value = true;
+  // Run the same self-check as the sidebar pet once per launch.
+  setTimeout(() => void checkNetwork(), 1500);
   void initializeUpdates(config.value.checkAppUpdates).catch((e) => (error.value = errorText(e)));
   void initializeMarket(reloadPlugins).catch((e) => (error.value = errorText(e)));
 });
@@ -270,6 +355,8 @@ onBeforeUnmount(() => {
   disposed = true;
   unlisten?.();
   if (timer) clearInterval(timer);
+  if (petTimer) clearTimeout(petTimer);
+  if (toastTimer) clearTimeout(toastTimer);
   window.removeEventListener('keydown', onKey);
 });
 </script>
@@ -283,13 +370,32 @@ onBeforeUnmount(() => {
       'sidebar-collapsed': sidebarCollapsed,
       'sidebar-resizing': resizing,
       'mac-native': macNative,
+      'platform-windows': windowsNative,
+      'has-wallpaper': showWallpaper,
       'motion-ready': ready,
       'reduce-motion': config.reduceMotion,
     }"
-    :style="{ '--sidebar-width': sidebarWidth + 'px' }"
+    :style="{
+      '--sidebar-width': sidebarWidth + 'px',
+      '--sidebar-collapsed-width': collapsedWidth + 'px',
+    }"
   >
+    <!-- Spans the whole window so sidebar width changes never rescale the image.
+         An <img> src is patched only when it changes; a style binding would re-apply the
+         multi-megabyte data URL on every clock tick and drag frame. -->
+    <Transition name="fade">
+      <div v-if="config.wallpaper" class="desktop-wallpaper" aria-hidden="true">
+        <img :src="config.wallpaper" alt="" decoding="async" />
+      </div>
+    </Transition>
     <aside id="app-sidebar" class="desktop-sidebar" aria-label="侧栏">
-      <div class="sidebar-top-space" aria-hidden="true"></div>
+      <div class="sidebar-top-space" data-tauri-drag-region aria-hidden="true"></div>
+      <SidebarPet
+        :state="petState"
+        :message="petMessage"
+        :variant="petVariant"
+        @check="checkNetwork"
+      />
       <nav ref="navigation" class="desktop-navigation" aria-label="主导航">
         <span
           class="nav-indicator"
@@ -309,7 +415,7 @@ onBeforeUnmount(() => {
             :aria-current="route === item.id ? 'page' : undefined"
             @click="route = item.id"
           >
-            <component :is="item.icon" :size="18" /><span>{{ item.title }}</span>
+            <component :is="item.icon" :size="20" /><span>{{ item.title }}</span>
           </button>
         </div>
         <div v-if="sidebarPlugins.length" class="nav-section">
@@ -325,10 +431,13 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="18" /><Compass
-              v-else
-              :size="18"
-            /><span>{{ plugin.name }}</span>
+            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
+              v-else-if="plugin.page.type === 'campus'"
+              :size="20"
+            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Settings2
+              v-else-if="plugin.page.type === 'agentSettings'"
+              :size="20"
+            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -342,7 +451,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'market' ? 'page' : undefined"
             @click="route = 'market'"
           >
-            <LayoutGrid :size="18" /><span>插件市场</span>
+            <LayoutGrid :size="20" /><span>插件市场</span>
           </button>
           <button
             class="desktop-nav-item"
@@ -353,7 +462,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'settings' ? 'page' : undefined"
             @click="openSettings()"
           >
-            <Settings :size="18" /><span>应用设置</span>
+            <Settings :size="20" /><span>应用设置</span>
           </button>
         </div>
       </nav>
@@ -366,7 +475,7 @@ onBeforeUnmount(() => {
           :class="{ selected: route === 'personal' || route === 'accounts' }"
           @click="route = 'personal'"
         >
-          <UiAvatar :src="displayAvatar" :size="28" />
+          <UiAvatar :src="displayAvatar" :size="32" />
           <span class="desktop-identity-text">
             <strong>{{ displayName }}</strong>
             <small>{{
@@ -382,13 +491,13 @@ onBeforeUnmount(() => {
       aria-label="调整侧栏宽度"
       aria-orientation="vertical"
       aria-controls="app-sidebar"
-      :aria-valuemin="56"
+      :aria-valuemin="collapsedWidth"
       :aria-valuemax="320"
       :aria-valuenow="sidebarWidth"
       :aria-valuetext="sidebarCollapsed ? '已收起，向右拖动展开' : sidebarWidth + ' 像素'"
       :aria-disabled="!configLoaded"
       :tabindex="configLoaded ? 0 : -1"
-      title="拖动调整宽度，双击恢复默认"
+      title="拖动调整宽度，拖到底自动收起，双击恢复默认"
       @pointerdown="resize.start"
       @pointermove="resize.move"
       @pointerup="resize.finish"
@@ -411,15 +520,26 @@ onBeforeUnmount(() => {
     >
       <ChevronLeft :size="14" class="sidebar-toggle-icon" />
     </button>
-    <main class="desktop-main" :class="{ 'has-wallpaper': route === 'home' && config.wallpaper }">
-      <Transition name="fade">
+    <main class="desktop-main">
+      <Transition name="pet-toast">
         <div
-          v-if="route === 'home' && config.wallpaper"
-          class="desktop-wallpaper"
-          :style="{ backgroundImage: `url(${config.wallpaper})` }"
-          aria-hidden="true"
-        ></div>
+          v-if="toast"
+          :key="toast.id"
+          class="pet-toast"
+          :class="`is-${toast.tone}`"
+          role="status"
+        >
+          <Wifi
+            v-if="toast.tone === 'campus' || toast.tone === 'vpn'"
+            :size="14"
+            aria-hidden="true"
+          />
+          <WifiOff v-else :size="14" aria-hidden="true" />
+          <span>{{ toast.message }}</span>
+        </div>
       </Transition>
+      <!-- The macOS title bar is embedded, so this strip keeps the window draggable. -->
+      <div v-if="macNative" class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
       <div ref="content" class="desktop-content">
         <div class="desktop-content-inner" :class="{ 'is-home': route === 'home' }">
           <Transition name="drop">
@@ -469,7 +589,22 @@ onBeforeUnmount(() => {
                 @update="persist"
               />
               <CommunityView v-else-if="route === 'community'" />
-              <AgentView v-else-if="route === 'agent'" @models="openSettings('models')" />
+              <AgentView
+                v-else-if="route === 'agent'"
+                @settings="route = 'cn.xjtu.agent-settings'"
+              />
+              <AgentSettingsView
+                v-else-if="activePlugin?.page.type === 'agentSettings'"
+                :key="activePlugin.id"
+                @agent="route = 'agent'"
+              />
+              <HomeThemeView
+                v-else-if="activePlugin?.page.type === 'homeTheme'"
+                :key="activePlugin.id"
+                :config="config"
+                :saving="saving || !configLoaded"
+                @update="persist"
+              />
               <div v-else-if="route === 'accounts'" class="subpage">
                 <button class="back-button" @click="route = 'personal'">
                   <ArrowLeft :size="14" /><span>个人</span>
@@ -483,7 +618,6 @@ onBeforeUnmount(() => {
                 :saving="saving || !configLoaded"
                 :warnings="pluginList.warnings"
                 :sources="pluginList.sources"
-                @visibility="toggleVisibility"
                 @settings="openSettings('plugins')"
                 @toggle="togglePlugin"
                 @move="movePlugin"
@@ -498,6 +632,16 @@ onBeforeUnmount(() => {
                 :error="scheduleError"
                 @refresh="refreshTimetable"
                 @account="route = 'accounts'"
+              />
+              <CampusView
+                v-else-if="activePlugin?.page.type === 'campus'"
+                :key="activePlugin.id"
+                :name="activePlugin.name"
+                :pinned="config.campusPinned"
+                :access-mode="account.accessMode ?? null"
+                :direct-session="account.directSession ?? false"
+                @update-pinned="setPinnedTools"
+                @direct-session="refreshAccountStatus"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"

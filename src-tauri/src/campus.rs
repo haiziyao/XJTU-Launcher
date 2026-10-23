@@ -28,14 +28,13 @@ pub fn callback(url: &Url, degree: &str) -> Option<(String, String)> {
 }
 
 async fn response_json(response: reqwest::Response) -> Result<Value, String> {
-    if [401, 403].contains(&response.status().as_u16()) {
-        return Err("校园会话已失效，请重新登录".into());
+    let status = response.status();
+    // Redirects land on the campus or WebVPN login page: the saved session expired.
+    if status.is_redirection() || [401, 403].contains(&status.as_u16()) {
+        return Err("校园会话已失效，请重新登录校园账号".into());
     }
-    if !response.status().is_success() {
-        return Err(format!(
-            "校园系统暂不可用（HTTP {}）",
-            response.status().as_u16()
-        ));
+    if !status.is_success() {
+        return Err(format!("校园系统暂不可用（HTTP {}）", status.as_u16()));
     }
     // Do not forward response bodies/errors: they may contain tokens or personal data.
     let json: Value = response
@@ -164,6 +163,38 @@ fn normalize_courses(value: Value) -> Result<Vec<Course>, String> {
             })
         })
         .collect()
+}
+
+/// Whether the campus host answers in the given access mode. The probe uses the
+/// attendance login page without cookies or the business token: a stale session
+/// must not make a working campus network look unreachable. As in the reference
+/// toolbox, any status below 500 counts as reachable.
+pub async fn reachable(session: &crate::vault::Session, mode: crate::network::AccessMode) -> bool {
+    let Ok(host) = domain(&session.degree) else {
+        return false;
+    };
+    let Ok(transport) =
+        crate::network::Transport::with_timeout(None, std::time::Duration::from_secs(10))
+    else {
+        return false;
+    };
+    let Ok(url) = Url::parse(&format!("https://{host}/sa/auth/cas/login/student-pc")) else {
+        return false;
+    };
+    let Ok(target) = crate::network::Transport::address(&url, mode) else {
+        return false;
+    };
+    match transport.client.get(target).send().await {
+        Ok(response) => response.status().as_u16() < 500,
+        Err(_) => false,
+    }
+}
+
+/// Whether the saved session can still fetch authenticated campus data.
+pub async fn session_valid(session: &crate::vault::Session) -> bool {
+    get(session, "/student/service/timetable/semesters", &[])
+        .await
+        .is_ok()
 }
 
 pub async fn timetable(session: &crate::vault::Session) -> Result<Timetable, String> {

@@ -54,7 +54,7 @@
     transform var(--duration-fast) var(--ease-out);
 }
 .btn:hover:not(:disabled) {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .btn:active:not(:disabled) {
   background: var(--surface-sunken);
@@ -63,8 +63,8 @@
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 1px 2px rgba(31, 111, 229, 0.25);
+  color: var(--accent-contrast);
+  box-shadow: 0 1px 2px var(--accent-tint);
 }
 .btn.primary:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -72,6 +72,19 @@
 }
 .btn.primary:active:not(:disabled) {
   background: var(--accent-pressed);
+}
+/* Accent tint instead of a solid fill, for lightweight open actions. */
+.btn.tinted {
+  border-color: var(--accent-outline);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  box-shadow: none;
+}
+.btn.tinted:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.btn.tinted:active:not(:disabled) {
+  background: var(--accent-soft);
 }
 .btn.ghost {
   border-color: transparent;
@@ -178,6 +191,81 @@ select.text-field {
 .field-shell.search:focus-within {
   background: var(--surface);
 }
+/* Dropdown built on the field shell, shared by the protocol and model picks. */
+.menu-field {
+  position: relative;
+  min-width: 0;
+}
+.menu-field-value {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 100%;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-field:hover .field-shell {
+  border-color: var(--accent-outline);
+}
+.menu-field-value:hover svg {
+  color: var(--accent-text);
+}
+.menu-field-value span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.menu-field-value svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) ease;
+}
+.menu-field-value[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.menu-field-menu {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.menu-field-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.menu-field-menu button:hover,
+.menu-field-menu button.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
 
 /* Switch */
 .ui-switch {
@@ -190,6 +278,12 @@ select.text-field {
   border-radius: var(--radius-full);
   background: #cdd1d7;
   transition: background var(--duration) ease;
+}
+.ui-switch:hover:not(:disabled) {
+  background: #bcc2ca;
+}
+.ui-switch[aria-checked='true']:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .ui-switch-thumb {
   position: absolute;
@@ -310,14 +404,24 @@ select.text-field {
 .setting-card > * {
   position: relative;
 }
-.setting-row.clickable {
+.setting-row {
   transition: background var(--duration-fast) ease;
 }
+.setting-row:hover {
+  background: var(--accent-wash);
+}
 .setting-row.clickable:hover:not(:disabled) {
-  background: var(--surface-subtle);
+  background: var(--accent-wash);
 }
 .setting-row.clickable:active:not(:disabled) {
   background: var(--surface-sunken);
+}
+/* Rows that open on double-click use the same hover cue as clickable rows. */
+.setting-row.actionable {
+  transition: background var(--duration-fast) ease;
+}
+.setting-row.actionable:hover {
+  background: var(--accent-wash);
 }
 .setting-row-leading {
   display: flex;

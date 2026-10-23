@@ -34,6 +34,10 @@ pub fn trusted(url: &Url) -> bool {
                     | "authx-service.xjtu.edu.cn"
                     | "jwxt.xjtu.edu.cn"
                     | "dean.xjtu.edu.cn"
+                    | "org.xjtu.edu.cn"
+                    | "ncard.xjtu.edu.cn"
+                    | "tyxylp.xjtu.edu.cn"
+                    | "hello.xjtu.edu.cn"
             )
         )
 }
@@ -123,6 +127,10 @@ pub struct Transport {
 }
 impl Transport {
     pub fn new(saved: Option<&str>) -> Result<Self, String> {
+        Self::with_timeout(saved, Duration::from_secs(25))
+    }
+    /// Self-checks use a short budget so the sidebar answer arrives quickly.
+    pub fn with_timeout(saved: Option<&str>, timeout: Duration) -> Result<Self, String> {
         let store = match saved {
             Some(json) => cookie_store::serde::json::load(json.as_bytes())
                 .map_err(|_| "保存的校园会话损坏，请重新登录")?,
@@ -131,8 +139,8 @@ impl Transport {
         let cookies = Arc::new(CookieStoreMutex::new(store));
         let client = Client::builder()
             .cookie_provider(cookies.clone())
-            .connect_timeout(Duration::from_secs(8))
-            .timeout(Duration::from_secs(25))
+            .connect_timeout(timeout.min(Duration::from_secs(8)))
+            .timeout(timeout)
             .redirect(reqwest::redirect::Policy::none())
             .user_agent(USER_AGENT)
             .build()

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.campus",
+  "name": "畅行校园",
+  "version": "0.1.0",
+  "description": "成绩、考试、空闲教室、考勤、校园卡等校园服务",
+  "icon": "route",
+  "page": { "type": "campus" },
+  "widget": false
+}

@@ -8,14 +8,16 @@ import {
   CalendarDays,
   Compass,
   Download,
-  RefreshCw,
-  Search,
   MoreHorizontal,
   Package,
-  GraduationCap,
+  Palette,
+  RefreshCw,
+  Route,
+  Search,
+  Settings2,
 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
-import type { AppConfig, Plugin, MarketCatalog, MarketEntry, SchoolFeature } from '../types';
+import type { AppConfig, Plugin, MarketCatalog, MarketEntry } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
@@ -32,7 +34,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   toggle: [id: string];
-  visibility: [id: string];
   move: [index: number, delta: number];
   reload: [];
   open: [id: string];
@@ -47,7 +48,6 @@ const tab = ref('campus');
 const search = ref('');
 const loading = ref(false);
 const loaded = ref(false);
-const features = ref<SchoolFeature[]>([]);
 const catalog = ref<MarketCatalog>({ source: null, defaultSource: null, plugins: [], updates: [] });
 const menu = ref('');
 let disposed = false;
@@ -55,12 +55,9 @@ const matches = (p: { name: string; description?: string }) =>
   (p.name + (p.description || '')).toLowerCase().includes(search.value.trim().toLowerCase());
 const filtered = computed(() => props.plugins.filter(matches));
 const builtins = computed(() =>
-  props.plugins.filter((p) => ['cn.xjtu.timetable', 'cn.xjtu.links'].includes(p.id) && matches(p)),
+  props.plugins.filter((p) => ['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(p.id) && matches(p)),
 );
 const remote = computed(() => catalog.value.plugins.filter(matches));
-const categories = computed(() => [
-  ...new Set(features.value.filter(matches).map((f) => f.category)),
-]);
 const installed = (id: string) => props.plugins.find((p) => p.id === id);
 const upgrade = (id: string) =>
   catalog.value.plugins.find(
@@ -130,18 +127,20 @@ async function remove(plugin: Plugin) {
     busy.value = '';
   }
 }
+/** Double-clicking a row opens it, unless the click landed on a control. */
+function rowDblClick(event: MouseEvent, action: () => void) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('button, a, input, [role="switch"]')) return;
+  action();
+}
+/** Rows only open an enabled plugin; enabling stays a deliberate click. */
+function openPlugin(plugin: Plugin) {
+  if (!props.config.disabledPlugins.includes(plugin.id)) emit('open', plugin.id);
+}
 watch(tab, (value) => {
   menu.value = '';
   search.value = '';
   if (value === 'remote' && !loaded.value) void refresh();
-});
-onMounted(async () => {
-  try {
-    features.value = await bridge.schoolCatalog();
-    if (props.config.checkPluginUpdates && !disposed) void refresh();
-  } catch (e) {
-    if (!disposed) error.value = String(e);
-  }
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -181,27 +180,27 @@ onBeforeUnmount(() => {
       {{ warning }}
     </p>
     <div v-if="tab === 'campus'" role="tabpanel">
-      <EmptyState
-        v-if="!builtins.length && !categories.length"
-        compact
-        :icon="Search"
-        title="没有匹配的插件"
-      />
+      <EmptyState v-if="!builtins.length" compact :icon="Search" title="没有匹配的插件" />
       <SettingGroup v-if="builtins.length" title="常用功能">
         <SettingRow
           v-for="plugin in builtins"
           :key="plugin.id"
+          class="actionable"
           :title="plugin.name"
           :description="plugin.description"
+          @dblclick="rowDblClick($event, () => openPlugin(plugin))"
         >
           <template #leading
             ><IconTile :size="34"
-              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
-                v-else
-                :size="19" /></IconTile
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
+                v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Palette
+                v-else-if="plugin.page.type === 'homeTheme'"
+                :size="19" /><Compass v-else :size="19" /></IconTile
           ></template>
           <button
             class="btn small"
+            :class="{ tinted: !config.disabledPlugins.includes(plugin.id) }"
             :disabled="saving"
             @click="
               config.disabledPlugins.includes(plugin.id)
@@ -211,18 +210,6 @@ onBeforeUnmount(() => {
           >
             {{ config.disabledPlugins.includes(plugin.id) ? '启用' : '打开' }}
           </button>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup v-for="category in categories" :key="category" :title="category">
-        <SettingRow
-          v-for="feature in features.filter((f) => f.category === category && matches(f))"
-          :key="feature.id"
-          :title="feature.name"
-        >
-          <template #leading
-            ><IconTile :size="34" tone="gray"><GraduationCap :size="19" /></IconTile
-          ></template>
-          <span class="setting-value">待接入</span>
         </SettingRow>
       </SettingGroup>
     </div>
@@ -273,16 +260,18 @@ onBeforeUnmount(() => {
       </SettingGroup>
     </div>
     <div v-else role="tabpanel">
-      <div class="installed-heading">
-        <span>插件</span><span>启用</span><span>侧栏显示</span><span></span>
-      </div>
+      <div class="installed-heading"><span>插件</span><span>启用</span><span></span></div>
       <div v-for="plugin in filtered" :key="plugin.id" class="installed-item">
-        <div class="installed-row">
+        <div class="installed-row" @dblclick="rowDblClick($event, () => openPlugin(plugin))">
           <div class="installed-name">
             <IconTile :size="34"
-              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Compass
-                v-else
-                :size="19"
+              ><CalendarDays v-if="plugin.page.type === 'timetable'" :size="19" /><Route
+                v-else-if="plugin.page.type === 'campus'"
+                :size="19" /><Palette
+                v-else-if="plugin.page.type === 'homeTheme'"
+                :size="19" /><Settings2
+                v-else-if="plugin.page.type === 'agentSettings'"
+                :size="19" /><Compass v-else :size="19"
             /></IconTile>
             <div>
               <strong>{{ plugin.name }}</strong
@@ -290,9 +279,11 @@ onBeforeUnmount(() => {
                 >{{
                   sources[plugin.id]
                     ? '远端插件'
-                    : plugin.id.startsWith('cn.xjtu.')
-                      ? '校园功能'
-                      : '本地插件'
+                    : plugin.page.type === 'agentSettings'
+                      ? 'Agent 配置'
+                      : plugin.id.startsWith('cn.xjtu.')
+                        ? '校园功能'
+                        : '本地插件'
                 }}
                 · {{ plugin.version }}</small
               >
@@ -304,12 +295,26 @@ onBeforeUnmount(() => {
             :disabled="saving || !!busy"
             @toggle="emit('toggle', plugin.id)"
           />
-          <UiSwitch
-            :checked="!config.hiddenPlugins.includes(plugin.id)"
-            :label="plugin.name + '侧栏显示'"
-            :disabled="saving || !!busy || config.disabledPlugins.includes(plugin.id)"
-            @toggle="emit('visibility', plugin.id)"
-          />
+          <span class="installed-move">
+            <button
+              class="btn ghost icon small"
+              aria-label="上移"
+              :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
+              @click="emit('move', plugins.indexOf(plugin), -1)"
+            >
+              <ArrowUp :size="14" />
+            </button>
+            <button
+              class="btn ghost icon small"
+              aria-label="下移"
+              :disabled="
+                saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
+              "
+              @click="emit('move', plugins.indexOf(plugin), 1)"
+            >
+              <ArrowDown :size="14" />
+            </button>
+          </span>
           <button
             class="btn ghost icon"
             :aria-label="plugin.name + '操作'"
@@ -324,7 +329,7 @@ onBeforeUnmount(() => {
             sources[plugin.id] || plugin.description
           }}</span>
           <button
-            class="btn small"
+            class="btn small tinted"
             :disabled="config.disabledPlugins.includes(plugin.id)"
             @click="emit('open', plugin.id)"
           >
@@ -339,25 +344,7 @@ onBeforeUnmount(() => {
             {{ busy === plugin.id ? '更新中…' : '更新' }}
           </button>
           <button
-            class="btn ghost icon small"
-            aria-label="上移"
-            :disabled="saving || !!busy || plugins.indexOf(plugin) === 0 || !!search"
-            @click="emit('move', plugins.indexOf(plugin), -1)"
-          >
-            <ArrowUp :size="14" />
-          </button>
-          <button
-            class="btn ghost icon small"
-            aria-label="下移"
-            :disabled="
-              saving || !!busy || plugins.indexOf(plugin) === plugins.length - 1 || !!search
-            "
-            @click="emit('move', plugins.indexOf(plugin), 1)"
-          >
-            <ArrowDown :size="14" />
-          </button>
-          <button
-            v-if="!['cn.xjtu.timetable', 'cn.xjtu.links'].includes(plugin.id)"
+            v-if="!['cn.xjtu.timetable', 'cn.xjtu.campus'].includes(plugin.id)"
             class="btn ghost small danger"
             :disabled="!!busy"
             @click="remove(plugin)"
@@ -387,7 +374,7 @@ onBeforeUnmount(() => {
 .installed-heading,
 .installed-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 100px 36px;
+  grid-template-columns: minmax(0, 1fr) 72px auto 36px;
   gap: 12px;
   align-items: center;
   padding: 16px 12px;
@@ -398,6 +385,10 @@ onBeforeUnmount(() => {
 }
 .installed-row {
   min-height: 86px;
+  transition: background var(--duration-fast) ease;
+}
+.installed-row:hover {
+  background: var(--accent-wash);
 }
 .installed-item {
   border-bottom: 1px solid var(--border);
@@ -415,6 +406,11 @@ onBeforeUnmount(() => {
   display: block;
   color: var(--text-tertiary);
   margin-top: 5px;
+}
+.installed-move {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 2px;
 }
 .installed-actions {
   display: flex;

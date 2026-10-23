@@ -1,9 +1,15 @@
 //! Campus business adapters. Protocol research: docs/CAMPUS_FEATURES.md on the dev branch.
 //! This module never submits passwords or sends evaluation answers during a query.
+mod attendance;
+mod card;
 pub mod evaluation;
+mod fitness;
 mod queries;
 mod transport;
 
+/// SSO entry used when a direct session is created; the card service is the
+/// most common reason to need one.
+pub(crate) use card::LOGIN_URL as CARD_LOGIN;
 pub use queries::{query, Query};
 use serde::Serialize;
 
@@ -15,6 +21,12 @@ pub struct Feature {
     pub category: &'static str,
     pub backend: &'static str,
     pub reference: &'static str,
+}
+
+/// Whether the saved account can still open the academic system. Only the
+/// undergraduate adapter has a lightweight session probe today.
+pub async fn academic_available(account: &crate::accounts::Account) -> bool {
+    account.degree != "undergraduate" || transport::Client::connect(account.clone()).await.is_ok()
 }
 
 /// Backend availability is separate from UI completion and real-account verification.
@@ -66,7 +78,7 @@ pub fn catalog() -> Vec<Feature> {
             "attendance",
             "考勤查询",
             "学习与教务",
-            "pending",
+            "undergraduate",
             "attendance/attendance.py",
         ),
         ("lms", "思源学堂", "学习与教务", "pending", "lms/lms.py"),
@@ -81,7 +93,7 @@ pub fn catalog() -> Vec<Feature> {
             "card",
             "校园卡",
             "校园生活",
-            "pending",
+            "undergraduate",
             "card/campus_card.py",
         ),
         (
@@ -95,7 +107,7 @@ pub fn catalog() -> Vec<Feature> {
             "fitness",
             "体测成绩",
             "校园生活",
-            "pending",
+            "undergraduate",
             "fitness/score.py",
         ),
         (

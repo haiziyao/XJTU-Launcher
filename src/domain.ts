@@ -1,15 +1,20 @@
 import type { AppConfig, Course, Plugin, Timetable } from './types';
+import { DEFAULT_ACCENT } from './theme';
+import { DEFAULT_PET } from './pets';
+
+export const DEFAULT_SIDEBAR_WIDTH = 140;
 
 export const defaultConfig = (): AppConfig => ({
   version: 1,
   sidebarCollapsed: false,
-  sidebarWidth: 196,
+  sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   nickname: '',
   avatar: null,
   wallpaper: null,
   reduceMotion: false,
   showSeconds: true,
-  accent: 'blue',
+  accent: DEFAULT_ACCENT,
+  pet: DEFAULT_PET,
   greeting: '把校园，放在手边。',
   widgets: ['timetable', 'links', 'plugins'],
   pluginOrder: [],
@@ -18,6 +23,9 @@ export const defaultConfig = (): AppConfig => ({
   pluginServer: null,
   checkPluginUpdates: true,
   checkAppUpdates: true,
+  campusPinned: [],
+  homeClock: 'plain',
+  homeSections: ['greeting', 'clock', 'timetable', 'links', 'plugins'],
 });
 
 export const campusLinks = [
@@ -63,7 +71,5 @@ export function moveItem<T>(items: T[], from: number, delta: number): T[] {
 }
 
 export function visiblePlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
-  return plugins.filter(
-    (p) => !config.disabledPlugins.includes(p.id) && !config.hiddenPlugins.includes(p.id),
-  );
+  return plugins.filter((p) => !config.disabledPlugins.includes(p.id));
 }

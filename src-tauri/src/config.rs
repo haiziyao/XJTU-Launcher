@@ -20,6 +20,8 @@ pub struct AppConfig {
     #[serde(default = "default_show_seconds")]
     pub show_seconds: bool,
     pub accent: String,
+    #[serde(default = "default_pet")]
+    pub pet: String,
     pub greeting: String,
     pub widgets: Vec<String>,
     pub plugin_order: Vec<String>,
@@ -32,14 +34,37 @@ pub struct AppConfig {
     pub check_plugin_updates: bool,
     #[serde(default = "default_show_seconds")]
     pub check_app_updates: bool,
+    /// Tool ids pinned to the top of the 畅行校园 page, in display order.
+    #[serde(default)]
+    pub campus_pinned: Vec<String>,
+    /// Clock style on the home page, managed by the 主页主题 plugin.
+    #[serde(default = "default_home_clock")]
+    pub home_clock: String,
+    /// Home sections the user keeps visible; order comes from `widgets`.
+    #[serde(default = "default_home_sections")]
+    pub home_sections: Vec<String>,
+}
+
+fn default_home_clock() -> String {
+    "plain".into()
+}
+
+pub const HOME_SECTIONS: [&str; 5] = ["greeting", "clock", "timetable", "links", "plugins"];
+
+fn default_home_sections() -> Vec<String> {
+    HOME_SECTIONS.iter().map(|id| id.to_string()).collect()
 }
 
 fn default_sidebar_width() -> u32 {
-    196
+    140
 }
 
 fn default_show_seconds() -> bool {
     true
+}
+
+fn default_pet() -> String {
+    "xixi".into()
 }
 
 impl Default for AppConfig {
@@ -53,7 +78,8 @@ impl Default for AppConfig {
             wallpaper: None,
             reduce_motion: false,
             show_seconds: true,
-            accent: "blue".into(),
+            accent: "#1f6fe5".into(),
+            pet: default_pet(),
             greeting: "把校园，放在手边。".into(),
             widgets: vec!["timetable".into(), "links".into(), "plugins".into()],
             plugin_order: vec![],
@@ -62,21 +88,61 @@ impl Default for AppConfig {
             plugin_server: None,
             check_plugin_updates: true,
             check_app_updates: true,
+            campus_pinned: Vec::new(),
+            home_clock: default_home_clock(),
+            home_sections: default_home_sections(),
         }
     }
 }
 
+// Personal images are stored inline as data URLs produced by `personal_image`.
+fn bad_image(value: &Option<String>, formats: &[&str]) -> bool {
+    value.as_ref().is_some_and(|s| {
+        s.len() > 12 * 1024 * 1024
+            || !formats
+                .iter()
+                .any(|f| s.starts_with(&format!("data:image/{f};base64,")))
+    })
+}
+
+// The accent is a #rrggbb colour; older configs still use the original names.
+fn bad_accent(value: &str) -> bool {
+    const LEGACY: [&str; 4] = ["sage", "blue", "violet", "amber"];
+    if LEGACY.contains(&value) {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    bytes.len() != 7 || bytes[0] != b'#' || !bytes[1..].iter().all(u8::is_ascii_hexdigit)
+}
+
 impl AppConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if !(176..=320).contains(&self.sidebar_width)
+        if !(130..=320).contains(&self.sidebar_width)
             || self.nickname.chars().count() > 40
-            || [&self.avatar, &self.wallpaper].iter().any(|v| {
-                v.as_ref().is_some_and(|s| {
-                    s.len() > 12 * 1024 * 1024 || !s.starts_with("data:image/png;base64,")
-                })
-            })
+            || bad_image(&self.avatar, &["png"])
+            || bad_image(&self.wallpaper, &["png", "jpeg"])
             || self.version != 1
-            || !["sage", "blue", "violet", "amber"].contains(&self.accent.as_str())
+            || bad_accent(&self.accent)
+            || !["xixi", "anan", "jiaojiao", "tongtong", "dada", "xuexue"]
+                .contains(&self.pet.as_str())
+            || self.campus_pinned.len() > 24
+            || self.campus_pinned.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 64
+                    || !id
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            })
+            || !["plain", "bold", "mono", "card"].contains(&self.home_clock.as_str())
+            || self.home_sections.len() > HOME_SECTIONS.len()
+            || self
+                .home_sections
+                .iter()
+                .any(|id| !HOME_SECTIONS.contains(&id.as_str()))
+            || {
+                let unique: std::collections::HashSet<_> = self.home_sections.iter().collect();
+                unique.len() != self.home_sections.len()
+            }
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
             || self
@@ -151,7 +217,7 @@ mod tests {
         let config: AppConfig = serde_json::from_str(old).unwrap();
         config.validate().unwrap();
         assert!(config.sidebar_collapsed);
-        assert_eq!(config.sidebar_width, 196);
+        assert_eq!(config.sidebar_width, 140);
         assert_eq!(config.disabled_plugins, vec!["cn.xjtu.timetable"]);
         assert!(config.avatar.is_none());
         assert!(config.wallpaper.is_none());
@@ -183,6 +249,23 @@ mod tests {
         fs::write(&path, b"broken").unwrap();
         assert!(load(&path).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"broken");
+    }
+
+    #[test]
+    fn personal_images_must_be_inline_data_urls() {
+        let mut config = AppConfig {
+            avatar: Some("data:image/png;base64,AAAA".into()),
+            wallpaper: Some("data:image/jpeg;base64,AAAA".into()),
+            ..AppConfig::default()
+        };
+        config.validate().unwrap();
+        config.wallpaper = Some("data:image/png;base64,AAAA".into());
+        config.validate().unwrap();
+        config.avatar = Some("data:image/jpeg;base64,AAAA".into());
+        assert!(config.validate().is_err());
+        config.avatar = None;
+        config.wallpaper = Some("https://example.com/wallpaper.jpg".into());
+        assert!(config.validate().is_err());
     }
 
     #[test]

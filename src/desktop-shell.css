@@ -1,6 +1,7 @@
 /* Window structure follows the reviewed desktop references. */
 .desktop-shell {
-  --sidebar-width: 196px;
+  --sidebar-width: 140px;
+  --sidebar-collapsed-width: 56px;
   --sidebar-motion: 280ms var(--ease-standard);
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -12,6 +13,7 @@
 
 /* Sidebar */
 .desktop-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -23,7 +25,7 @@
 }
 /* Reserve the upper sidebar for future app-level content. */
 .sidebar-top-space {
-  height: 56px;
+  height: 40px;
   flex-shrink: 0;
 }
 .desktop-navigation {
@@ -89,6 +91,7 @@
   transition:
     background var(--duration-fast) ease,
     color var(--duration) ease,
+    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-nav-item svg {
@@ -126,22 +129,26 @@
 }
 .sidebar-group-label {
   position: relative;
-  height: 30px;
-  padding: 12px 11px 0;
+  height: 36px;
+  padding: 8px 11px 0;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
 }
-/* In the compact rail the label becomes a short divider at the same height. */
+/* The label text and the collapsed divider share the same 16px centre, and the
+   block keeps one height in both states so plugin icons never shift vertically.
+   With the 6px section gap above and 2px item gap below, the divider ends up
+   equally far from both icon rows. */
 .sidebar-group-label::after {
   content: '';
   position: absolute;
   left: 50%;
-  top: 18px;
-  width: 20px;
-  margin-left: -10px;
+  top: 16px;
+  width: 28px;
+  margin-left: -14px;
   border-top: 1px solid var(--border-strong);
   opacity: 0;
   transition: opacity var(--duration) ease;
@@ -171,6 +178,7 @@
   overflow: hidden;
   transition:
     background var(--duration-fast) ease,
+    padding-left var(--sidebar-motion),
     transform var(--duration-fast) var(--ease-out);
 }
 .desktop-identity:hover {
@@ -223,6 +231,16 @@
   transition:
     opacity 100ms ease,
     transform var(--sidebar-motion);
+}
+
+/* The rail is wider on macOS to clear the window buttons, so icons centre in it.
+   The offset uses the settled rail width, not the dragged width, so icons do not
+   drift across the divider while the sidebar is being resized. */
+.sidebar-collapsed .desktop-nav-item {
+  padding-left: calc((var(--sidebar-collapsed-width) - 36px) / 2);
+}
+.sidebar-collapsed .desktop-identity {
+  padding-left: calc((var(--sidebar-collapsed-width) - 44px) / 2);
 }
 
 /* Collapse toggle sits on the divider's vertical middle. */
@@ -292,7 +310,10 @@
   opacity: 0.5;
   transition-delay: 120ms;
 }
-.sidebar-resizer:focus-visible {
+/* Keyboard focus already shows as the accent line above. The global
+   [role='separator']:focus-visible rule loads later, so outrank it here or a
+   second outline draws two blue lines around the divider. */
+.desktop-shell .sidebar-resizer:focus-visible {
   outline: none;
 }
 .sidebar-resizing,
@@ -325,17 +346,21 @@
   min-width: 0;
   min-height: 0;
 }
-.desktop-wallpaper {
+.desktop-wallpaper,
+.desktop-wallpaper img {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: center;
+  width: 100%;
+  height: 100%;
+}
+.desktop-wallpaper img {
+  object-fit: cover;
 }
 .desktop-wallpaper::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.6));
+  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.38));
 }
 .desktop-content {
   position: relative;
@@ -361,10 +386,78 @@
 .desktop-required {
   padding: 32px;
 }
-.has-wallpaper .ui-card {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(16px) saturate(1.2);
-  border-color: rgba(255, 255, 255, 0.7);
+/* The wallpaper backs every page. Large panels turn translucent; controls keep solid colours. */
+.desktop-shell.has-wallpaper {
+  --panel: rgba(255, 255, 255, 0.72);
+  --panel-border: rgba(255, 255, 255, 0.6);
+  --sidebar-bg: rgba(241, 242, 244, 0.6);
+  --sidebar-border: rgba(15, 23, 42, 0.08);
+  /* An opaque highlight reads as a grey slab on the frosted sidebar. */
+  --nav-active: var(--accent-tint);
+  background: transparent;
+}
+.has-wallpaper .desktop-sidebar {
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+/* No backdrop blur here: inside a fading page it only appears after the fade ends. */
+.has-wallpaper .ui-card,
+.has-wallpaper .setting-card,
+.has-wallpaper .profile-card,
+.has-wallpaper .schedule-scroll {
+  border-color: var(--panel-border);
+  background: var(--panel);
+}
+/* Row states inside panels tint the panel instead of covering it with an opaque fill. */
+.desktop-shell.has-wallpaper .course-item:hover,
+.desktop-shell.has-wallpaper .shortcut:hover,
+.desktop-shell.has-wallpaper .plugin-tile:hover,
+.desktop-shell.has-wallpaper .setting-row.clickable:hover:not(:disabled),
+.desktop-shell.has-wallpaper .day-heading {
+  background: var(--accent-wash);
+}
+.desktop-shell.has-wallpaper .shortcut:active,
+.desktop-shell.has-wallpaper .setting-row.clickable:active:not(:disabled) {
+  background: var(--surface-pressed);
+}
+
+/* macOS: the title bar is embedded; keep the top strip draggable and clear of controls. */
+.titlebar-drag {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+}
+.mac-native .desktop-content-inner {
+  padding-top: 40px;
+}
+
+/* WebView2 draws classic, always-visible scrollbars; match the slim macOS look. */
+/* Windows uses the bundled Noto Sans SC so Latin and Chinese share one face;
+   the system fonts remain as a fallback for glyphs outside the subset. */
+.platform-windows {
+  --font-sans:
+    'XJTU Sans SC', 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI',
+    'Microsoft YaHei', sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+.platform-windows ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.platform-windows ::-webkit-scrollbar-track,
+.platform-windows ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.platform-windows ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.18) padding-box;
+}
+.platform-windows ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(15, 23, 42, 0.32);
 }
 
 /* Page transition: quick fade out, then a short rise on enter. */

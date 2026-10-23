@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.agent-settings",
+  "name": "Agent 设置",
+  "version": "0.1.0",
+  "description": "模型服务、接入工具与 MCP 管理",
+  "icon": "settings-2",
+  "page": { "type": "agentSettings" },
+  "widget": false
+}

@@ -1,33 +1,36 @@
-# 版本发布
+# 桌面应用更新发布
 
-Windows 适配分支为 `codex/windows-support`，同时维护三平台打包配置。界面与校园业务沿用主线。
+客户端已接入 Tauri Updater：检查新版、说明、下载进度、签名验证、安装及重启。默认开发构建未配置更新端点和公钥，显示“此构建尚未配置更新服务”；不会将其误报为最新版本。
 
-## 发布流程
+插件市场地址与应用更新端点分别配置。修改插件来源不会修改应用更新来源。
 
-1. 同步 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 与 `src-tauri/tauri.conf.json` 中的应用版本。
-2. 新增 `docs/releases/v版本号.md`，记录变化、下载平台和已知限制。
-3. 推送分支，确认 Desktop checks；可手动运行 Desktop release 验证安装包，手动运行仅生成 Actions artifacts。
-4. 在验证过的提交上创建带说明的标签并推送，例如 `git tag -a v0.1.0 -m "XJTU Launcher v0.1.0"`、`git push origin v0.1.0`。
-5. 标签触发四个构建任务：Windows x64、macOS ARM64 / x64、Linux x64。全部成功后校验安装包、创建草稿、上传附件，最后公开 Release。
+## 当前配置（2026-10-22）
 
-首次发布暂不配置签名和自动更新，安装包通过 GitHub Releases 手动下载。`tools/prepare-release.mjs` 仍支持配置完整更新地址、公钥和签名私钥后的签名构建；启用自动更新时需另行配置 workflow 的密钥传递与更新清单上传。
+- 更新端点：`https://github.com/haiziyao/XJTU-Launcher/releases/latest/download/latest.json`（仓库为公开仓库，使用 Release 资产中的 latest.json）。
+- 更新公钥：`dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCRDUwMjM1QzIzRTVBRkIKUldUN1dqN0NOUUxWYTQ0WlRpUGZWeVg1V21OVDZna1BsdW9kSExSWitYaUNHay9TL2JZU0hkSnIK`
+- 签名密钥已在本机生成（`~/.tauri/xjtu-launcher.key`，无密码）；私钥不入仓库，需自行备份并填入 GitHub Secret。丢失私钥后无法再为已发布客户端签名更新。
+- 仓库 Variables 与 Secret 已于 2026-10-22 配置完毕，签名构建可跑通。
 
-## 失败处理
+系统代码签名（Gatekeeper / SmartScreen）尚未配置，步骤见 [SIGNING.md](SIGNING.md)。未签名不影响自动更新的 minisign 校验，但首次安装会触发系统警告。
 
-构建失败时不会公开 Release。修复后重新验证；已公开版本不移动标签、不替换安装包，递增补丁版本发布。若附件上传阶段失败，会保留草稿供检查，应恢复该草稿的上传和发布，不重复创建同名版本。
+## 首次部署
 
-## 本地构建
+1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
+2. 在仓库 Variables 中设置 `XJTU_UPDATE_ENDPOINT`（HTTPS 的静态更新 JSON 地址）和 `XJTU_UPDATE_PUBLIC_KEY`。可选设置 `XJTU_PLUGIN_SERVER`。
+3. 在 Secrets 中设置 `TAURI_SIGNING_PRIVATE_KEY` 和相应的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。不把私钥写入仓库。
+4. 保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
+5. 手动运行 `Signed desktop release` 工作流，构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与草稿 Release。检查安装包和更新清单后再正式发布；公钥配置必须已包含在用户当前安装的客户端中。
 
-```sh
-npm ci
-npm test
-npm run app:build
-```
+工作流把三个平台串行执行（`max-parallel: 1`）。`tauri-action` 无法按 tag 查询草稿，只能取发布列表里第一个同名草稿，并行 job 会各自新建草稿并把资产分散上传，导致每个草稿都缺平台、`latest.json` 只有部分 `platforms`。发布前确认**只有一个**同名草稿且三个平台的安装包、更新包和 `.sig` 齐全，否则先删除残缺草稿再重跑。每次构建都会先读出已有 `latest.json` 再合并平台，挂到同一个草稿上即可得到完整清单。
 
-Windows 使用 Visual Studio C++ Build Tools 和 WebView2，macOS 使用 Xcode Command Line Tools。Linux（Ubuntu 22.04）安装：
+工作流调用 `tools/prepare-release.mjs`，生成开启 `bundle.createUpdaterArtifacts` 的临时 Tauri 配置。普通 `npm run app:build` 保持可本地构建，无需发布密钥。更新相关环境变量也通过 Rust 编译进入客户端，不允许用户更改插件源时连带修改。
 
-```sh
-sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2 xdg-utils
-```
+GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest.json；若仓库私有，应使用用户无需 GitHub 凭据即可访问的自有公开更新托管。更新清单中的平台名称、下载 URL 和 `.sig` 内容由官方 Tauri Action 生成。清单里的下载 URL 是 `api.github.com/.../releases/assets/{id}` 形式，客户端下载时会带 `Accept: application/octet-stream`，公开仓库正式发布后可匿名下载。签名构建已于 2026-10-22 跑通，但尚无正式发布的版本，跨版本更新仍未实测。
 
-安装包在 `src-tauri/target/release/bundle/` 下。每个平台在对应系统上构建；Windows 安装配置位于 `src-tauri/tauri.windows.conf.json`，由 Tauri 自动合并。
+## 运行行为
+
+启动后按用户选项自动检查；手动检查位于“应用设置 → 软件更新”。下载与状态保存在 Rust 运行时，切换页面不会中断。安装与重启前尝试取得校园任务、账号操作和插件安装锁，已有操作未结束则提示稍后重试。macOS 安装完成后由用户选择重启，Windows 由安装程序按 Updater 机制退出并更新。
+
+未来 Agent 有实际运行任务后，必须把任务锁接入更新前检查，不能宣称目前已经覆盖尚不存在的 Agent 运行时。
+
+参考：Tauri Updater 官方文档与 `tauri-apps/tauri-action` 官方 README。未使用真实发布包进行跨版本安装，Windows 安装行为仍需 Windows 实机验收。

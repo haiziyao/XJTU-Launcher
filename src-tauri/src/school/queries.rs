@@ -36,6 +36,26 @@ pub enum Query {
         campus: String,
     },
     Calendar,
+    AttendanceStreams {
+        start: Option<String>,
+        end: Option<String>,
+        page: u32,
+    },
+    AttendanceRecords {
+        start: String,
+        end: String,
+        page: u32,
+    },
+    Card,
+    CardTransactions {
+        start: String,
+        end: String,
+        page: u32,
+    },
+    Fitness,
+    FitnessScore {
+        year: String,
+    },
 }
 impl Query {
     pub fn feature(&self) -> &'static str {
@@ -46,6 +66,9 @@ impl Query {
             Self::Evaluations { .. } => "evaluations",
             Self::RoomOptions | Self::Rooms { .. } => "rooms",
             Self::Calendar => "calendar",
+            Self::AttendanceStreams { .. } | Self::AttendanceRecords { .. } => "attendance",
+            Self::Card | Self::CardTransactions { .. } => "card",
+            Self::Fitness | Self::FitnessScore { .. } => "fitness",
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -73,6 +96,35 @@ impl Query {
             {
                 return Err("请选择有效校区、日期和节次范围".into());
             }
+            Self::AttendanceStreams { start, end, page }
+                if !(1..=500).contains(page)
+                    || start.as_deref().is_some_and(|date| !valid_date(date))
+                    || end.as_deref().is_some_and(|date| !valid_date(date))
+                    || matches!((start, end), (Some(start), Some(end)) if start > end) =>
+            {
+                return Err("请选择有效的日期范围和页码".into());
+            }
+            Self::AttendanceRecords { start, end, page }
+                if !(1..=500).contains(page)
+                    || !valid_date(start)
+                    || !valid_date(end)
+                    || start > end =>
+            {
+                return Err("请选择有效的日期范围和页码".into());
+            }
+            Self::CardTransactions { start, end, page }
+                if !(1..=200).contains(page)
+                    || !valid_date(start)
+                    || !valid_date(end)
+                    || start > end =>
+            {
+                return Err("请选择有效的日期范围和页码".into());
+            }
+            Self::FitnessScore { year }
+                if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) =>
+            {
+                return Err("请选择有效的体测学年".into());
+            }
             _ => {}
         }
         if let Self::Courses { name, campus, .. } = self {
@@ -99,7 +151,7 @@ fn validate_term(term: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn valid_date(value: &str) -> bool {
+pub(super) fn valid_date(value: &str) -> bool {
     let p: Vec<_> = value.split('-').collect();
     if p.len() != 3 || p[0].len() != 4 || p[1].len() != 2 || p[2].len() != 2 {
         return false;
@@ -132,6 +184,46 @@ pub async fn query(
     query.validate()?;
     if matches!(query, Query::Calendar) {
         return calendar().await.map(|v| (v, None));
+    }
+    if matches!(
+        query,
+        Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. }
+    ) {
+        let client = super::attendance::Client::connect(account.ok_or("请先登录校园账号")?)?;
+        let value = match query {
+            Query::AttendanceStreams { start, end, page } => {
+                client
+                    .streams(start.as_deref(), end.as_deref(), page)
+                    .await?
+            }
+            Query::AttendanceRecords { start, end, page } => {
+                client.records(&start, &end, page).await?
+            }
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
+    }
+    if matches!(query, Query::Fitness | Query::FitnessScore { .. }) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::fitness::Client::connect(&account).await?;
+        let value = match query {
+            Query::Fitness => json!({"rows": client.years().await?}),
+            Query::FitnessScore { year } => client.score(&year).await?,
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
+    }
+    if matches!(query, Query::Card | Query::CardTransactions { .. }) {
+        let account = account.ok_or("请先登录校园账号")?;
+        let client = super::card::Client::connect(&account).await?;
+        let value = match query {
+            Query::Card => client.info().await?,
+            Query::CardTransactions { start, end, page } => {
+                client.transactions(&start, &end, page).await?
+            }
+            _ => unreachable!(),
+        };
+        return Ok((value, None));
     }
     let client = Client::connect(account.ok_or("请先登录校园账号")?).await?;
     let value = match query {
@@ -245,6 +337,9 @@ pub async fn query(
             json!({"term":term,"rows":rows.iter().map(|r|json!({"code":field(r,"KCH"),"name":field(r,"KCM"),"class":field(r,"KXH"),"teachers":field(r,"SKJS"),"credits":r["XF"],"campus":field(r,"XXXQDM_DISPLAY"),"department":field(r,"KKDWDM_DISPLAY"),"timePlace":field(r,"YPSJDD")})).collect::<Vec<_>>()})
         }
         Query::Calendar => unreachable!(),
+        Query::AttendanceStreams { .. } | Query::AttendanceRecords { .. } => unreachable!(),
+        Query::Card | Query::CardTransactions { .. } => unreachable!(),
+        Query::Fitness | Query::FitnessScore { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }

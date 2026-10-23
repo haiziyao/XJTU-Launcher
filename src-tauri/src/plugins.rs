@@ -3,7 +3,9 @@ use std::{collections::HashSet, fs, path::Path};
 use url::Url;
 
 pub const TIMETABLE_ID: &str = "cn.xjtu.timetable";
-pub const LINKS_ID: &str = "cn.xjtu.links";
+pub const CAMPUS_ID: &str = "cn.xjtu.campus";
+pub const AGENT_ID: &str = "cn.xjtu.agent-settings";
+pub const HOME_THEME_ID: &str = "cn.xjtu.home-theme";
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -22,7 +24,14 @@ pub struct Plugin {
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Page {
     Timetable,
-    Links { links: Vec<Link> },
+    Links {
+        links: Vec<Link>,
+    },
+    Campus,
+    #[serde(rename = "agentSettings")]
+    AgentSettings,
+    #[serde(rename = "homeTheme")]
+    HomeTheme,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -84,11 +93,13 @@ impl Plugin {
         {
             return Err("插件清单字段无效或版本不受支持".into());
         }
-        if [TIMETABLE_ID, LINKS_ID].contains(&self.id.as_str()) && !builtin {
+        if [TIMETABLE_ID, CAMPUS_ID, AGENT_ID].contains(&self.id.as_str()) && !builtin {
             return Err("不能覆盖内置插件".into());
         }
         match &self.page {
             Page::Timetable if !builtin => return Err("课表服务目前仅供内置插件使用".into()),
+            Page::Campus if !builtin => return Err("畅行校园仅供内置插件使用".into()),
+            Page::AgentSettings if !builtin => return Err("Agent 设置仅供内置插件使用".into()),
             Page::Links { links } => {
                 if links.len() > 50 {
                     return Err("导航插件最多包含 50 个链接".into());
@@ -123,12 +134,21 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
         serde_json::from_str(include_str!("../../plugins/cn.xjtu.timetable/plugin.json"))
             .map_err(|_| "内置课表插件损坏")?;
     builtin.validate(true)?;
-    let links: Plugin =
-        serde_json::from_str(include_str!("../../plugins/cn.xjtu.links/plugin.json"))
-            .map_err(|_| "内置校园导航插件损坏")?;
-    links.validate(true)?;
+    let campus: Plugin =
+        serde_json::from_str(include_str!("../../plugins/cn.xjtu.campus/plugin.json"))
+            .map_err(|_| "内置畅行校园插件损坏")?;
+    campus.validate(true)?;
+    let agent: Plugin = serde_json::from_str(include_str!(
+        "../../plugins/cn.xjtu.agent-settings/plugin.json"
+    ))
+    .map_err(|_| "内置 Agent 设置插件损坏")?;
+    agent.validate(true)?;
+    let theme: Plugin =
+        serde_json::from_str(include_str!("../../plugins/cn.xjtu.home-theme/plugin.json"))
+            .map_err(|_| "内置主页主题插件损坏")?;
+    theme.validate(true)?;
     let mut result = PluginList {
-        plugins: vec![builtin, links],
+        plugins: vec![builtin, campus, agent, theme],
         sources: Default::default(),
         warnings: vec![],
         directory: directory.display().to_string(),
@@ -139,7 +159,12 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
         .map(|e| e.path())
         .collect();
     paths.sort();
-    let mut ids = HashSet::from([TIMETABLE_ID.to_string(), LINKS_ID.to_string()]);
+    let mut ids = HashSet::from([
+        TIMETABLE_ID.to_string(),
+        CAMPUS_ID.to_string(),
+        AGENT_ID.to_string(),
+        HOME_THEME_ID.to_string(),
+    ]);
     for path in paths.into_iter().take(256) {
         if !path.is_dir()
             || path
@@ -213,7 +238,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         import(Path::new("../examples/campus-links"), directory.path()).unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 3);
+        assert_eq!(result.plugins.len(), 5);
         assert!(result.warnings.is_empty());
         assert!(import(Path::new("../examples/campus-links"), directory.path()).is_err());
     }
@@ -242,7 +267,7 @@ mod tests {
         fs::create_dir(directory.path().join("bad")).unwrap();
         fs::write(directory.path().join("bad/plugin.json"), "{}").unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 2);
+        assert_eq!(result.plugins.len(), 4);
         assert_eq!(result.warnings.len(), 1);
     }
 }

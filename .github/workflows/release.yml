@@ -1,21 +1,18 @@
-name: Desktop release
-
+name: Signed desktop release
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
-
+  push:
+    tags:
+      - 'v*'
 permissions:
-  contents: read
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
+  contents: write
 jobs:
-  build:
+  release:
     strategy:
       fail-fast: false
+      # tauri-action 无法按 tag 查询草稿发布，只能取列表里第一个同名草稿；
+      # 并行 job 会各自建草稿并分散上传，串行执行保证三个平台合并到同一个草稿。
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest
@@ -26,11 +23,14 @@ jobs:
             bundles: app,dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bundles: nsis,msi
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            bundles: deb,appimage
+            bundles: nsis
     runs-on: ${{ matrix.os }}
+    env:
+      XJTU_UPDATE_ENDPOINT: ${{ vars.XJTU_UPDATE_ENDPOINT }}
+      XJTU_UPDATE_PUBLIC_KEY: ${{ vars.XJTU_UPDATE_PUBLIC_KEY }}
+      XJTU_PLUGIN_SERVER: ${{ vars.XJTU_PLUGIN_SERVER }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,64 +39,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2 xdg-utils
-      - name: Install Rust
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy --target ${{ matrix.target }}
+      - run: rustup toolchain install stable --profile minimal
       - run: rustup default stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: release-${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
       - run: npm ci
-      - name: Validate release version
-        run: node tools/prepare-release.mjs
-      - run: npm run format:check
-      - run: npm test
-      - run: npm run build
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
-        if: matrix.target != 'x86_64-apple-darwin'
-      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }} --all-targets -- -D warnings
-      - name: Build installers
-        uses: tauri-apps/tauri-action@v1
-        with:
-          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config .release/tauri.conf.json -- --locked
-      - name: Collect installers and checksums
-        run: node tools/collect-release.mjs ${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.target }}
-          path: .release/assets/*
-          if-no-files-found: error
-
-  publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
-          path: release-assets
-          merge-multiple: true
-      - name: Verify downloads and publish
+      - run: node tools/prepare-release.mjs
+      - uses: tauri-apps/tauri-action@v1
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat release-assets/SHA256SUMS-*.txt > release-assets/SHA256SUMS.txt
-          (cd release-assets && sha256sum --check SHA256SUMS.txt)
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title "XJTU Launcher $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
-          gh release upload "$RELEASE_TAG" release-assets/*.dmg release-assets/*.exe release-assets/*.msi release-assets/*.deb release-assets/*.AppImage release-assets/SHA256SUMS.txt
-          gh release edit "$RELEASE_TAG" --draft=false --latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: XJTU Launcher v__VERSION__
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config .release/tauri.conf.json

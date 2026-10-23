@@ -1,8 +1,19 @@
+/* Bundled UI font for Windows, where the default Chinese face looks heavy.
+   Noto Sans SC (SIL OFL); the licence ships beside the file. */
+@font-face {
+  font-family: 'XJTU Sans SC';
+  src: url('./assets/fonts/noto-sans-sc.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /* Design tokens shared by the shell, pages and UI components. */
 :root {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
 
   --text: #1f2329;
   --text-secondary: #5c636d;
@@ -22,6 +33,10 @@
   --accent-pressed: #1657b8;
   --accent-soft: #eaf1fd;
   --accent-text: #1a5ec6;
+  --accent-contrast: #ffffff;
+  --accent-tint: rgba(31, 111, 229, 0.13);
+  --accent-outline: rgba(31, 111, 229, 0.35);
+  --accent-wash: rgba(31, 111, 229, 0.07);
   --danger: #c23a2f;
   --danger-soft: #fdefed;
   --success: #2c8653;
@@ -52,6 +67,8 @@
   --duration: 200ms;
   --duration-slow: 300ms;
 
+  /* The UI has no dark theme yet; keep native controls light under Windows dark mode. */
+  color-scheme: light;
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--surface);

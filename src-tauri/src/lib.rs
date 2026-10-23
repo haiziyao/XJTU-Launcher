@@ -1,7 +1,10 @@
+mod agent;
 mod campus;
 mod campus_browser;
 mod config;
 mod market;
+mod mcp;
+mod personal_image;
 mod plugins;
 mod providers;
 mod school;
@@ -27,11 +30,13 @@ struct AppState {
     config_lock: Mutex<()>,
     market_lock: tokio::sync::Mutex<()>,
     providers_lock: Mutex<()>,
+    mcp_lock: Mutex<()>,
     auth_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
     auth: auth::Manager,
     school_lock: tokio::sync::Mutex<()>,
     evaluations: school::evaluation::Manager,
+    agent: agent::Manager,
 }
 
 fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -198,6 +203,10 @@ struct AccountStatus {
     student_id: Option<String>,
     avatar: Option<String>,
     api_key_set: bool,
+    /// Current access mode: some services are only reachable directly.
+    access_mode: Option<network::AccessMode>,
+    /// Whether this account also holds a direct session for card/fitness/profile.
+    direct_session: bool,
 }
 
 #[tauri::command]
@@ -216,6 +225,12 @@ async fn account_status(
     } else {
         None
     };
+    let access_mode = active
+        .map(|account| account.mode)
+        .or_else(|| legacy.as_ref().map(|session| session.mode));
+    let direct_session = active
+        .and_then(|account| account.direct_cookies.as_ref())
+        .is_some();
     Ok(AccountStatus {
         connected: active.is_some() || legacy.is_some(),
         degree: active
@@ -225,6 +240,8 @@ async fn account_status(
         student_id: active.and_then(|a| a.student_id.clone()),
         avatar: active.and_then(|a| a.avatar.clone()),
         api_key_set: vault::api_key_set()?,
+        access_mode,
+        direct_session,
     })
 }
 
@@ -503,27 +520,20 @@ async fn save_api_key(
     vault::save_api_key(&key)
 }
 
-#[tauri::command]
-async fn query_timetable(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
-    plugin_id: String,
-) -> Result<campus::Timetable, String> {
-    main_only(&window)?;
-    if plugin_id != plugins::TIMETABLE_ID {
-        return Err("此插件没有课表服务权限".into());
-    }
-    if config::load(&config_path(&app)?)?
+/// Shared by the timetable command and the Agent's campus tools.
+pub(crate) async fn run_timetable(app: &tauri::AppHandle) -> Result<campus::Timetable, String> {
+    if config::load(&config_path(app)?)?
         .disabled_plugins
-        .contains(&plugin_id)
+        .iter()
+        .any(|id| id == plugins::TIMETABLE_ID)
     {
         return Err("请先启用课表插件".into());
     }
+    let state = app.state::<AppState>();
     let generation = state.generation.load(Ordering::SeqCst);
     let session = {
         let _guard = state.auth_lock.lock().await;
-        let path = accounts_path(&app)?;
+        let path = accounts_path(app)?;
         let book = accounts::load(&path)?;
         if let Some(account) = book.active() {
             vault::Session {
@@ -545,6 +555,231 @@ async fn query_timetable(
     Ok(timetable)
 }
 
+#[tauri::command]
+async fn query_timetable(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    plugin_id: String,
+) -> Result<campus::Timetable, String> {
+    main_only(&window)?;
+    if plugin_id != plugins::TIMETABLE_ID {
+        return Err("此插件没有课表服务权限".into());
+    }
+    run_timetable(&app).await
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NetworkCheck {
+    /// campus | vpn | manual | neutral
+    tone: &'static str,
+    message: String,
+}
+
+enum SessionRefresh {
+    Refreshed,
+    NeedsManual,
+}
+
+/// Re-run the saved account's login with its stored password. Only used by the
+/// explicit sidebar self-check; the password never leaves this process.
+async fn refresh_saved_session(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<SessionRefresh, String> {
+    let path = accounts_path(app)?;
+    let (account_id, username, degree, password) = {
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("未绑定校园账号")?;
+        let saved = record.password.as_ref().ok_or("此账号未保存密码")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            record.degree.clone(),
+            saved.0.clone(),
+        )
+    };
+    let mut login = auth::Login::begin(degree).await?;
+    login
+        .act(auth::Action::Credentials {
+            username,
+            password,
+            remember_password: true,
+            captcha: String::new(),
+        })
+        .await?;
+    // The campus CAS can return an intermediate confirmation page with no input;
+    // submitting "continue" is what the login dialog's second click does.
+    for _ in 0..2 {
+        if login.completed.is_some() {
+            break;
+        }
+        let view = login.view();
+        if view.phase != auth::Phase::Credentials || !view.can_continue {
+            break;
+        }
+        login
+            .act(auth::Action::Continue {
+                captcha: String::new(),
+            })
+            .await?;
+    }
+    let Some(account) = login.completed.take() else {
+        // A captcha, MFA or identity step still needs the login dialog.
+        return Ok(SessionRefresh::NeedsManual);
+    };
+    let _guard = state.auth_lock.lock().await;
+    let mut book = accounts::load(&path)?;
+    if book.active().map(|a| a.id.as_str()) != Some(account_id.as_str()) {
+        return Ok(SessionRefresh::NeedsManual);
+    }
+    book.upsert(account)?;
+    accounts::save(&path, &book)?;
+    drop(_guard);
+    state.generation.fetch_add(1, Ordering::SeqCst);
+    campus_browser::close_all(app)?;
+    account_changed(app, "校园会话已刷新");
+    Ok(SessionRefresh::Refreshed)
+}
+
+/// Services such as the campus card refuse WebVPN sessions, so they get a CAS
+/// session of their own. The UI calls this before opening one of those tools and
+/// the self-check renews it in the background; a captcha or phone step falls
+/// back to the "VPN 下不可用" label.
+#[tauri::command]
+async fn refresh_direct_session(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    main_only(&window)?;
+    renew_direct_session(&app, &state).await?;
+    Ok(true)
+}
+
+/// Shared by the command above and the self-check's quiet renewal.
+async fn renew_direct_session(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let path = accounts_path(app)?;
+    let (account_id, username, password) = {
+        let _guard = state.auth_lock.lock().await;
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("请先登录校园账号")?;
+        let saved = record
+            .password
+            .as_ref()
+            .ok_or("此账号未保存密码，无法自动直连")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            zeroize::Zeroizing::new(saved.0.clone()),
+        )
+    };
+    let generation = state.generation.load(Ordering::SeqCst);
+    let cookies = auth::direct_login(school::CARD_LOGIN, &username, &password).await?;
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新打开".into());
+    }
+    let mut book = accounts::load(&path)?;
+    book.accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?
+        .direct_cookies = Some(cookies);
+    accounts::save(&path, &book)
+}
+
+/// Sidebar self-check: try the campus host through a direct connection first,
+/// then through WebVPN, so the pet can report which network is in effect.
+#[tauri::command]
+async fn check_network(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<NetworkCheck, String> {
+    main_only(&window)?;
+    let generation = state.generation.load(Ordering::SeqCst);
+    let (session, account) = {
+        let _guard = state.auth_lock.lock().await;
+        let path = accounts_path(&app)?;
+        let book = accounts::load(&path)?;
+        if let Some(account) = book.active() {
+            (
+                Some(vault::Session {
+                    degree: account.degree.clone(),
+                    token: account.token.clone(),
+                    mode: account.mode,
+                    cookies: Some(account.cookies.clone()),
+                }),
+                Some(account.clone()),
+            )
+        } else if !path.exists() {
+            (vault::session()?, None)
+        } else {
+            (None, None)
+        }
+    };
+    let Some(session) = session else {
+        return Ok(NetworkCheck {
+            tone: "neutral",
+            message: "未绑定校园账号，无法检测校园网络".into(),
+        });
+    };
+    let direct = campus::reachable(&session, network::AccessMode::Direct).await;
+    let vpn = !direct && campus::reachable(&session, network::AccessMode::Webvpn).await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账户状态已变化，请重新检查".into());
+    }
+    let (tone, mut message) = if direct {
+        ("campus", "校园网环境下，网络可正常访问".to_string())
+    } else if vpn {
+        ("vpn", "检测到非校园网环境，目前自动连接vpn".to_string())
+    } else {
+        return Ok(NetworkCheck {
+            tone: "neutral",
+            message: "校园网和 vpn 均不可用".into(),
+        });
+    };
+    // A bound account can outlive its VPN session; refresh it on the spot when
+    // the saved password allows an unattended login. A session that cannot be
+    // renewed turns the whole result red.
+    let academic_ok = match &account {
+        Some(account) => school::academic_available(account).await,
+        None => true,
+    };
+    if !campus::session_valid(&session).await || !academic_ok {
+        match refresh_saved_session(&app, &state).await {
+            Ok(SessionRefresh::Refreshed) => message.push_str("，校园会话已刷新"),
+            Ok(SessionRefresh::NeedsManual) => {
+                return Ok(NetworkCheck {
+                    tone: "manual",
+                    message: "校园会话已失效，请手动重新登录".into(),
+                })
+            }
+            Err(error) => {
+                return Ok(NetworkCheck {
+                    tone: "manual",
+                    message: format!("自动登录失败：{error}，请手动重新登录"),
+                })
+            }
+        }
+    }
+    // Direct-only tools (card, fitness) need their own CAS session. Prepare it
+    // here so opening one does not have to wait; failures leave the existing
+    // "VPN 下不可用" label untouched.
+    if let Some(account) = &account {
+        if account.mode == network::AccessMode::Webvpn
+            && account.direct_cookies.is_none()
+            && account.password.is_some()
+        {
+            let _ = renew_direct_session(&app, &state).await;
+        }
+    }
+    Ok(NetworkCheck { tone, message })
+}
 #[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,
@@ -635,27 +870,35 @@ async fn save_school_session(
     accounts::save(&path, &book)
 }
 
-#[tauri::command]
-async fn school_query(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
+/// Shared by the school_query command and the Agent's campus tools.
+pub(crate) async fn run_school_query(
+    app: &tauri::AppHandle,
     query: school::Query,
 ) -> Result<serde_json::Value, String> {
-    main_only(&window)?;
-    require_school_feature(&app, query.feature())?;
+    require_school_feature(app, query.feature())?;
     query.validate()?;
+    let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
     if matches!(query, school::Query::Calendar) {
         return school::query(None, query).await.map(|(data, _)| data);
     }
-    let (account, generation) = school_account(&app, &state).await?;
+    let (account, generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
     let (data, cookies) = school::query(Some(account), query).await?;
     if let Some(cookies) = cookies {
-        save_school_session(&app, &state, &account_id, generation, cookies).await?;
+        save_school_session(app, &state, &account_id, generation, cookies).await?;
     }
     Ok(data)
+}
+
+#[tauri::command]
+async fn school_query(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    query: school::Query,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    run_school_query(&app, query).await
 }
 
 #[tauri::command]
@@ -729,7 +972,7 @@ fn school_cancel_evaluations(
     state.evaluations.cancel(&preview_id)
 }
 
-fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
         .app_data_dir()
@@ -748,6 +991,42 @@ fn list_model_providers(
         .lock()
         .map_err(|_| "模型配置服务繁忙")?;
     Ok(providers::load(&providers_path(&app)?)?.view(vault::api_key_set()?))
+}
+#[tauri::command]
+async fn list_provider_models(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    input: providers::ListInput,
+) -> Result<Vec<String>, String> {
+    main_only(&window)?;
+    // Resolve the key while holding the config lock, then release it before I/O.
+    let key = {
+        let _guard = state
+            .providers_lock
+            .lock()
+            .map_err(|_| "模型配置服务繁忙")?;
+        if input.use_legacy_key {
+            vault::get("model-api-key")?.unwrap_or_default()
+        } else if let Some(key) = input
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+        {
+            key.to_string()
+        } else if let Some(id) = input.id.as_deref() {
+            providers::load(&providers_path(&app)?)?
+                .providers
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| p.api_key.clone())
+                .ok_or("模型配置不存在")?
+        } else {
+            String::new()
+        }
+    };
+    providers::list_models(&input.base_url, &input.protocol, &key).await
 }
 #[tauri::command]
 fn save_model_provider(
@@ -806,54 +1085,513 @@ fn select_model_provider(
     providers::save(&path, &book)
 }
 #[tauri::command]
-fn read_personal_image(
+fn save_provider_models(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    models: Vec<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let path = providers_path(&app)?;
+    let mut book = providers::load(&path)?;
+    book.set_models(&id, models)?;
+    providers::save(&path, &book)
+}
+#[tauri::command]
+fn set_provider_model(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    model: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let path = providers_path(&app)?;
+    let mut book = providers::load(&path)?;
+    book.set_model(&id, &model)?;
+    providers::save(&path, &book)
+}
+/// Shows the stored key on request; it never leaves the local window otherwise.
+#[tauri::command]
+fn reveal_provider_key(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let _guard = state
+        .providers_lock
+        .lock()
+        .map_err(|_| "模型配置服务繁忙")?;
+    let book = providers::load(&providers_path(&app)?)?;
+    let provider = book
+        .providers
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or("模型配置不存在")?;
+    Ok(provider.api_key.clone())
+}
+/// Checks reachability, the key and the model endpoint in one call.
+#[tauri::command]
+async fn test_provider(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<usize, String> {
+    main_only(&window)?;
+    let (base_url, protocol, key) = {
+        let _guard = state
+            .providers_lock
+            .lock()
+            .map_err(|_| "模型配置服务繁忙")?;
+        let book = providers::load(&providers_path(&app)?)?;
+        let provider = book
+            .providers
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("模型配置不存在")?;
+        (
+            provider.base_url.clone(),
+            provider.protocol.clone(),
+            provider.api_key.clone(),
+        )
+    };
+    providers::list_models(&base_url, &protocol, &key)
+        .await
+        .map(|models| models.len())
+}
+/// The balance endpoint is vendor specific; unknown vendors report nothing.
+#[tauri::command]
+async fn provider_balance(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Option<providers::Balance>, String> {
+    main_only(&window)?;
+    let (base_url, key) = {
+        let _guard = state
+            .providers_lock
+            .lock()
+            .map_err(|_| "模型配置服务繁忙")?;
+        let book = providers::load(&providers_path(&app)?)?;
+        let provider = book
+            .providers
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("模型配置不存在")?;
+        (provider.base_url.clone(), provider.api_key.clone())
+    };
+    providers::balance(&base_url, &key).await
+}
+fn mcp_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .home_dir()
+        .map_err(|_| "无法定位 MCP 配置目录")?
+        .join(".xjtu-launcher")
+        .join("mcp.json"))
+}
+#[tauri::command]
+fn list_mcp_servers(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+) -> Result<Vec<mcp::PublicServer>, String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    Ok(mcp::public(&mcp::load(&mcp_path(&app)?)?))
+}
+#[tauri::command]
+fn save_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    input: mcp::Input,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let id = mcp::upsert(&mut book, input)?;
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(id)
+}
+#[tauri::command]
+fn remove_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let before = book.servers.len();
+    book.servers.retain(|server| server.id != id);
+    if book.servers.len() == before {
+        return Err("MCP 服务不存在".into());
+    }
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(())
+}
+#[tauri::command]
+fn set_mcp_server_enabled(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    let server = book
+        .servers
+        .iter_mut()
+        .find(|server| server.id == id)
+        .ok_or("MCP 服务不存在")?;
+    server.enabled = enabled;
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(())
+}
+#[tauri::command]
+async fn probe_mcp_server(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Vec<mcp::Tool>, String> {
+    main_only(&window)?;
+    let server = {
+        let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+        mcp::load(&mcp_path(&app)?)?
+            .servers
+            .into_iter()
+            .find(|server| server.id == id)
+            .ok_or("MCP 服务不存在")?
+    };
+    mcp::probe(&server).await
+}
+#[tauri::command]
+async fn mcp_catalog(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<mcp::RemoteCatalog, String> {
+    main_only(&window)?;
+    mcp::catalog(&config::load(&config_path(&app)?)?).await
+}
+#[tauri::command]
+async fn install_mcp_entry(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    entry_id: String,
+    values: std::collections::BTreeMap<String, String>,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let catalog = mcp::catalog(&config::load(&config_path(&app)?)?).await?;
+    let entry = catalog
+        .servers
+        .into_iter()
+        .find(|entry| entry.id == entry_id)
+        .ok_or("目录中没有这个 MCP 服务")?;
+    let server = mcp::from_entry(&entry, &values)?;
+    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
+    let path = mcp_path(&app)?;
+    let mut book = mcp::load(&path)?;
+    book.servers.retain(|existing| existing.id != server.id);
+    book.servers.push(server.clone());
+    mcp::save(&path, &book)?;
+    agent::invalidate_for_mcp(&app);
+    Ok(server.id)
+}
+// Image work runs off the main thread so the window stays responsive.
+// The source goes back as raw bytes; the webview decodes the crop preview natively.
+#[tauri::command]
+async fn personal_image_source(
     window: WebviewWindow,
     path: String,
     kind: String,
-) -> Result<String, String> {
-    use base64::Engine;
+) -> Result<tauri::ipc::Response, String> {
     main_only(&window)?;
-    if kind == "avatar" {
-        return accounts::avatar(std::path::Path::new(&path));
+    let kind = personal_image::Kind::parse(&kind)?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        personal_image::source(std::path::Path::new(&path), kind)
+    })
+    .await
+    .map_err(|_| "无法处理图片".to_string())??;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+#[tauri::command]
+async fn read_personal_image(
+    window: WebviewWindow,
+    path: String,
+    kind: String,
+    crop: personal_image::Crop,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let kind = personal_image::Kind::parse(&kind)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        personal_image::crop(std::path::Path::new(&path), kind, &crop)
+    })
+    .await
+    .map_err(|_| "无法处理图片".to_string())?
+}
+
+#[tauri::command]
+fn agent_list(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::store::Summary>, String> {
+    main_only(&window)?;
+    Ok(agent::store::summaries(&agent::store::load(&agent::path(
+        &app,
+    )?)?))
+}
+#[tauri::command]
+fn agent_get(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<agent::store::Conversation, String> {
+    main_only(&window)?;
+    Ok(agent::store::find(&agent::store::load(&agent::path(&app)?)?, &id)?.clone())
+}
+#[tauri::command]
+fn agent_new(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    workspace_id: Option<String>,
+) -> Result<agent::store::Conversation, String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::create(&mut book, workspace_id);
+    agent::store::save(&path, &book)?;
+    Ok(conversation)
+}
+#[tauri::command]
+fn agent_workspaces(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::store::Workspace>, String> {
+    main_only(&window)?;
+    Ok(agent::store::workspaces(&agent::store::load(
+        &agent::path(&app)?,
+    )?))
+}
+#[tauri::command]
+fn agent_set_workspace(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    workspace_id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    agent::store::set_workspace(&mut book, &id, workspace_id)?;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_create_workspace(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    name: String,
+) -> Result<agent::store::Workspace, String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let workspace = agent::store::create_workspace(&mut book, &name)?;
+    agent::store::save(&path, &book)?;
+    Ok(workspace)
+}
+#[tauri::command]
+fn agent_delete(app: tauri::AppHandle, window: WebviewWindow, id: String) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    agent::store::remove(&mut book, &id)?;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_rename(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    title: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let title = title.trim();
+    if title.is_empty() || title.chars().count() > 60 {
+        return Err("标题需要 1–60 个字符".into());
     }
-    if kind != "wallpaper" {
-        return Err("图片类型无效".into());
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.title = title.to_string();
+    conversation.updated_at = agent::store::now();
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+async fn agent_send(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    input: agent::Send,
+) -> Result<(), String> {
+    main_only(&window)?;
+    agent::send(app, input).await
+}
+#[tauri::command]
+fn agent_cancel(
+    window: WebviewWindow,
+    state: tauri::State<AppState>,
+    request_id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    state.agent.cancel(&request_id);
+    Ok(())
+}
+fn drop_by<T>(list: &mut Vec<T>, predicate: impl Fn(&T) -> bool) -> bool {
+    match list.iter().position(predicate) {
+        Some(index) => {
+            list.remove(index);
+            true
+        }
+        None => false,
     }
-    let meta = std::fs::metadata(&path).map_err(|_| "无法读取图片")?;
-    if !meta.is_file() || meta.len() > 10 * 1024 * 1024 {
-        return Err("请选择不超过 10 MB 的图片".into());
+}
+
+#[tauri::command]
+fn agent_presets(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<agent::presets::Presets, String> {
+    main_only(&window)?;
+    agent::presets::load(&agent::presets_path(&app)?)
+}
+#[tauri::command]
+fn agent_save_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    input: agent::presets::Input,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let id = agent::presets::upsert(&mut presets, input)?;
+    agent::presets::save(&path, &presets)?;
+    Ok(id)
+}
+#[tauri::command]
+fn agent_remove_preset(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    kind: String,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::presets_path(&app)?;
+    let mut presets = agent::presets::load(&path)?;
+    let removed = match kind.as_str() {
+        "role" => drop_by(&mut presets.roles, |item| item.id == id),
+        "skill" => drop_by(&mut presets.skills, |item| item.id == id),
+        "task" => drop_by(&mut presets.tasks, |item| item.id == id),
+        _ => return Err("未知的预设类型".into()),
+    };
+    if !removed {
+        return Err("预设不存在".into());
     }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(
-        std::fs::read(path).map_err(|_| "无法读取图片")?,
-    ))
-    .with_guessed_format()
-    .map_err(|_| "图片格式无效")?;
-    if !matches!(
-        reader.format(),
-        Some(image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP)
-    ) {
-        return Err("仅支持 PNG、JPEG 和 WebP".into());
-    }
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(8192);
-    limits.max_image_height = Some(8192);
-    limits.max_alloc = Some(128 * 1024 * 1024);
-    reader.limits(limits);
-    let img = reader
-        .decode()
-        .map_err(|_| "图片损坏或尺寸过大")?
-        .thumbnail(1920, 1200);
-    let mut output = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut output, image::ImageFormat::Png)
-        .map_err(|_| "无法处理图片")?;
-    let value = format!(
-        "data:image/png;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(output.into_inner())
-    );
-    if value.len() > 12 * 1024 * 1024 {
-        return Err("图片处理后仍过大，请选择较小图片".into());
-    }
-    Ok(value)
+    agent::presets::save(&path, &presets)
+}
+#[tauri::command]
+fn agent_memories(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<Vec<agent::memory::Memory>, String> {
+    main_only(&window)?;
+    Ok(agent::memory::load(&agent::memory_path(&app)?)?.entries)
+}
+#[tauri::command]
+fn agent_save_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: Option<String>,
+    content: String,
+) -> Result<agent::memory::Memory, String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    let entry = agent::memory::upsert(&mut book, id, &content)?;
+    agent::memory::save(&path, &book)?;
+    Ok(entry)
+}
+#[tauri::command]
+fn agent_remove_memory(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::memory_path(&app)?;
+    let mut book = agent::memory::load(&path)?;
+    agent::memory::remove(&mut book, &id)?;
+    agent::memory::save(&path, &book)
+}
+#[tauri::command]
+fn agent_set_role(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    role_id: Option<String>,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.role_id = role_id;
+    conversation.updated_at = agent::store::now();
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+fn agent_pin(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let path = agent::path(&app)?;
+    let mut book = agent::store::load(&path)?;
+    let conversation = agent::store::find_mut(&mut book, &id)?;
+    conversation.pinned = pinned;
+    agent::store::save(&path, &book)
+}
+#[tauri::command]
+async fn agent_tools(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<agent::tools::ToolInfo>, String> {
+    main_only(&window)?;
+    Ok(state.agent.tool_infos(&app).await)
 }
 
 pub fn run() {
@@ -889,9 +1627,42 @@ pub fn run() {
             school_submit_evaluations,
             school_cancel_evaluations,
             list_model_providers,
+            list_provider_models,
             save_model_provider,
             remove_model_provider,
             select_model_provider,
+            save_provider_models,
+            set_provider_model,
+            provider_balance,
+            test_provider,
+            reveal_provider_key,
+            list_mcp_servers,
+            save_mcp_server,
+            remove_mcp_server,
+            set_mcp_server_enabled,
+            probe_mcp_server,
+            mcp_catalog,
+            install_mcp_entry,
+            agent_list,
+            agent_workspaces,
+            agent_create_workspace,
+            agent_set_workspace,
+            agent_get,
+            agent_new,
+            agent_delete,
+            agent_rename,
+            agent_send,
+            agent_cancel,
+            agent_tools,
+            agent_presets,
+            agent_save_preset,
+            agent_remove_preset,
+            agent_memories,
+            agent_save_memory,
+            agent_remove_memory,
+            agent_set_role,
+            agent_pin,
+            personal_image_source,
             read_personal_image,
             load_config,
             save_config,
@@ -911,6 +1682,8 @@ pub fn run() {
             logout,
             save_api_key,
             query_timetable,
+            refresh_direct_session,
+            check_network,
             open_external
         ])
         .run(tauri::generate_context!())

@@ -1,6 +1,7 @@
 [package]
 name = "xjtu-launcher"
-version = "0.1.0"
+version = "0.3.1"
+license = "MIT"
 description = "A local campus workspace"
 edition = "2021"
 
@@ -20,10 +21,10 @@ sha2 = "0.10"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "cookies"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "cookies", "stream"] }
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 url = "2"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "process", "io-util", "time", "rt", "macros"] }
 tempfile = "3"
 
 reqwest_cookie_store = "0.8"
@@ -40,3 +41,25 @@ regex = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 aes-gcm = "0.10"
 cookie_store = "0.21"
+
+# Image codecs are very slow unoptimised; keep avatar and wallpaper import responsive under `tauri dev`.
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-core]
+opt-level = 3
+[profile.dev.package.image-webp]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+[profile.dev.package.adler2]
+opt-level = 3
+[profile.dev.package.simd-adler32]
+opt-level = 3
