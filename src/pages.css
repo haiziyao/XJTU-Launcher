@@ -121,6 +121,24 @@
 }
 
 /* Personal: local MCP endpoint. Detail lines sit under the row's icon column. */
+/* Height of an auto-sized block is not animatable directly; a 0fr/1fr grid row
+   is, so the card grows and shrinks instead of snapping. */
+.expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--duration-slow) var(--ease-out),
+    opacity var(--duration) ease;
+}
+.expand.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.expand-inner {
+  min-height: 0;
+  overflow: hidden;
+}
 .connect-detail {
   display: grid;
   gap: 8px;

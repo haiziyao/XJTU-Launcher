@@ -342,78 +342,103 @@ onBeforeUnmount(() => {
           @toggle="toggleServer"
         />
       </SettingRow>
-      <p v-if="serverError && !config.mcpServerEnabled" class="connect-error">
-        {{ serverError }}
-      </p>
-      <div v-if="config.mcpServerEnabled" class="connect-detail">
-        <div class="connect-line">
-          <span class="connect-label">端口</span>
-          <input
-            v-model="portDraft"
-            class="text-field connect-port"
-            inputmode="numeric"
-            maxlength="5"
-            aria-label="MCP 端口"
-            :disabled="busy"
-          />
-          <UiButton size="sm" :disabled="busy || !portChanged" @click="applyPort">应用</UiButton>
-        </div>
-        <div v-if="!status.running" class="connect-error">
-          <span>{{ status.error || serverError || 'MCP 服务未启动' }}</span>
-          <UiButton variant="ghost" size="sm" :disabled="busy" @click="retryStart">
-            <RefreshCw :size="13" />重试
-          </UiButton>
-        </div>
-        <template v-else>
-          <div class="connect-line">
-            <span class="connect-label">地址</span>
-            <code>{{ status.address }}</code>
-            <UiButton variant="ghost" size="sm" @click="copy(status.address, 'address')">
-              <Copy :size="13" />{{ copied === 'address' ? '已复制' : '复制' }}
-            </UiButton>
-          </div>
-          <div class="connect-line">
-            <span class="connect-label">命令</span>
-            <code>{{ command }}</code>
-            <UiButton variant="ghost" size="sm" @click="copy(command, 'command')">
-              <Copy :size="13" />{{ copied === 'command' ? '已复制' : '复制' }}
-            </UiButton>
-          </div>
-          <div class="connect-tools">
-            <span>已开放 {{ openCount }} 个工具 · 仅本机访问</span>
-            <UiButton variant="ghost" size="sm" @click="showTools = !showTools">
-              {{ showTools ? '收起工具' : '查看工具' }}
-            </UiButton>
-          </div>
-          <div v-if="showTools" class="tool-panel">
-            <div class="tool-head">
-              <span>未勾选的工具不会出现在 tools/list 中</span>
-              <UiButton variant="ghost" size="sm" :disabled="probing" @click="probe">
-                {{ probing ? '检查中…' : '检查可达性' }}
+      <Transition name="drop">
+        <p v-if="serverError && !config.mcpServerEnabled" class="connect-error">
+          {{ serverError }}
+        </p>
+      </Transition>
+      <!-- Kept in the DOM so opening and closing can animate the auto height. -->
+      <div
+        class="expand"
+        :class="{ open: config.mcpServerEnabled }"
+        :inert="!config.mcpServerEnabled"
+      >
+        <div class="expand-inner">
+          <div class="connect-detail">
+            <div class="connect-line">
+              <span class="connect-label">端口</span>
+              <input
+                v-model="portDraft"
+                class="text-field connect-port"
+                inputmode="numeric"
+                maxlength="5"
+                aria-label="MCP 端口"
+                :disabled="busy"
+              />
+              <UiButton size="sm" :disabled="busy || !portChanged" @click="applyPort"
+                >应用</UiButton
+              >
+            </div>
+            <!-- Turning the switch off stops the listener; keep the old address
+                 visible while the block collapses instead of flashing an error. -->
+            <div v-if="!status.running && config.mcpServerEnabled" class="connect-error">
+              <span>{{ status.error || serverError || 'MCP 服务未启动' }}</span>
+              <UiButton variant="ghost" size="sm" :disabled="busy" @click="retryStart">
+                <RefreshCw :size="13" />重试
               </UiButton>
             </div>
-            <p v-if="probeState" class="tool-probe" :class="probeState.tone">
-              {{ probeState.text }}
-            </p>
-            <div v-for="group in toolGroups" :key="group.title" class="tool-group">
-              <p class="tool-group-title">{{ group.title }}</p>
-              <label v-for="tool in group.tools" :key="tool.name" class="tool-row">
-                <input
-                  type="checkbox"
-                  :checked="isToolOpen(tool.name)"
-                  @change="onToolToggle(tool.name, $event)"
-                />
-                <span class="tool-copy">
-                  <code>{{ tool.name }}</code>
-                  <small>{{ tool.description }}</small>
-                </span>
-                <span class="tool-state" :class="toolState(tool.name).tone">
-                  {{ toolState(tool.name).text }}
-                </span>
-              </label>
-            </div>
+            <template v-else>
+              <div class="connect-line">
+                <span class="connect-label">地址</span>
+                <code>{{ status.address }}</code>
+                <UiButton variant="ghost" size="sm" @click="copy(status.address, 'address')">
+                  <Copy :size="13" />{{ copied === 'address' ? '已复制' : '复制' }}
+                </UiButton>
+              </div>
+              <div class="connect-line">
+                <span class="connect-label">命令</span>
+                <code>{{ command }}</code>
+                <UiButton variant="ghost" size="sm" @click="copy(command, 'command')">
+                  <Copy :size="13" />{{ copied === 'command' ? '已复制' : '复制' }}
+                </UiButton>
+              </div>
+              <div class="connect-toolbox">
+                <div class="connect-tools">
+                  <span>已开放 {{ openCount }} 个工具 · 仅本机访问</span>
+                  <UiButton variant="ghost" size="sm" @click="showTools = !showTools">
+                    {{ showTools ? '收起工具' : '查看工具' }}
+                  </UiButton>
+                </div>
+                <div class="expand" :class="{ open: showTools }" :inert="!showTools">
+                  <div class="expand-inner">
+                    <div class="tool-panel">
+                      <div class="tool-head">
+                        <span>未勾选的工具不会出现在 tools/list 中</span>
+                        <UiButton variant="ghost" size="sm" :disabled="probing" @click="probe">
+                          {{ probing ? '检查中…' : '检查可达性' }}
+                        </UiButton>
+                      </div>
+                      <div class="expand" :class="{ open: !!probeState }">
+                        <div class="expand-inner">
+                          <p class="tool-probe" :class="probeState?.tone" aria-live="polite">
+                            {{ probeState?.text }}
+                          </p>
+                        </div>
+                      </div>
+                      <div v-for="group in toolGroups" :key="group.title" class="tool-group">
+                        <p class="tool-group-title">{{ group.title }}</p>
+                        <label v-for="tool in group.tools" :key="tool.name" class="tool-row">
+                          <input
+                            type="checkbox"
+                            :checked="isToolOpen(tool.name)"
+                            @change="onToolToggle(tool.name, $event)"
+                          />
+                          <span class="tool-copy">
+                            <code>{{ tool.name }}</code>
+                            <small>{{ tool.description }}</small>
+                          </span>
+                          <span class="tool-state" :class="toolState(tool.name).tone">
+                            {{ toolState(tool.name).text }}
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
-        </template>
+        </div>
       </div>
       <SettingRow title="Web 模式" description="在浏览器中查看校园数据。">
         <template #leading>
