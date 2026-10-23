@@ -48,15 +48,17 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 ## 下载安装
 
-前往 **[Releases](https://github.com/haiziyao/XJTU-Launcher/releases/latest)** 下载对应安装包：
+先确认你的电脑，再点对应的链接，下载后直接安装即可：
 
-| 平台                           | 安装包       |
-| ------------------------------ | ------------ |
-| macOS（Apple Silicon / Intel） | `.dmg`       |
-| Windows x64                    | `-setup.exe` |
+- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_aarch64.dmg)**
+- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_x64.dmg)**
+- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.3.1/XJTU.Launcher_0.3.1_x64-setup.exe)**
 
-- macOS 自动更新已实测通过（0.1.1 → 0.3.1）；Windows 安装与升级仍待实机验收。
-- 安装包目前**没有系统代码签名**：macOS 首次打开可能提示“无法验证开发者”，Windows 可能出现 SmartScreen 提示；签名方案与进度见 [docs/SIGNING.md](docs/SIGNING.md)。
+不确定自己是什么芯片？Mac 左上角 →「关于本机」，看“芯片”一栏：写着 Apple M 系列就选第一个，写着 Intel 就选第二个。
+
+其他版本、更新说明和历史安装包都在 **[Releases 页面](https://github.com/haiziyao/XJTU-Launcher/releases)**。
+
+> 安装包目前**没有系统代码签名**：macOS 首次打开可能提示“无法验证开发者”（右键 →「打开」即可），Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [docs/SIGNING.md](docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。
 
 ## 开发
 
