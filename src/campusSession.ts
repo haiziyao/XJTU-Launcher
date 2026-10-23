@@ -30,3 +30,31 @@ export async function directQuery<T>(query: SchoolQuery): Promise<T> {
     return (await bridge.schoolQuery(query)) as T;
   }
 }
+
+// Sites such as 思源学堂 and the venue system log in separately from the
+// academic system, so the first query of a session may have to sign in with
+// the saved password. Concurrent opens of one service share that login.
+const sitePending = new Map<string, Promise<void>>();
+const missingSession = (error: unknown) =>
+  /请先完成|失效/.test(error instanceof Error ? error.message : String(error));
+
+export async function siteQuery<T>(
+  query: SchoolQuery,
+  site: string,
+  refresh: () => Promise<boolean>,
+): Promise<T> {
+  try {
+    return (await bridge.schoolQuery(query)) as T;
+  } catch (error) {
+    if (!missingSession(error)) throw error;
+    let pending = sitePending.get(site);
+    if (!pending) {
+      pending = refresh()
+        .then(() => undefined)
+        .finally(() => sitePending.delete(site));
+      sitePending.set(site, pending);
+    }
+    await pending;
+    return (await bridge.schoolQuery(query)) as T;
+  }
+}

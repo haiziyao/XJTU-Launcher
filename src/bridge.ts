@@ -159,6 +159,23 @@ export const bridge = {
     requireNative();
     return invoke('refresh_direct_session');
   },
+  // Each campus service keeps its own cookie or token session.
+  async refreshProfileSession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_profile_session');
+  },
+  async refreshLmsSession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_lms_session');
+  },
+  async refreshLibrarySession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_library_session');
+  },
+  async refreshVenueSession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_venue_session');
+  },
   // Native campus authentication and local account management.
   async accounts(): Promise<CampusAccountList> {
     requireNative();

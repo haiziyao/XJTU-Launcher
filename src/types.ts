@@ -198,7 +198,16 @@ export type SchoolQuery =
   | { type: 'courses'; term: string | null; name: string; campus: string }
   | { type: 'evaluations'; finished: boolean }
   | { type: 'fitness' }
-  | { type: 'fitnessScore'; year: string };
+  | { type: 'fitnessScore'; year: string }
+  | { type: 'profile' }
+  | { type: 'lmsCourses' }
+  | { type: 'lmsActivities'; course: number }
+  | { type: 'libraryFloors' }
+  | { type: 'libraryAreas'; floor: string }
+  | { type: 'librarySeats'; area: string }
+  | { type: 'venueList' }
+  | { type: 'venueSlots'; venue: number; date: string }
+  | { type: 'venueOrders' };
 export interface GradeRow {
   id: string;
   name: string;
@@ -365,6 +374,122 @@ export interface CardTransactions {
   page: number;
   total: number;
   rows: CardTransaction[];
+}
+export interface ProfileInfo {
+  name: string;
+  studentNo: string;
+  sex: string;
+  birthdate: string;
+  grade: string;
+  campus: string;
+  academy: string;
+  department: string;
+  major: string;
+  className: string;
+  schoolingLen: string;
+  enterSchoolDate: string;
+  cardId: string;
+  pictureUrl: string;
+  classTeacher: string;
+  classTeacherPhone: string;
+  counselor: string;
+  counselorPhone: string;
+  counselorOffice: string;
+}
+export interface LmsCourse {
+  id: number;
+  name: string;
+  code: string;
+  type: string;
+  credit: number | null;
+  class: string;
+  department: string;
+  instructors: string[];
+  year: string;
+  term: string;
+  start: string;
+  end: string;
+  published: boolean;
+}
+export interface LmsCourses {
+  courses: LmsCourse[];
+}
+export interface LmsActivity {
+  id: number;
+  type: string;
+  title: string;
+  start: string;
+  end: string;
+  published: boolean;
+  group: boolean;
+}
+export interface LmsActivities {
+  course: number;
+  activities: LmsActivity[];
+}
+export interface LibraryFloor {
+  campus: string;
+  code: string;
+  name: string;
+}
+export interface LibraryArea {
+  code: string;
+  name: string;
+}
+export interface LibraryAreas {
+  floor: string;
+  areas: LibraryArea[];
+}
+export interface LibrarySeat {
+  id: string;
+  free: boolean;
+}
+export interface LibrarySeats {
+  area: string;
+  seats: LibrarySeat[];
+  stats: { code: string; total: number; free: number }[];
+}
+export interface Venue {
+  id: number;
+  name: string;
+  address: string;
+  category: string;
+  advanceDays: number;
+  advanceCount: number;
+}
+export interface VenueList {
+  venues: Venue[];
+}
+export interface VenueSlot {
+  area: string;
+  stockId: number;
+  time: string;
+  price: number;
+  using: number;
+  total: number;
+  available: boolean;
+}
+export interface VenueSlots {
+  venue: number;
+  date: string;
+  slots: VenueSlot[];
+}
+export interface VenueOrderDetail {
+  date: string;
+  time: string;
+  area: string;
+  venue: string;
+}
+export interface VenueOrder {
+  id: string;
+  status: number;
+  statusText: string;
+  created: string;
+  price: number;
+  details: VenueOrderDetail[];
+}
+export interface VenueOrders {
+  orders: VenueOrder[];
 }
 export interface SchoolFeature {
   id: string;

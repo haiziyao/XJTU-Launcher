@@ -28,6 +28,10 @@ import CampusRooms from './campus/CampusRooms.vue';
 import CampusCourses from './campus/CampusCourses.vue';
 import CampusEvaluations from './campus/CampusEvaluations.vue';
 import CampusFitness from './campus/CampusFitness.vue';
+import CampusProfile from './campus/CampusProfile.vue';
+import CampusLms from './campus/CampusLms.vue';
+import CampusLibrary from './campus/CampusLibrary.vue';
+import CampusVenue from './campus/CampusVenue.vue';
 import { bridge } from '../bridge';
 import { directQuery, ensureDirectSession } from '../campusSession';
 import type {
@@ -122,7 +126,13 @@ const SECTIONS: { title: string; tools: Tool[] }[] = [
         icon: CreditCard,
         tone: 'green',
       },
-      { id: 'library', name: '图书馆', description: '借阅与座位', icon: BookMarked, tone: 'teal' },
+      {
+        id: 'library',
+        name: '图书馆',
+        description: '楼层与实时座位',
+        icon: BookMarked,
+        tone: 'teal',
+      },
       {
         id: 'fitness',
         name: '体测成绩',
@@ -133,12 +143,12 @@ const SECTIONS: { title: string; tools: Tool[] }[] = [
       {
         id: 'venues',
         name: '场馆预约',
-        description: '场馆查询与预约',
+        description: '场馆时段与我的预订',
         icon: MapPin,
         tone: 'violet',
       },
       { id: 'profile', name: '学籍档案', description: '个人学籍信息', icon: IdCard, tone: 'gray' },
-      { id: 'lms', name: '思源学堂', description: '课程资料与作业', icon: BookOpen, tone: 'blue' },
+      { id: 'lms', name: '思源学堂', description: '课程与活动', icon: BookOpen, tone: 'blue' },
     ],
   },
 ];
@@ -153,6 +163,10 @@ const READY = [
   'courses',
   'evaluations',
   'fitness',
+  'profile',
+  'lms',
+  'library',
+  'venues',
 ];
 const TOOLS = SECTIONS.flatMap((section) => section.tools);
 const pinnedTools = computed(() =>
@@ -193,11 +207,15 @@ const backend = (id: string) => features.value.find((feature) => feature.id === 
 const directReady = ref(false);
 const hasDirect = computed(() => props.directSession || directReady.value);
 // These services have no WebVPN route; a direct login unlocks them.
-const DIRECT_ONLY = ['card', 'fitness', 'profile'];
+const DIRECT_ONLY = ['card', 'fitness'];
+// Plain-HTTP services are reachable only from the campus network.
+const CAMPUS_ONLY = ['library', 'venues'];
 const vpnBlocked = (id: string) =>
   props.accessMode === 'webvpn' && !hasDirect.value && DIRECT_ONLY.includes(id);
+const campusBlocked = (id: string) => props.accessMode === 'webvpn' && CAMPUS_ONLY.includes(id);
 const available = (id: string) => READY.includes(id);
 const badge = (id: string) => {
+  if (campusBlocked(id)) return '需校园网';
   if (vpnBlocked(id)) return 'VPN 下不可用';
   if (available(id)) return '可用';
   const state = backend(id);
@@ -233,6 +251,10 @@ function range(days: number): [string, string] {
 
 async function open(id: string) {
   if (!available(id)) return;
+  if (campusBlocked(id)) {
+    error.value = '图书馆和场馆系统只支持校园网直连，请连接校园网后重试';
+    return;
+  }
   error.value = '';
   if (!(await openDirect(id))) return;
   tool.value = id;
@@ -555,6 +577,10 @@ onMounted(async () => {
       <CampusCourses v-else-if="tool === 'courses'" />
       <CampusEvaluations v-else-if="tool === 'evaluations'" />
       <CampusFitness v-else-if="tool === 'fitness'" />
+      <CampusProfile v-else-if="tool === 'profile'" />
+      <CampusLms v-else-if="tool === 'lms'" />
+      <CampusLibrary v-else-if="tool === 'library'" />
+      <CampusVenue v-else-if="tool === 'venues'" />
 
       <template v-else-if="tool === 'calendar'">
         <SettingGroup title="校历">
