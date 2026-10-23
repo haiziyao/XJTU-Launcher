@@ -44,6 +44,9 @@ impl Client {
             .unwrap_or(&account.cookies);
         let transport = Transport::new(Some(saved))?;
         let http = Http::builder()
+            // Without a browser user agent CAS answers with its login page
+            // instead of the service ticket, which looks like a success.
+            .user_agent(crate::network::USER_AGENT)
             .cookie_provider(transport.cookies.clone())
             .redirect(Policy::custom(|attempt| {
                 if campus_host(attempt.url()) {
@@ -60,7 +63,8 @@ impl Client {
             .send()
             .await
             .map_err(|_| "无法连接体测服务，请检查网络后重试")?;
-        if !response.status().is_success() {
+        if !response.status().is_success() || response.url().host_str() == Some("login.xjtu.edu.cn")
+        {
             return Err("体测登录态已失效，请重新登录校园账号".into());
         }
         let client = Self { http };
@@ -162,5 +166,36 @@ fn text(value: Option<&Value>) -> Option<String> {
         Value::String(text) => Some(text.trim().to_string()).filter(|text| !text.is_empty()),
         Value::Number(number) => Some(number.to_string()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Manual probe: reads the local account file but prints no cookies, token
+    /// or password values, only the shape of the session and the server reply.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_fitness_session_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        println!(
+            "mode={:?} has_direct={} has_saved_password={} has_sites={}",
+            account.mode,
+            account.direct_cookies.is_some(),
+            account.password.is_some(),
+            account.sites.len()
+        );
+        match Client::connect(account).await {
+            Ok(client) => match client.years().await {
+                Ok(list) => println!("years={}", list.len()),
+                Err(error) => println!("years error: {error}"),
+            },
+            Err(error) => println!("connect error: {error}"),
+        }
     }
 }
