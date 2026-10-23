@@ -993,9 +993,18 @@ async fn open_external(
             .open_url(url.as_str(), None::<&str>)
             .map_err(|_| "无法打开系统浏览器".into());
     }
+    open_campus_url(&app, &state, url).await
+}
+
+/// Opens a school URL in the native campus window with the active account.
+async fn open_campus_url(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+    url: url::Url,
+) -> Result<(), String> {
     // Keep account changes serialized with native cookie import and window creation.
     let _guard = state.auth_lock.lock().await;
-    let book = accounts::load(&accounts_path(&app)?)?;
+    let book = accounts::load(&accounts_path(app)?)?;
     let account = book.active().ok_or("请先添加并登录校园账号")?;
     let session = campus_browser::Session {
         account_id: account.id.clone(),
@@ -1007,11 +1016,54 @@ async fn open_external(
         mode: account.mode,
         cookies: account.cookies.clone(),
     };
+    let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         campus_browser::open(&app, session, url).map(|_| ())
     })
     .await
     .map_err(|_| "校园窗口初始化失败")?
+}
+
+/// Resolve a 思源学堂 attachment and show it in the campus window. The blob
+/// redirects to the media host, which serves the file without LMS cookies.
+#[tauri::command]
+async fn lms_open_file(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    upload_id: u64,
+) -> Result<(), String> {
+    main_only(&window)?;
+    require_school_feature(&app, "lms")?;
+    let _service_guard = state.school_lock.lock().await;
+    let (account, _) = school_account(&app, &state).await?;
+    let url = school::lms::Client::connect(&account)?
+        .open_file(upload_id)
+        .await?;
+    open_campus_url(&app, &state, url).await
+}
+
+/// Stream a 思源学堂 attachment to a user-chosen path.
+#[tauri::command]
+async fn lms_save_file(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    upload_id: u64,
+    path: String,
+) -> Result<u64, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "lms")?;
+    let path = std::path::PathBuf::from(path);
+    if !path.is_absolute() {
+        return Err("请选择有效的保存位置".into());
+    }
+    // No school lock here: the body comes from the public media host and a
+    // large download must not block other campus queries for minutes.
+    let (account, _) = school_account(&app, &state).await?;
+    school::lms::Client::connect(&account)?
+        .save_file(upload_id, &path)
+        .await
 }
 
 #[tauri::command]
@@ -1823,6 +1875,8 @@ pub fn run() {
             updates::restart_after_update,
             school_catalog,
             school_query,
+            lms_open_file,
+            lms_save_file,
             school_prepare_evaluations,
             school_submit_evaluations,
             school_cancel_evaluations,

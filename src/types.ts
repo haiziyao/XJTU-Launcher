@@ -202,6 +202,7 @@ export type SchoolQuery =
   | { type: 'profile' }
   | { type: 'lmsCourses' }
   | { type: 'lmsActivities'; course: number }
+  | { type: 'lmsActivity'; activity: number }
   | { type: 'libraryFloors' }
   | { type: 'libraryAreas'; floor: string }
   | { type: 'librarySeats'; area: string }
@@ -426,6 +427,39 @@ export interface LmsActivity {
 export interface LmsActivities {
   course: number;
   activities: LmsActivity[];
+}
+export interface LmsUpload {
+  id: number;
+  name: string;
+  size: number | null;
+  type: string;
+  allowDownload: boolean;
+}
+export interface LmsActivityDetail {
+  id: number;
+  courseId: number | null;
+  type: string;
+  title: string;
+  start: string;
+  end: string;
+  published: boolean;
+  description: string;
+  uploads: LmsUpload[];
+  submitByGroup: boolean;
+  submitCount: number | null;
+  submitTimes: number | null;
+  averageScore: number | null;
+  highestScore: number | null;
+  lowestScore: number | null;
+  scoredCount: number | null;
+  lessonStart: string;
+  lessonEnd: string;
+  duration: number | null;
+  replayCode: string;
+  liveName: string;
+  liveStart: string;
+  liveEnd: string;
+  player: string;
 }
 export interface LibraryFloor {
   campus: string;

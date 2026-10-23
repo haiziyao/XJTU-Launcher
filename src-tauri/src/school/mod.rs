@@ -5,7 +5,7 @@ mod card;
 pub mod evaluation;
 mod fitness;
 mod library;
-mod lms;
+pub(crate) mod lms;
 mod profile;
 mod queries;
 mod transport;

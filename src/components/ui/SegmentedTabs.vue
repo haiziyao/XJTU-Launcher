@@ -3,6 +3,8 @@ const props = defineProps<{
   modelValue: string;
   tabs: readonly { id: string; title: string }[];
   label: string;
+  /** Tighter tabs for in-page filters that carry counts or many entries. */
+  compact?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 function key(event: KeyboardEvent, index: number) {
@@ -23,7 +25,7 @@ function key(event: KeyboardEvent, index: number) {
 }
 </script>
 <template>
-  <div class="segmented-tabs" role="tablist" :aria-label="label">
+  <div class="segmented-tabs" :class="{ compact }" role="tablist" :aria-label="label">
     <button
       v-for="(tab, index) in tabs"
       :key="tab.id"
@@ -71,5 +73,22 @@ button.active {
 }
 button:active {
   transform: scale(0.98);
+}
+/* Compact tabs sit inside a page section: no fixed width, no trailing gap,
+   and they scroll sideways instead of squeezing when there are many. */
+.segmented-tabs.compact {
+  max-width: 100%;
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmented-tabs.compact::-webkit-scrollbar {
+  display: none;
+}
+.compact button {
+  min-width: 0;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 </style>

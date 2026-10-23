@@ -61,6 +61,9 @@ pub enum Query {
     LmsActivities {
         course: u64,
     },
+    LmsActivity {
+        activity: u64,
+    },
     LibraryFloors,
     LibraryAreas {
         floor: String,
@@ -88,7 +91,7 @@ impl Query {
             Self::Card | Self::CardTransactions { .. } => "card",
             Self::Fitness | Self::FitnessScore { .. } => "fitness",
             Self::Profile => "profile",
-            Self::LmsCourses | Self::LmsActivities { .. } => "lms",
+            Self::LmsCourses | Self::LmsActivities { .. } | Self::LmsActivity { .. } => "lms",
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
             }
@@ -151,6 +154,9 @@ impl Query {
             }
             Self::LmsActivities { course } if !(1..=9_999_999).contains(course) => {
                 return Err("课程编号无效".into());
+            }
+            Self::LmsActivity { activity } if !(1..=9_999_999_999).contains(activity) => {
+                return Err("活动编号无效".into());
             }
             Self::LibraryAreas { floor } if !super::library::valid_floor(floor) => {
                 return Err("请选择有效的图书馆楼层".into());
@@ -285,12 +291,16 @@ pub async fn query(
         let account = account.ok_or("请先登录校园账号")?;
         return Ok((super::profile::query(&account).await?, None));
     }
-    if matches!(query, Query::LmsCourses | Query::LmsActivities { .. }) {
+    if matches!(
+        query,
+        Query::LmsCourses | Query::LmsActivities { .. } | Query::LmsActivity { .. }
+    ) {
         let account = account.ok_or("请先登录校园账号")?;
         let client = super::lms::Client::connect(&account)?;
         let value = match query {
             Query::LmsCourses => client.courses().await?,
             Query::LmsActivities { course } => client.activities(course).await?,
+            Query::LmsActivity { activity } => client.activity(activity).await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -425,6 +435,7 @@ pub async fn query(
         Query::Profile
         | Query::LmsCourses
         | Query::LmsActivities { .. }
+        | Query::LmsActivity { .. }
         | Query::LibraryFloors
         | Query::LibraryAreas { .. }
         | Query::LibrarySeats { .. }

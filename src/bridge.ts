@@ -49,6 +49,9 @@ export const bridge = {
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
   schoolQuery: (query: SchoolQuery) => invoke<unknown>('school_query', { query }),
+  lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
+  lmsSaveFile: (uploadId: number, path: string) =>
+    invoke<number>('lms_save_file', { uploadId, path }),
   schoolPrepareEvaluations: (input: EvaluationPrepare) =>
     invoke<EvaluationPreview>('school_prepare_evaluations', { input }),
   schoolSubmitEvaluations: (previewId: string) =>
