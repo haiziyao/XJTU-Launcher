@@ -29,6 +29,13 @@ export const defaultConfig = (): AppConfig => ({
   mcpServerEnabled: false,
   mcpServerPort: 39217,
   mcpServerDisabledTools: [],
+  petDesktopEnabled: true,
+  petCharacter: 'deepseek-girl',
+  petBarStyle: 'glass-light',
+  petBarHidden: false,
+  petBubbleEnabled: true,
+  petSources: ['campus', 'agent', 'update'],
+  petPosition: null,
 });
 
 export const campusLinks = [

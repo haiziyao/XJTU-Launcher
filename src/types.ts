@@ -28,6 +28,41 @@ export interface AppConfig {
   mcpServerPort: number;
   /** Built-in tools kept out of that endpoint. */
   mcpServerDisabledTools: string[];
+  /** Show the desktop pet after minimizing the main window. */
+  petDesktopEnabled: boolean;
+  /** Built-in pet id. */
+  petCharacter: string;
+  /** Notification bar material. */
+  petBarStyle: string;
+  /** Keep only the pet, without the notification bar. */
+  petBarHidden: boolean;
+  petBubbleEnabled: boolean;
+  /** Notification sources the bar may show. */
+  petSources: string[];
+  /** Last floating-window position in physical pixels. */
+  petPosition: [number, number] | null;
+}
+
+export interface PetDesktopSettings {
+  enabled: boolean;
+  character: string;
+  barStyle: string;
+  barHidden: boolean;
+  bubble: boolean;
+  sources: string[];
+  reduceMotion: boolean;
+  accent: string;
+}
+
+export interface PetNotification {
+  id: string;
+  source: string;
+  text: string;
+}
+
+export interface PetDesktopView {
+  settings: PetDesktopSettings;
+  notifications: PetNotification[];
 }
 
 export interface ExposeStatus {

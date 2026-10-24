@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pet",
+  "description": "The floating desktop pet may drag its own window and listen to its own events, nothing else.",
+  "windows": ["pet"],
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}

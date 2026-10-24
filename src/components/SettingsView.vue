@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Check, Download, Home, Package, Pipette, SlidersHorizontal } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { Cat, Check, Download, Home, Package, Pipette, SlidersHorizontal } from 'lucide-vue-next';
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
 import { ACCENT_PRESETS, normalizeAccent } from '../theme';
@@ -15,14 +15,25 @@ import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
 
 import UiButton from './ui/UiButton.vue';
+import { bridge } from '../bridge';
+import deepseekGirl from '../assets/pets/deepseek-girl.webp';
+import whalechan from '../assets/pets/deepseek-whalechan.webp';
+import gptDragon from '../assets/pets/gpt-dragon-girl.webp';
+import claude from '../assets/pets/claude.webp';
 const props = defineProps<{
   config: AppConfig;
   saving: boolean;
-  initialSection?: 'appearance' | 'home' | 'plugins' | 'updates';
+  initialSection?: 'appearance' | 'home' | 'pet' | 'plugins' | 'updates';
   saveSource: (source: string | null) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
 const tab = ref<string>(props.initialSection || 'appearance');
+watch(
+  () => props.initialSection,
+  (section) => {
+    if (section) tab.value = section;
+  },
+);
 const accent = computed(() => normalizeAccent(props.config.accent));
 const customAccent = computed(() => !ACCENT_PRESETS.some((p) => p.value === accent.value));
 const currentPet = computed(() => normalizePet(props.config.pet));
@@ -36,9 +47,56 @@ function setAccent(value: string) {
 const sections = [
   { id: 'appearance', title: '外观与交互', icon: SlidersHorizontal },
   { id: 'home', title: '主页', icon: Home },
+  { id: 'pet', title: '桌面宠物', icon: Cat },
   { id: 'plugins', title: '插件服务', icon: Package },
   { id: 'updates', title: '软件更新', icon: Download },
 ] as const;
+
+const DESKTOP_PETS = [
+  { id: 'deepseek-girl', name: 'DeepSeek 娘', file: deepseekGirl, height: 2288 },
+  { id: 'deepseek-whalechan', name: '鲸鱼娘', file: whalechan, height: 2288 },
+  { id: 'gpt-dragon-girl', name: 'GPT 龙娘', file: gptDragon, height: 2288 },
+  { id: 'claude', name: 'Claude', file: claude, height: 1872 },
+] as const;
+
+const BAR_STYLES = [
+  { id: 'glass-light', name: '玻璃' },
+  { id: 'glass-dark', name: '深色玻璃' },
+  { id: 'solid', name: '纯白' },
+] as const;
+
+const PET_SOURCES = [
+  {
+    id: 'campus',
+    title: '校园通知',
+    description: '教务处、学生处等栏目出现新通知时提示',
+    off: false,
+  },
+  { id: 'agent', title: 'Agent 任务', description: '任务完成或出错时提示', off: false },
+  {
+    id: 'class',
+    title: '上课提醒',
+    description: '课表只有节次、没有上课时间，暂未接入',
+    off: true,
+  },
+  { id: 'update', title: '更新提示', description: '应用有可用更新时提示', off: false },
+] as const;
+
+function setDesktopPet(id: string) {
+  if (id !== props.config.petCharacter) emit('update', { ...props.config, petCharacter: id });
+}
+function setBarStyle(id: string) {
+  if (id !== props.config.petBarStyle) emit('update', { ...props.config, petBarStyle: id });
+}
+function toggleSource(id: string) {
+  const next = new Set(props.config.petSources);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  emit('update', { ...props.config, petSources: [...next] });
+}
+function previewPet() {
+  void bridge.petPreview();
+}
 </script>
 <template>
   <section class="desktop-page settings-page">
@@ -135,6 +193,102 @@ const sections = [
                   :disabled="saving"
                   @toggle="emit('update', { ...config, showSeconds: !config.showSeconds })"
                 />
+              </SettingRow>
+            </SettingGroup>
+          </div>
+          <div v-else-if="tab === 'pet'" key="pet">
+            <SettingGroup title="桌面宠物">
+              <SettingRow
+                title="最小化时显示桌宠"
+                description="主窗口最小化后出现浮动桌宠和通知横条；关闭窗口仍然是关闭"
+              >
+                <UiSwitch
+                  :checked="config.petDesktopEnabled"
+                  label="最小化时显示桌宠"
+                  :disabled="saving"
+                  @toggle="
+                    emit('update', { ...config, petDesktopEnabled: !config.petDesktopEnabled })
+                  "
+                />
+              </SettingRow>
+              <SettingRow title="角色" description="四只内置角色，之后可继续扩展">
+                <div class="pet-picker desk-pet-picker" role="radiogroup" aria-label="桌面宠物角色">
+                  <button
+                    v-for="item in DESKTOP_PETS"
+                    :key="item.id"
+                    type="button"
+                    class="pet-option"
+                    :class="{ active: config.petCharacter === item.id }"
+                    role="radio"
+                    :aria-checked="config.petCharacter === item.id"
+                    :disabled="saving"
+                    @click="setDesktopPet(item.id)"
+                  >
+                    <span class="desk-pet-art" aria-hidden="true">
+                      <i
+                        :style="{
+                          backgroundImage: `url(${item.file})`,
+                          backgroundSize: `1536px ${item.height}px`,
+                        }"
+                      />
+                    </span>
+                    <span>{{ item.name }}</span>
+                  </button>
+                </div>
+              </SettingRow>
+              <SettingRow title="横条风格" description="半透明玻璃、深色玻璃或纯白">
+                <div class="desk-styles" role="group" aria-label="横条风格">
+                  <button
+                    v-for="style in BAR_STYLES"
+                    :key="style.id"
+                    type="button"
+                    class="desk-style"
+                    :class="{ active: config.petBarStyle === style.id }"
+                    :aria-pressed="config.petBarStyle === style.id"
+                    :disabled="saving"
+                    @click="setBarStyle(style.id)"
+                  >
+                    {{ style.name }}
+                  </button>
+                </div>
+              </SettingRow>
+              <SettingRow title="只保留桌宠" description="隐藏通知横条，只显示桌宠">
+                <UiSwitch
+                  :checked="config.petBarHidden"
+                  label="只保留桌宠"
+                  :disabled="saving"
+                  @toggle="emit('update', { ...config, petBarHidden: !config.petBarHidden })"
+                />
+              </SettingRow>
+              <SettingRow title="台词气泡" description="和桌宠互动时冒出一句短台词">
+                <UiSwitch
+                  :checked="config.petBubbleEnabled"
+                  label="台词气泡"
+                  :disabled="saving"
+                  @toggle="
+                    emit('update', { ...config, petBubbleEnabled: !config.petBubbleEnabled })
+                  "
+                />
+              </SettingRow>
+            </SettingGroup>
+            <SettingGroup title="桌面通知">
+              <SettingRow
+                v-for="source in PET_SOURCES"
+                :key="source.id"
+                :title="source.title"
+                :description="source.description"
+              >
+                <span v-if="source.off" class="setting-value">暂不可用</span>
+                <UiSwitch
+                  v-else
+                  :checked="config.petSources.includes(source.id)"
+                  :label="source.title"
+                  :disabled="saving"
+                  @toggle="toggleSource(source.id)"
+                />
+              </SettingRow>
+              <SettingRow title="预览" description="不最小化主窗口，直接查看桌宠效果">
+                <UiButton size="sm" :disabled="saving" @click="previewPet">预览桌宠</UiButton>
               </SettingRow>
             </SettingGroup>
           </div>
@@ -254,6 +408,47 @@ const sections = [
   display: block;
   width: 40px;
   height: 40px;
+}
+.desk-pet-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0;
+}
+.desk-pet-art {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+}
+.desk-pet-art i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 192px;
+  height: 208px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  transform: scale(0.21);
+  transform-origin: top left;
+}
+.desk-styles {
+  display: flex;
+  gap: 6px;
+}
+.desk-style {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 11px;
+  cursor: pointer;
+}
+.desk-style.active {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-text);
 }
 .settings-layout {
   display: block;

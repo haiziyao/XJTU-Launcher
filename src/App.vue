@@ -72,8 +72,10 @@ const primaryNav = [
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
 }
-const settingsSection = ref<'appearance' | 'home' | 'plugins' | 'updates'>('appearance');
-function openSettings(section: 'appearance' | 'home' | 'plugins' | 'updates' = 'appearance') {
+const settingsSection = ref<'appearance' | 'home' | 'pet' | 'plugins' | 'updates'>('appearance');
+function openSettings(
+  section: 'appearance' | 'home' | 'pet' | 'plugins' | 'updates' = 'appearance',
+) {
   settingsSection.value = section;
   route.value = 'settings';
 }
@@ -186,6 +188,7 @@ const identity = computed(() =>
 );
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 let unlisten: (() => void) | undefined;
+const petUnlisteners: (() => void)[] = [];
 let timer: ReturnType<typeof setInterval> | undefined;
 let accountGeneration = 0;
 let disposed = false;
@@ -360,6 +363,20 @@ onMounted(async () => {
   } catch (e) {
     error.value = errorText(e);
   }
+  try {
+    const stops = await Promise.all([
+      bridge.onPetOpenSettings(() => {
+        if (!disposed) openSettings('pet');
+      }),
+      bridge.onPetConfigChanged((next) => {
+        if (!disposed) config.value = next;
+      }),
+    ]);
+    if (disposed) stops.forEach((stop) => stop());
+    else petUnlisteners.push(...stops);
+  } catch (e) {
+    error.value = errorText(e);
+  }
   ready.value = true;
   // Home can show today's courses right away from the stored timetable.
   void primeTimetable();
@@ -371,6 +388,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true;
   unlisten?.();
+  petUnlisteners.forEach((stop) => stop());
   if (timer) clearInterval(timer);
   if (petTimer) clearTimeout(petTimer);
   if (toastTimer) clearTimeout(toastTimer);

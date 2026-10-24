@@ -38,6 +38,7 @@ import type {
   AccountStatus,
   NetworkCheck,
   AppConfig,
+  PetDesktopView,
   AuthEvent,
   PluginList,
   Timetable,
@@ -408,6 +409,46 @@ export const bridge = {
   async onAgent(callback: (event: AgentEvent) => void): Promise<() => void> {
     requireNative();
     return listen<AgentEvent>('agent-event', (e) => callback(e.payload));
+  },
+  async petView(): Promise<PetDesktopView> {
+    requireNative();
+    return invoke('pet_view');
+  },
+  async petRestore(): Promise<void> {
+    requireNative();
+    return invoke('pet_restore');
+  },
+  async petOpenSettings(): Promise<void> {
+    requireNative();
+    return invoke('pet_open_settings');
+  },
+  async petSetBarHidden(hidden: boolean): Promise<PetDesktopView> {
+    requireNative();
+    return invoke('pet_set_bar_hidden', { hidden });
+  },
+  async petPreview(): Promise<void> {
+    requireNative();
+    return invoke('pet_preview');
+  },
+  async petPushNotification(source: string, text: string, key?: string): Promise<void> {
+    requireNative();
+    return invoke('pet_push_notification', { source, text, key: key ?? null });
+  },
+  async onPetNotifications(callback: () => void): Promise<() => void> {
+    requireNative();
+    return listen('pet-notifications', () => callback());
+  },
+  async onPetSettings(callback: () => void): Promise<() => void> {
+    requireNative();
+    return listen('pet-settings', () => callback());
+  },
+  async onPetOpenSettings(callback: () => void): Promise<() => void> {
+    requireNative();
+    return listen('pet-open-settings', () => callback());
+  },
+  async onPetConfigChanged(callback: (config: AppConfig) => void): Promise<() => void> {
+    requireNative();
+    return listen<AppConfig>('pet-config-changed', (e) => callback(e.payload));
   },
 };
 

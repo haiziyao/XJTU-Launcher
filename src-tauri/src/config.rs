@@ -53,6 +53,26 @@ pub struct AppConfig {
     /// ignored so a config written by an older build still loads.
     #[serde(default)]
     pub mcp_server_disabled_tools: Vec<String>,
+    /// Show the desktop pet after the main window is minimized.
+    #[serde(default = "default_true")]
+    pub pet_desktop_enabled: bool,
+    /// Built-in pet id; unknown ids fall back to the first character.
+    #[serde(default = "default_pet_character")]
+    pub pet_character: String,
+    /// Notification bar material: glass-light | glass-dark | solid.
+    #[serde(default = "default_pet_bar_style")]
+    pub pet_bar_style: String,
+    /// Keep only the pet, without the notification bar.
+    #[serde(default)]
+    pub pet_bar_hidden: bool,
+    #[serde(default = "default_true")]
+    pub pet_bubble_enabled: bool,
+    /// Notification sources the bar may show.
+    #[serde(default = "default_pet_sources")]
+    pub pet_sources: Vec<String>,
+    /// Last floating-window position in physical pixels.
+    #[serde(default)]
+    pub pet_position: Option<[i32; 2]>,
 }
 
 fn default_home_clock() -> String {
@@ -85,6 +105,25 @@ fn default_pet() -> String {
     "xixi".into()
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_pet_character() -> String {
+    "deepseek-girl".into()
+}
+
+fn default_pet_bar_style() -> String {
+    "glass-light".into()
+}
+
+fn default_pet_sources() -> Vec<String> {
+    ["campus", "agent", "update"]
+        .iter()
+        .map(|id| id.to_string())
+        .collect()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -112,6 +151,13 @@ impl Default for AppConfig {
             mcp_server_enabled: false,
             mcp_server_port: default_mcp_port(),
             mcp_server_disabled_tools: Vec::new(),
+            pet_desktop_enabled: true,
+            pet_character: default_pet_character(),
+            pet_bar_style: default_pet_bar_style(),
+            pet_bar_hidden: false,
+            pet_bubble_enabled: true,
+            pet_sources: default_pet_sources(),
+            pet_position: None,
         }
     }
 }
@@ -177,6 +223,23 @@ impl AppConfig {
             || {
                 let unique: std::collections::HashSet<_> = self.home_sections.iter().collect();
                 unique.len() != self.home_sections.len()
+            }
+            || ![
+                "deepseek-girl",
+                "deepseek-whalechan",
+                "gpt-dragon-girl",
+                "claude",
+            ]
+            .contains(&self.pet_character.as_str())
+            || !["glass-light", "glass-dark", "solid"].contains(&self.pet_bar_style.as_str())
+            || self.pet_sources.len() > 4
+            || self
+                .pet_sources
+                .iter()
+                .any(|source| !["campus", "agent", "class", "update"].contains(&source.as_str()))
+            || {
+                let unique: std::collections::HashSet<_> = self.pet_sources.iter().collect();
+                unique.len() != self.pet_sources.len()
             }
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 3
@@ -265,6 +328,30 @@ mod tests {
         assert!(!config.mcp_server_enabled);
         assert_eq!(config.mcp_server_port, 39217);
         assert!(config.mcp_server_disabled_tools.is_empty());
+    }
+
+    #[test]
+    fn desktop_pet_settings_default_and_reject_unknown_values() {
+        let config = AppConfig::default();
+        config.validate().unwrap();
+        assert!(config.pet_desktop_enabled);
+        assert_eq!(config.pet_character, "deepseek-girl");
+        assert_eq!(config.pet_bar_style, "glass-light");
+        let bad = AppConfig {
+            pet_character: "unknown".into(),
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
+        let bad = AppConfig {
+            pet_bar_style: "unknown".into(),
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
+        let bad = AppConfig {
+            pet_sources: vec!["campus".into(), "campus".into()],
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
     }
 
     #[test]

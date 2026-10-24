@@ -106,6 +106,14 @@ pub async fn check_app_update(
                 s.received = 0;
                 s.total = None;
             });
+            if let Some(available) = update.as_ref() {
+                crate::pet_desktop::notify(
+                    &app,
+                    "update",
+                    &format!("应用更新 {} 可用", available.version),
+                    Some(format!("app-update-{}", available.version)),
+                );
+            }
             *state.update.lock().map_err(|_| "更新服务繁忙")? = update;
         }
         Err(error) => publish(&window, &state, |s| {

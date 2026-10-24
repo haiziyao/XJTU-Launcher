@@ -17,6 +17,7 @@ mod vault;
 mod accounts;
 mod auth;
 mod network;
+mod pet_desktop;
 
 use serde::Serialize;
 use std::{
@@ -84,7 +85,7 @@ pub(crate) fn main_only(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 
-fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app
         .path()
         .app_config_dir()
@@ -120,7 +121,10 @@ fn save_config(
 ) -> Result<(), String> {
     main_only(&window)?;
     let _guard = state.config_lock.lock().map_err(|_| "配置服务繁忙")?;
-    config::save(&config_path(&app)?, &config)
+    config::save(&config_path(&app)?, &config)?;
+    drop(_guard);
+    pet_desktop::sync_config(&app, &config);
+    Ok(())
 }
 
 #[tauri::command]
@@ -2214,11 +2218,13 @@ async fn expose_probe(app: tauri::AppHandle, window: WebviewWindow) -> Result<()
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .manage(pet_desktop::State::default())
         .manage(updates::State::default())
         .manage(expose::State::default())
         .setup(|app| {
             vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
             campus_browser::install_menu(app.handle())?;
+            pet_desktop::initialize(app.handle())?;
             // Resume the endpoint only if the user left it on; a bind failure is
             // kept in the shared state so the personal page can show the reason.
             if let Ok(config) = config_path(app.handle()).and_then(|path| config::load(&path)) {
@@ -2233,6 +2239,16 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = campus_browser::close_all(window.app_handle());
+                // The hidden pet window would otherwise keep the process alive
+                // after the main window is closed.
+                if let Some(pet) = window.app_handle().get_webview_window(pet_desktop::LABEL) {
+                    let _ = pet.destroy();
+                }
+            }
+            if window.label() == pet_desktop::LABEL {
+                if let tauri::WindowEvent::Moved(position) = event {
+                    pet_desktop::remember_moved(window.app_handle(), *position);
+                }
             }
         })
         .plugin(tauri_plugin_dialog::init())
@@ -2250,6 +2266,12 @@ pub fn run() {
             school_catalog,
             school_query,
             cache::cache_read,
+            pet_desktop::pet_view,
+            pet_desktop::pet_restore,
+            pet_desktop::pet_open_settings,
+            pet_desktop::pet_set_bar_hidden,
+            pet_desktop::pet_push_notification,
+            pet_desktop::pet_preview,
             lms_open_file,
             lms_save_file,
             school_prepare_evaluations,

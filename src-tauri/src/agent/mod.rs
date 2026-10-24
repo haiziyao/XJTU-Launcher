@@ -244,6 +244,14 @@ pub async fn send(app: AppHandle, input: Send) -> Result<(), String> {
                         conversation_id: conversation_id.clone(),
                     },
                 );
+                let title = conversation.title.trim();
+                let title = if title.is_empty() { "对话" } else { title };
+                crate::pet_desktop::notify(
+                    &app,
+                    "agent",
+                    &format!("Agent · {title} 已完成"),
+                    Some(format!("agent-done-{request}")),
+                );
             }
             Err(error) if error == "__cancelled__" || cancel.load(Ordering::Relaxed) => {
                 let _ = app.emit(
@@ -260,6 +268,12 @@ pub async fn send(app: AppHandle, input: Send) -> Result<(), String> {
                         request_id: request.clone(),
                         message: error,
                     },
+                );
+                crate::pet_desktop::notify(
+                    &app,
+                    "agent",
+                    "Agent · 任务出错",
+                    Some(format!("agent-error-{request}")),
                 );
             }
         }
