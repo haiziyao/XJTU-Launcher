@@ -179,6 +179,8 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 2. 更新：新增可配置的 HTTPS 镜像更新源（「应用设置 → 软件更新 → 更新源」），留空继续使用内置 GitHub 地址；配置保存时校验 HTTPS、拒绝账号密码。发布说明在设置页和新的更新弹窗中按 Markdown 渲染；启动检查发现新版本会弹出说明，侧栏出现「发现新版本」入口，点击可重新打开弹窗并下载更新。镜像需要同时提供安装包和改写下载地址的 `latest.json`，见 RELEASING.md。未用真实更新包验证弹窗与下载链路。
 3. 主页：修复同时开启多个分区（尤其是插件与通知）时，卡片的 CSS `order` 把它们挤出预期网格位置的问题。两栏通知布局改为显式网格单元格，插件固定在下一行；网格启用 dense 自动填充并给卡片补上 `min-width: 0`。「主页主题」新增「显示顺序」，可上移/下移今日课程、快捷入口、教务处通知与我的插件。Windows 上的实际表现仍待测试机确认。
 
+2026-10-24 0.5.0 登录方式（按用户要求）：登录页改为「账号密码 / 手机号 / 扫码登录」三选一，沿用现有分段标签与表单样式。手机号登录走 CAS 的手机动态码：`/cas/passwordlessTokenSend` 发送（同一会话、60 秒冷却），`submitPasswordlessToken` 提交手机号与 4–8 位动态码，图片验证码共用 `/cas/captcha.jpg`。扫码登录走 CAS 的 `/cas/qr/qrcode` 取 PNG，前端每 1.5 秒轮询 `/cas/qr/comet`，授权后用 `currentMenu=3`、`submitQrCodeKey` 提交。两种方式都进入同一个登录状态机，后续 MFA / 身份选择 / 账号保存与密码登录一致；账号用户名分别记为手机号或扫码返回的 userId，手机号与扫码均不保存密码。该二维码是学校统一认证的扫码登录（移动交通大学 App），不是单独的微信 OAuth；界面文案允许微信扫一扫打开学校登录页时使用。手机号与扫码登录尚未用真实账号完成验证，待用户验收。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。
