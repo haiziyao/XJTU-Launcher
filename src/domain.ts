@@ -16,7 +16,7 @@ export const defaultConfig = (): AppConfig => ({
   accent: DEFAULT_ACCENT,
   pet: DEFAULT_PET,
   greeting: '把校园，放在手边。',
-  widgets: ['timetable', 'links', 'plugins'],
+  widgets: ['timetable', 'links', 'notices', 'plugins'],
   pluginOrder: [],
   disabledPlugins: [],
   hiddenPlugins: [],
@@ -25,7 +25,7 @@ export const defaultConfig = (): AppConfig => ({
   checkAppUpdates: true,
   campusPinned: [],
   homeClock: 'plain',
-  homeSections: ['greeting', 'clock', 'timetable', 'links', 'plugins'],
+  homeSections: ['greeting', 'clock', 'timetable', 'links', 'notices'],
   mcpServerEnabled: false,
   mcpServerPort: 39217,
   mcpServerDisabledTools: [],
@@ -43,7 +43,7 @@ export const campusLinks = [
   { title: '一网通办', description: '校园办事与服务', url: 'https://ywtb.xjtu.edu.cn' },
   { title: '教务系统', description: '教学与学业信息', url: 'https://jwxt.xjtu.edu.cn' },
   { title: '思源学堂', description: '课程与学习资源', url: 'https://lms.xjtu.edu.cn' },
-  { title: '图书馆', description: '文献检索与借阅', url: 'https://lib.xjtu.edu.cn' },
+  { title: '图书馆', description: '文献检索与借阅', url: 'https://www.lib.xjtu.edu.cn' },
 ];
 
 export function orderedPlugins(plugins: Plugin[], config: AppConfig): Plugin[] {

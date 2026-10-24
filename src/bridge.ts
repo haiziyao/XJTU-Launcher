@@ -38,6 +38,7 @@ import type {
   AccountStatus,
   NetworkCheck,
   AppConfig,
+  CampusNoticeBoard,
   PetDesktopView,
   AuthEvent,
   PluginList,
@@ -409,6 +410,10 @@ export const bridge = {
   async onAgent(callback: (event: AgentEvent) => void): Promise<() => void> {
     requireNative();
     return listen<AgentEvent>('agent-event', (e) => callback(e.payload));
+  },
+  async notices(channel: string, limit: number): Promise<CampusNoticeBoard> {
+    requireNative();
+    return invoke('campus_notices', { channel, limit });
   },
   async petView(): Promise<PetDesktopView> {
     requireNative();

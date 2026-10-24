@@ -45,6 +45,20 @@ export interface AppConfig {
   pageTabSurfaces: boolean;
 }
 
+export interface CampusNotice {
+  title: string;
+  category: string;
+  date: string;
+  url: string;
+}
+
+export interface CampusNoticeBoard {
+  channel: string;
+  name: string;
+  url: string;
+  items: CampusNotice[];
+}
+
 export interface PetDesktopSettings {
   enabled: boolean;
   character: string;

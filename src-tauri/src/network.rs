@@ -10,6 +10,14 @@ const VPN_HOST: &str = "webvpn.xjtu.edu.cn";
 const VPN_KEY: &[u8; 16] = b"wrdvpnisthebest!";
 pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) XJTU-Launcher/0.1 Safari/537.36";
 
+/// Campus web pages run in a real browser engine; a launcher token in the UA
+/// makes sites such as TronClass reject the page as an unsupported browser.
+/// Backend API requests keep `USER_AGENT`; only the visible windows use this.
+#[cfg(target_os = "windows")]
+pub const BROWSER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+#[cfg(not(target_os = "windows"))]
+pub const BROWSER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
 #[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum AccessMode {

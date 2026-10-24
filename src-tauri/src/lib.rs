@@ -1165,6 +1165,18 @@ async fn check_network(
     }
     Ok(NetworkCheck { tone, message })
 }
+/// Public notice boards shown on the home page. No account or cookies are
+/// involved; the closed channel list lives in `school::notices`.
+#[tauri::command]
+async fn campus_notices(
+    window: WebviewWindow,
+    channel: String,
+    limit: u32,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    school::notices::list(&channel, limit).await
+}
+
 #[tauri::command]
 async fn open_external(
     app: tauri::AppHandle,
@@ -2265,6 +2277,7 @@ pub fn run() {
             updates::restart_after_update,
             school_catalog,
             school_query,
+            campus_notices,
             cache::cache_read,
             pet_desktop::pet_view,
             pet_desktop::pet_restore,

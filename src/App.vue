@@ -26,6 +26,7 @@ import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins 
 import type {
   AccountStatus,
   AppConfig,
+  CampusNoticeBoard,
   NetworkCheck,
   PetState,
   PluginList,
@@ -87,6 +88,9 @@ watch(() => config.value.accent, applyAccent, { immediate: true });
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
+const notices = ref<CampusNoticeBoard | null>(null);
+const noticesLoading = ref(false);
+const noticesError = ref('');
 const scheduleError = ref('');
 const scheduleLoading = ref(false);
 const ready = ref(false);
@@ -269,6 +273,20 @@ async function checkNetwork() {
     petMessage.value = '';
   }, 3000);
 }
+async function refreshNotices() {
+  if (!native || noticesLoading.value) return;
+  noticesLoading.value = true;
+  noticesError.value = '';
+  try {
+    const board = await bridge.notices('dean', 20);
+    if (!disposed) notices.value = board;
+  } catch (e) {
+    if (!disposed) noticesError.value = errorText(e);
+  } finally {
+    if (!disposed) noticesLoading.value = false;
+  }
+}
+
 async function openLink(url: string) {
   try {
     await bridge.openUrl(url);
@@ -380,6 +398,8 @@ onMounted(async () => {
   ready.value = true;
   // Home can show today's courses right away from the stored timetable.
   void primeTimetable();
+  // Public notice board on the home page; independent of the campus account.
+  void refreshNotices();
   // Run the same self-check as the sidebar pet once per launch.
   setTimeout(() => void checkNetwork(), 1500);
   void initializeUpdates(config.value.checkAppUpdates).catch((e) => (error.value = errorText(e)));
@@ -605,11 +625,15 @@ onBeforeUnmount(() => {
                 :has-timetable="!!timetable"
                 :timetable-enabled="timetableEnabled"
                 :courses="todayCourses"
+                :notices="notices"
+                :notices-loading="noticesLoading"
+                :notices-error="noticesError"
                 :loading="scheduleLoading"
                 :error="scheduleError"
                 :saving="saving || !configLoaded"
                 @link="openLink"
                 @refresh="refreshTimetable"
+                @refresh-notices="refreshNotices"
                 @toggle="togglePlugin"
                 @account="route = 'accounts'"
                 @open="route = $event"

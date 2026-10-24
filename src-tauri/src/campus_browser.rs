@@ -190,7 +190,7 @@ pub fn open(app: &AppHandle, session: Session, target: Url) -> Result<WebviewWin
     .visible(false)
     .incognito(true)
     .data_directory(profile.path().to_owned())
-    .user_agent(network::USER_AGENT)
+    .user_agent(network::BROWSER_AGENT)
     .on_navigation(move |url| {
         if !nav_live.load(Ordering::SeqCst) {
             return false;

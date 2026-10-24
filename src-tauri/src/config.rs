@@ -82,10 +82,20 @@ fn default_home_clock() -> String {
     "plain".into()
 }
 
-pub const HOME_SECTIONS: [&str; 5] = ["greeting", "clock", "timetable", "links", "plugins"];
+pub const HOME_SECTIONS: [&str; 6] = [
+    "greeting",
+    "clock",
+    "timetable",
+    "links",
+    "plugins",
+    "notices",
+];
 
 fn default_home_sections() -> Vec<String> {
-    HOME_SECTIONS.iter().map(|id| id.to_string()).collect()
+    ["greeting", "clock", "timetable", "links", "notices"]
+        .iter()
+        .map(|id| id.to_string())
+        .collect()
 }
 
 fn default_sidebar_width() -> u32 {
@@ -141,7 +151,12 @@ impl Default for AppConfig {
             accent: "#1f6fe5".into(),
             pet: default_pet(),
             greeting: "把校园，放在手边。".into(),
-            widgets: vec!["timetable".into(), "links".into(), "plugins".into()],
+            widgets: vec![
+                "timetable".into(),
+                "links".into(),
+                "notices".into(),
+                "plugins".into(),
+            ],
             plugin_order: vec![],
             disabled_plugins: vec![],
             hidden_plugins: vec![],
@@ -246,11 +261,11 @@ impl AppConfig {
                 unique.len() != self.pet_sources.len()
             }
             || self.greeting.chars().count() > 60
-            || self.widgets.len() > 3
+            || self.widgets.len() > 4
             || self
                 .widgets
                 .iter()
-                .any(|w| !["timetable", "links", "plugins"].contains(&w.as_str()))
+                .any(|w| !["timetable", "links", "plugins", "notices"].contains(&w.as_str()))
             || self.plugin_order.len() > 256
             || self.disabled_plugins.len() > 256
             || self.hidden_plugins.len() > 256

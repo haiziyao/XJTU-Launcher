@@ -21,6 +21,7 @@ const SECTIONS = [
   { id: 'clock', name: '时钟', description: '右上角的时间显示' },
   { id: 'timetable', name: '今日课程', description: '当天的课程卡片' },
   { id: 'links', name: '校园快捷入口', description: '一网通办、教务、思源学堂、图书馆' },
+  { id: 'notices', name: '教务处通知', description: '教务处教学通知，可在主页上下滚动查看' },
   { id: 'plugins', name: '我的插件', description: '已安装插件的快捷入口' },
 ];
 const visible = computed(() => new Set(props.config.homeSections));
