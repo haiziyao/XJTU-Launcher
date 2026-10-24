@@ -640,10 +640,20 @@ impl Login {
                     self.choices.clear();
                     return Ok(());
                 }
-            } else if page.url.host_str() == Some("webvpn.xjtu.edu.cn")
+                if self.mode == AccessMode::Webvpn && network::webvpn_host(&page.url) {
+                    // The VPN proxy answers unauthenticated requests with its own
+                    // login page, so the ticket from CAS was never accepted.
+                    return Err("WebVPN 认证未完成，请重新开始登录".into());
+                }
+            } else if self.page.is_some()
                 && page.status.is_success()
-                && page.html.contains("西安交通大学WebVPN - 资源站点")
+                && network::webvpn_host(&page.url)
             {
+                // CAS hands its ticket back to the WebVPN portal. Do not match
+                // the portal's wording, which the school can change without
+                // notice: switch to the campus step and prove the VPN session
+                // by fetching the campus entry. A ticket the portal rejected
+                // lands on its login page there instead.
                 self.step = Step::Campus;
                 self.mfa = None;
                 self.failures = 0;
@@ -662,7 +672,11 @@ impl Login {
             if page.url.host_str() != Some("login.xjtu.edu.cn")
                 || !page.url.path().starts_with("/cas/")
             {
-                return Err("未收到预期的校园认证页面，请重新开始".into());
+                // Name the site that answered: a campus service page without a
+                // ticket and a portal page point at different failures, and the
+                // host is what a user can report back.
+                let host = page.url.host_str().unwrap_or("未知主机");
+                return Err(format!("未收到预期的校园认证页面（{host}），请重新开始"));
             }
             let form = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请重新开始")?;
             let failed = page.status == StatusCode::UNAUTHORIZED || has_error(&page.html);

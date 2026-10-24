@@ -137,6 +137,14 @@ Agent 与 MCP：新增 `campus_timetable_customizations`（列出本学期的覆
 
 README 的 `docs/screenshots/mcp.png` 与 `mcp-tools.png` 仍是 14 个工具时的截图，新工具面验收后再重拍；在重拍前不要用它们判断工具数量。Agent / MCP 预览真实作业前，需先在应用内打开思源学堂完成登录，确保账号的 `sites.lms` 保存了会话；否则工具会提示“请先打开思源学堂页面完成登录”。
 
+2026-10-24 登录探测与 WebVPN 落地（按用户反馈）：校园网下部分用户被带到 WebVPN 登录，另有人点“登录”后报“未收到预期的校园认证页面”。
+
+探测：`network::probe` 原本要求考勤入口 302 到特定地址，或 200 页面同时含“西安交通大学”和“统一身份认证 / 考勤”，5 秒超时即回退 WebVPN；这与侧栏自检 `campus::reachable`（任何 <500 状态都算可达、10 秒预算）不一致，会出现自检说校园网可用、登录却走 WebVPN。现在两者统一：目标服务返回任何 <500 状态即直连，只有 5xx 或传输失败才回退；传输失败重试一次，每次 6 秒。
+
+WebVPN：CAS 登录成功后 WebVPN 会先落在自己的门户页，旧代码靠页面含写死的 `西安交通大学WebVPN - 资源站点` 判定认证完成，学校改版或文案变化就会落到通用错误。现在不再匹配页面文案：在已经拿到 CAS 表单之后回到 WebVPN 主机的成功页面，就切到校园步骤，并用校园入口的实际响应验证 VPN 会话；如果代理把请求打回自己的登录页，明确提示“WebVPN 认证未完成”。其他非 CAS 落地页的错误会带上主机名，便于用户反馈定位。
+
+Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式检查通过。未用真实凭据做端到端验证：直连判定需要校园网环境，WebVPN 门户页需要真实账号登录，两项都待用户用受影响账号在开发版中实测。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。

@@ -77,6 +77,18 @@ pub fn vpn_url(url: &Url) -> Result<Url, String> {
     encode_vpn_url(url)
 }
 
+/// Whether a page belongs to the WebVPN portal itself rather than a mapped
+/// campus site (whose path starts with `/https/`). The portal shows this page
+/// again whenever a ticket was not accepted, so callers use it to tell an
+/// authenticated VPN from a rejected one.
+pub fn webvpn_host(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.host_str() == Some(VPN_HOST)
+        && url.username().is_empty()
+        && url.password().is_none()
+        && !url.path().starts_with("/https/")
+}
+
 /// Browsing accepts university sites; authentication transport keeps its narrower allowlist.
 pub fn campus_web_url(url: &Url) -> bool {
     url.scheme() == "https"
@@ -344,52 +356,40 @@ pub async fn json(response: Response) -> Result<serde_json::Value, String> {
         .unwrap_or(serde_json::Value::Null))
 }
 
+/// Decides whether the campus login can go direct or must go through WebVPN.
+/// The campus host answering at all — a redirect to CAS, the attendance page,
+/// an expired session or a client error — proves the direct route works, so
+/// any answer below 500 selects Direct. This is the same rule as
+/// `campus::reachable`, which keeps the sidebar self-check and the login page
+/// from disagreeing about the current network. Only a transport failure is
+/// retried once before the login falls back to WebVPN.
 pub async fn probe(degree: &str) -> Result<AccessMode, String> {
     let host = crate::campus::domain(degree)?;
     let client = Client::builder()
-        .timeout(Duration::from_secs(5))
-        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(6))
+        .connect_timeout(Duration::from_secs(4))
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(USER_AGENT)
         .build()
         .map_err(|_| "无法检测校园网络")?;
     let url = Url::parse(&format!("https://{host}/sa/auth/cas/login/student-pc"))
         .map_err(|_| "校园地址无效")?;
-    let reachable = match client.get(url.clone()).send().await {
-        Ok(response) => {
-            let status = response.status();
-            if status.is_redirection() {
-                response
-                    .headers()
-                    .get(header::LOCATION)
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|s| url.join(s).ok())
-                    .is_some_and(|target| {
-                        trusted(&target)
-                            && (target.host_str() == Some("login.xjtu.edu.cn")
-                                && target.path().starts_with("/cas/")
-                                || target.host_str() == Some(host))
-                    })
-            } else if status.is_success() {
-                limited_bytes(response, 512 * 1024)
-                    .await
-                    .ok()
-                    .is_some_and(|bytes| {
-                        let body = String::from_utf8_lossy(&bytes);
-                        body.contains("西安交通大学")
-                            && (body.contains("统一身份认证") || body.contains("考勤"))
-                    })
-            } else {
-                false
+    for attempt in 0..2 {
+        match client.get(url.clone()).send().await {
+            Ok(response) => {
+                // A 5xx means the host answered but the service is unhealthy;
+                // WebVPN would only proxy to the same server.
+                return Ok(if response.status().as_u16() < 500 {
+                    AccessMode::Direct
+                } else {
+                    AccessMode::Webvpn
+                });
             }
+            Err(_) if attempt == 0 => continue,
+            Err(_) => break,
         }
-        Err(_) => false,
-    };
-    Ok(if reachable {
-        AccessMode::Direct
-    } else {
-        AccessMode::Webvpn
-    })
+    }
+    Ok(AccessMode::Webvpn)
 }
 
 #[cfg(test)]
@@ -411,6 +411,27 @@ mod tests {
             assert!(vpn_url(&Url::parse(bad).unwrap()).is_err());
         }
     }
+    #[test]
+    fn the_portal_page_is_distinct_from_mapped_campus_sites() {
+        assert!(webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/login?cas_login=true").unwrap()
+        ));
+        assert!(webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/").unwrap()
+        ));
+        assert!(!webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/https/77726476/login").unwrap()
+        ));
+        for bad in [
+            "http://webvpn.xjtu.edu.cn/login",
+            "https://webvpn.xjtu.edu.cn.evil.test/login",
+            "https://u:p@webvpn.xjtu.edu.cn/login",
+            "https://login.xjtu.edu.cn/cas/login",
+        ] {
+            assert!(!webvpn_host(&Url::parse(bad).unwrap()), "{bad}");
+        }
+    }
+
     #[test]
     fn plain_http_services_are_limited_to_their_exact_origins() {
         let lib = Url::parse("http://rg.lib.xjtu.edu.cn:8086/qseat?sp=A101").unwrap();
