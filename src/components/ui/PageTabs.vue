@@ -48,32 +48,48 @@ function key(event: KeyboardEvent, index: number) {
 .page-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 30px;
-  padding: 0 0 14px;
+  align-items: flex-end;
+  gap: 0;
+  margin-bottom: 26px;
+  padding: 0;
   border-bottom: 1px solid var(--border);
 }
 button {
-  padding: 6px 12px;
-  border: 0;
-  border-radius: var(--radius-sm);
+  position: relative;
+  margin-bottom: -1px;
+  padding: 7px 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
   background: transparent;
   color: var(--text-secondary);
+  font-weight: 500;
   transition:
     background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
     color var(--duration) ease;
 }
 button:hover:not(.active) {
-  background: var(--accent-wash);
+  background: var(--surface-hover);
   color: var(--text);
 }
-/* The selected pill keeps the opaque tint: a translucent one lets the
-   wallpaper pattern show through the label. */
+/* Browser-style selection: the active tab sits on the hairline like a tab
+   attached to the page, with a short accent strip along its top edge. */
 button.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 600;
+  z-index: 1;
 }
-button:active {
-  transform: scale(0.98);
+button.active::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 2px;
+  border-radius: 9px 9px 0 0;
+  background: var(--accent);
 }
 </style>

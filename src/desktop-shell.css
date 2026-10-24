@@ -399,9 +399,7 @@
      reads against a bright wallpaper. */
   --control-border: rgba(15, 23, 42, 0.1);
   --control-sunken: rgba(15, 23, 42, 0.05);
-  /* The nav sits over the picture itself; keep the rail nearly opaque so
-     hair and other busy details cannot run through the labels. */
-  --sidebar-bg: rgba(246, 247, 249, 0.97);
+  --sidebar-bg: rgba(241, 242, 244, 0.6);
   --sidebar-border: rgba(15, 23, 42, 0.08);
   /* An opaque highlight reads as a grey slab on the frosted sidebar. */
   --nav-active: var(--accent-tint);
@@ -430,6 +428,18 @@
 .desktop-shell.has-wallpaper .shortcut:active,
 .desktop-shell.has-wallpaper .setting-row.clickable:active:not(:disabled) {
   background: var(--surface-pressed);
+}
+
+/* Over a wallpaper the page behind the tabs is a photo. Put one continuous
+   rail behind the whole tab strip (not a pill per label) and let the active
+   tab rise out of it, browser-style. */
+.desktop-shell.has-wallpaper .page-tabs {
+  background: rgba(255, 255, 255, 0.64);
+  border-radius: 10px 10px 0 0;
+  padding: 4px 6px 0;
+}
+.desktop-shell.has-wallpaper .page-tabs button.active {
+  background: rgba(255, 255, 255, 0.96);
 }
 
 /* macOS: the title bar is embedded; keep the top strip draggable and clear of controls. */
