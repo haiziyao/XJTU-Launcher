@@ -52,6 +52,30 @@ pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .join("campus-accounts.enc"))
 }
 
+/// Stable identifier for the campus login's device fingerprint. The school ties
+/// "trusted device" decisions to it, so it is generated once per installation;
+/// a failed write only means the device is never remembered, never a login
+/// failure. It holds no personal data.
+fn device_visitor(app: &tauri::AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "无法定位应用数据目录")?
+        .join("device-id");
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        let id = text.trim();
+        if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(id.to_string());
+        }
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, &id);
+    Ok(id)
+}
+
 pub(crate) fn main_only(window: &WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
@@ -268,6 +292,7 @@ fn account_changed(app: &tauri::AppHandle, message: &str) {
 
 #[tauri::command]
 async fn start_account_login(
+    app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
     degree: String,
@@ -276,7 +301,11 @@ async fn start_account_login(
     main_only(&window)?;
     campus::domain(&degree)?;
     let token = state.auth.reserve(&request_id)?;
-    let result = auth::Login::begin(degree).await;
+    let result = async {
+        let visitor = device_visitor(&app)?;
+        auth::Login::begin(degree, visitor).await
+    }
+    .await;
     state.auth.complete(&request_id, &token, result)
 }
 
@@ -301,6 +330,7 @@ async fn advance_account_login(
                 account_id,
                 captcha,
                 remember_password,
+                trust_device,
             } => {
                 let _guard = state.auth_lock.lock().await;
                 let book = accounts::load(&accounts_path(&app)?)?;
@@ -321,6 +351,7 @@ async fn advance_account_login(
                     password: password.0.clone(),
                     remember_password,
                     captcha,
+                    trust_device,
                 }
             }
             other => other,
@@ -745,13 +776,15 @@ async fn refresh_saved_session(
             saved.0.clone(),
         )
     };
-    let mut login = auth::Login::begin(degree).await?;
+    let mut login = auth::Login::begin(degree, device_visitor(app)?).await?;
     login
         .act(auth::Action::Credentials {
             username,
             password,
             remember_password: true,
             captcha: String::new(),
+            // An unattended renewal must not change the device-trust choice.
+            trust_device: false,
         })
         .await?;
     // The campus CAS can return an intermediate confirmation page with no input;
@@ -824,7 +857,8 @@ async fn renew_direct_session(
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
-    let cookies = auth::direct_login(school::CARD_LOGIN, &username, &password).await?;
+    let visitor = device_visitor(app)?;
+    let cookies = auth::direct_login(school::CARD_LOGIN, &username, &password, &visitor).await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -863,7 +897,8 @@ async fn refresh_profile_session(
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
-    let (cookies, token, system_type) = auth::hello_login(&username, &password).await?;
+    let visitor = device_visitor(&app)?;
+    let (cookies, token, system_type) = auth::hello_login(&username, &password, &visitor).await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -910,7 +945,8 @@ async fn refresh_lms_session(
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
-    let cookies = auth::direct_login(school::LMS_LOGIN, &username, &password).await?;
+    let visitor = device_visitor(&app)?;
+    let cookies = auth::direct_login(school::LMS_LOGIN, &username, &password, &visitor).await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -961,7 +997,8 @@ async fn refresh_library_session(
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
-    let cookies = auth::direct_login(school::LIBRARY_LOGIN, &username, &password).await?;
+    let visitor = device_visitor(&app)?;
+    let cookies = auth::direct_login(school::LIBRARY_LOGIN, &username, &password, &visitor).await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -1012,7 +1049,8 @@ async fn refresh_venue_session(
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
-    let cookies = auth::direct_login(school::VENUE_LOGIN, &username, &password).await?;
+    let visitor = device_visitor(&app)?;
+    let cookies = auth::direct_login(school::VENUE_LOGIN, &username, &password, &visitor).await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());

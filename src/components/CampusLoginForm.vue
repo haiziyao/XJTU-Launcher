@@ -18,6 +18,7 @@ const degree = ref<CampusDegree>(props.account?.degree || 'undergraduate');
 const username = ref(props.account?.username || '');
 const password = ref('');
 const remember = ref(true);
+const trust = ref(true);
 const showPassword = ref(false);
 const useSaved = ref(!!props.account?.passwordSaved);
 const captcha = ref('');
@@ -86,6 +87,7 @@ async function submit() {
         accountId: props.account.id,
         captcha: captcha.value.trim(),
         rememberPassword: remember.value,
+        trustDevice: trust.value,
       };
     else
       action = {
@@ -94,6 +96,7 @@ async function submit() {
         password: password.value,
         captcha: captcha.value.trim(),
         rememberPassword: remember.value,
+        trustDevice: trust.value,
       };
   } else if (flow.value.phase === 'mfa') action = { type: 'verifyMfa', code: code.value.trim() };
   else if (flow.value.phase === 'identity')
@@ -265,15 +268,30 @@ onBeforeUnmount(() => {
               </div>
             </template>
             <div v-if="!flow.canContinue || hasCredentials" class="login-remember">
-              <div>
-                <strong>保存账号密码</strong><small>登录成功后保存在本机，之后可直接重新登录</small>
+              <div class="login-option">
+                <div>
+                  <strong>保存账号密码</strong
+                  ><small>登录成功后保存在本机，之后可直接重新登录</small>
+                </div>
+                <UiSwitch
+                  :checked="remember"
+                  label="保存账号密码"
+                  :disabled="busy"
+                  @toggle="remember = !remember"
+                />
               </div>
-              <UiSwitch
-                :checked="remember"
-                label="保存账号密码"
-                :disabled="busy"
-                @toggle="remember = !remember"
-              />
+              <div class="login-option">
+                <div>
+                  <strong>信任本设备</strong
+                  ><small>学校会记住这台电脑，短信验证通过一次后，之后登录通常不再要求验证码</small>
+                </div>
+                <UiSwitch
+                  :checked="trust"
+                  label="信任本设备"
+                  :disabled="busy"
+                  @toggle="trust = !trust"
+                />
+              </div>
             </div>
           </template>
           <template v-else-if="flow.phase === 'mfa'">
@@ -392,12 +410,16 @@ onBeforeUnmount(() => {
 }
 .login-remember {
   grid-column: 1 / -1;
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+.login-option {
   display: flex;
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
-  border-top: 1px solid var(--divider);
 }
 .login-remember strong {
   font-size: 12px;

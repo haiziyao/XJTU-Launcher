@@ -170,8 +170,15 @@ export type CampusLoginAction =
       password: string;
       captcha?: string;
       rememberPassword: boolean;
+      trustDevice?: boolean;
     }
-  | { type: 'savedCredentials'; accountId: string; captcha?: string; rememberPassword: boolean }
+  | {
+      type: 'savedCredentials';
+      accountId: string;
+      captcha?: string;
+      rememberPassword: boolean;
+      trustDevice?: boolean;
+    }
   | { type: 'continue'; captcha?: string }
   | { type: 'sendMfa' }
   | { type: 'verifyMfa'; code: string }

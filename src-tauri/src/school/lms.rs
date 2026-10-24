@@ -1160,7 +1160,13 @@ mod tests {
             println!("no saved password");
             return;
         };
-        let cookies = match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-lms-probe",
+        )
+        .await
         {
             Ok(cookies) => cookies,
             Err(error) => {
@@ -1220,7 +1226,13 @@ mod tests {
             println!("no saved password");
             return;
         };
-        let cookies = match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-lms-probe",
+        )
+        .await
         {
             Ok(cookies) => cookies,
             Err(error) => {
@@ -1270,7 +1282,9 @@ mod tests {
             return;
         };
         println!("mode={:?}", account.mode);
-        match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await {
+        match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0, "live-lms-probe")
+            .await
+        {
             Ok(cookies) => {
                 let client = Client::with_cookies(&cookies).expect("client");
                 match client.courses().await {
@@ -1317,7 +1331,13 @@ mod tests {
             println!("no saved password");
             return;
         };
-        let cookies = match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-lms-probe",
+        )
+        .await
         {
             Ok(cookies) => cookies,
             Err(error) => {
@@ -1382,7 +1402,13 @@ mod tests {
             println!("no saved password");
             return;
         };
-        let cookies = match crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0).await
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-lms-probe",
+        )
+        .await
         {
             Ok(cookies) => cookies,
             Err(error) => {

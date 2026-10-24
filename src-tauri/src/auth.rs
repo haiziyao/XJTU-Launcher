@@ -79,12 +79,16 @@ pub enum Action {
         remember_password: bool,
         #[serde(default)]
         captcha: String,
+        #[serde(default)]
+        trust_device: bool,
     },
     SavedCredentials {
         account_id: String,
         #[serde(default)]
         captcha: String,
         remember_password: bool,
+        #[serde(default)]
+        trust_device: bool,
     },
     Continue {
         #[serde(default)]
@@ -103,6 +107,9 @@ struct Mfa {
     flow: &'static str,
     gid: Option<String>,
     phone: Option<String>,
+    /// The school asked for this second step, so the password submission must
+    /// echo its state and state whether the device is trusted.
+    required: bool,
     verified: bool,
     sent: Option<Instant>,
 }
@@ -209,8 +216,13 @@ fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
 /// reject WebVPN get a real CAS session of their own. The returned cookie jar
 /// holds that CAS session plus whatever the service sets on the way back.
 /// Captcha and two-step verification are reported instead of guessed.
-pub async fn direct_login(service: &str, username: &str, password: &str) -> Result<String, String> {
-    let (transport, _) = direct_login_page(service, username, password).await?;
+pub async fn direct_login(
+    service: &str,
+    username: &str,
+    password: &str,
+    visitor: &str,
+) -> Result<String, String> {
+    let (transport, _) = direct_login_page(service, username, password, visitor).await?;
     transport.snapshot()
 }
 
@@ -220,6 +232,7 @@ async fn direct_login_page(
     service: &str,
     username: &str,
     password: &str,
+    visitor: &str,
 ) -> Result<(Transport, Page), String> {
     if username.trim().is_empty() || password.is_empty() || password.len() > 512 {
         return Err("保存的校园密码无效，请重新登录".into());
@@ -249,7 +262,6 @@ async fn direct_login_page(
     let pem = String::from_utf8(network::limited_bytes(response, 32 * 1024).await?)
         .map_err(|_| "校园登录公钥格式不受支持")?;
     let encrypted = Zeroizing::new(encrypt_password(password, &pem)?);
-    let visitor = Uuid::new_v4().simple().to_string();
     // The detection call also opens the server-side verification state that the
     // password submission must echo back, even when no phone step is needed.
     let mut mfa_state = String::new();
@@ -262,7 +274,7 @@ async fn direct_login_page(
             .form(&[
                 ("username", username),
                 ("password", encrypted.as_str()),
-                ("fpVisitorId", visitor.as_str()),
+                ("fpVisitorId", visitor),
                 ("loginType", "passwordLogin"),
             ])
             .send()
@@ -291,13 +303,15 @@ async fn direct_login_page(
                 ("execution", form.execution),
                 ("_eventId", "submit".into()),
                 ("submit1", "Login1".into()),
-                ("fpVisitorId", visitor.clone()),
+                ("fpVisitorId", visitor.to_string()),
                 ("captcha", String::new()),
                 ("currentMenu", "1".into()),
                 ("failN", attempt.to_string()),
                 ("mfaState", mfa_state.clone()),
                 ("geolocation", String::new()),
-                ("trustAgent", "false".into()),
+                // No second step was required, so there is no device-trust
+                // decision to record; the reference client sends nothing too.
+                ("trustAgent", String::new()),
             ])
             .send()
             .await
@@ -322,8 +336,9 @@ const HELLO_LOGIN: &str = "https://org.xjtu.edu.cn/openplatform/oauth/authorize?
 pub async fn hello_login(
     username: &str,
     password: &str,
+    visitor: &str,
 ) -> Result<(String, String, String), String> {
-    let (transport, mut page) = direct_login_page(HELLO_LOGIN, username, password).await?;
+    let (transport, mut page) = direct_login_page(HELLO_LOGIN, username, password, visitor).await?;
     if page.url.host_str() != Some("hello.xjtu.edu.cn") {
         // Some CAS responses land on the OAuth consent page first; ask once more.
         page = transport
@@ -373,6 +388,9 @@ pub struct Login {
     retained_password: Option<SavedPassword>,
     pending_captcha: String,
     visitor: String,
+    /// Whether the user asked the school to remember this device, which is
+    /// only submitted when a second step is required.
+    trust: bool,
     mfa: Option<Mfa>,
     choices: Vec<Choice>,
     chosen: Option<String>,
@@ -381,7 +399,9 @@ pub struct Login {
     pub completed: Option<Account>,
 }
 impl Login {
-    pub async fn begin(degree: String) -> Result<Self, String> {
+    /// `visitor` is the installation's stable device fingerprint; the school
+    /// remembers a trusted device under it, so it must not change per login.
+    pub async fn begin(degree: String, visitor: String) -> Result<Self, String> {
         let mode = network::probe(&degree).await?;
         let transport = Transport::new(None)?;
         let step = if mode == AccessMode::Webvpn {
@@ -417,7 +437,8 @@ impl Login {
             encrypted: Zeroizing::new(String::new()),
             retained_password: None,
             pending_captcha: String::new(),
-            visitor: Uuid::new_v4().simple().to_string(),
+            visitor,
+            trust: false,
             mfa: None,
             choices: vec![],
             chosen: None,
@@ -433,6 +454,21 @@ impl Login {
             AccessMode::Direct
         } else {
             self.mode
+        }
+    }
+    /// What the password submission reports about this device. Like the
+    /// reference client, the value is only sent when the school actually
+    /// required a second step; an empty string leaves the device as it was.
+    fn trust_agent(&self) -> &'static str {
+        match self.mfa.as_ref() {
+            Some(mfa) if mfa.required => {
+                if self.trust {
+                    "true"
+                } else {
+                    "false"
+                }
+            }
+            _ => "",
         }
     }
     pub fn view(&self) -> View {
@@ -559,6 +595,7 @@ impl Login {
                 flow: "mfa",
                 gid: None,
                 phone: None,
+                required: need,
                 verified: !need,
                 sent: None,
             });
@@ -592,7 +629,7 @@ impl Login {
                 ("failN", self.failures.to_string()),
                 ("mfaState", mfa),
                 ("geolocation", String::new()),
-                ("trustAgent", "false".into()),
+                ("trustAgent", self.trust_agent().into()),
             ],
         )
         .await
@@ -707,6 +744,7 @@ impl Login {
                     flow: "sec",
                     gid: None,
                     phone: None,
+                    required: true,
                     verified: false,
                     sent: None,
                 });
@@ -807,6 +845,7 @@ impl Login {
                 password,
                 remember_password,
                 captcha,
+                trust_device,
             } => {
                 let password = Zeroizing::new(password);
                 if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
@@ -836,6 +875,7 @@ impl Login {
                 self.encrypted = Zeroizing::new(encrypt_password(&password, &pem)?);
                 self.retained_password =
                     remember_password.then(|| SavedPassword(password.to_string()));
+                self.trust = trust_device;
                 self.pending_captcha = captcha.clone();
                 self.mfa = None;
                 self.password_page(captcha).await?
@@ -933,7 +973,7 @@ impl Login {
                             ("_eventId", "submit".into()),
                             ("geolocation", String::new()),
                             ("fpVisitorId", self.visitor.clone()),
-                            ("trustAgent", "false".into()),
+                            ("trustAgent", self.trust_agent().into()),
                             ("username", label),
                             ("useDefault", "false".into()),
                         ],
@@ -1110,7 +1150,9 @@ mod tests {
             .build()
             .unwrap();
         runtime.block_on(async {
-            let login = Login::begin("undergraduate".into()).await.unwrap();
+            let login = Login::begin("undergraduate".into(), "test-visitor".into())
+                .await
+                .unwrap();
             let response = login
                 .transport
                 .get(
@@ -1130,24 +1172,37 @@ mod tests {
     #[test]
     fn ui_actions_decode_remember_password_and_saved_account_fields() {
         let action: Action = serde_json::from_value(
-            json!({"type":"credentials","username":"u","password":"p","rememberPassword":true}),
+            json!({"type":"credentials","username":"u","password":"p","rememberPassword":true,"trustDevice":true}),
         )
         .unwrap();
         assert!(matches!(
             action,
             Action::Credentials {
                 remember_password: true,
+                trust_device: true,
                 ..
             }
         ));
-        let saved: Action = serde_json::from_value(
-            json!({"type":"savedCredentials","accountId":"local-id","rememberPassword":false}),
+        let minimal: Action = serde_json::from_value(
+            json!({"type":"credentials","username":"u","password":"p","rememberPassword":false}),
         )
+        .unwrap();
+        assert!(matches!(
+            minimal,
+            Action::Credentials {
+                trust_device: false,
+                ..
+            }
+        ));
+        let saved: Action = serde_json::from_value(json!({
+            "type":"savedCredentials","accountId":"local-id","rememberPassword":false,"trustDevice":true
+        }))
         .unwrap();
         assert!(matches!(
             saved,
             Action::SavedCredentials {
                 remember_password: false,
+                trust_device: true,
                 ..
             }
         ));
@@ -1196,11 +1251,13 @@ mod tests {
                 retained_password: None,
                 pending_captcha: String::new(),
                 visitor: "test".into(),
+                trust: false,
                 mfa: Some(Mfa {
                     state: "mfa-state".into(),
                     flow: "mfa",
                     gid: Some("gid".into()),
                     phone: None,
+                    required: true,
                     verified: false,
                     sent: None,
                 }),
@@ -1224,7 +1281,7 @@ mod tests {
             .build()
             .unwrap();
         let login = runtime
-            .block_on(Login::begin("undergraduate".into()))
+            .block_on(Login::begin("undergraduate".into(), "test-visitor".into()))
             .unwrap();
         let view = login.view();
         assert!(matches!(view.phase, Phase::Credentials | Phase::Captcha));

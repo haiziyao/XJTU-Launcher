@@ -147,6 +147,8 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 
 同日核对了登录页的验证码与两步验证链路。图片验证码：连续 3 次失败后进入验证码阶段，取 `/cas/captcha.jpg`（实测返回 80×25 JPEG，支持 png / jpeg / webp），提交时随账号密码一起发送；失败后自动换图，验证码会保留到短信验证完成。短信两步验证：`mfa/detect` 拿 `state` / `need`，需要时 `initByType/securephone` 取 `gid` 与脱敏手机号，`send` 发送、`valid` 校验，之后带 `mfaState` 重投密码；另有安全验证页（`secState`）分支。新版 CAS 页面仍解析出 `mfaEnabled=true`，检测保持开启。将 `valid` 的判定改成与参考实现一致：只有明确返回 `status` 且不是 2 才算失败，缺少 `status` 不再误报“验证码未通过”。未支持用短信动态密码代替密码登录（只走“密码 + 两步验证”）。真实短信验证仍未用真实账号执行。Rust 115 项测试通过。
 
+按用户决定加入“信任本设备”：登录表单在“保存账号密码”下方新增同名开关（默认开启），登录时把选择带到 `trustDevice`，只在二次验证时以 `trustAgent=true/false` 提交；没有要求二次验证时不发送该字段，与参考实现一致。设备可信依赖稳定的 `fpVisitorId`，原本每次登录随机生成，学校无法记住设备；现在应用数据目录下保存 `device-id`（32 位十六进制，首次需要时生成并复用），账号登录、自动重连与各服务直连共用，文件不含个人信息，写入失败只表示设备不会被记住。自动重连不改变用户的信任选择。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。
