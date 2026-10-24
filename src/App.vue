@@ -118,6 +118,55 @@ const enabledPlugins = computed(() =>
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 const showWallpaper = computed(() => !!config.value.wallpaper);
+// A dark wallpaper leaves too little contrast under the light veil, so the
+// shell switches to a stronger scrim and slightly darker body text.
+const wallpaperDark = ref(false);
+let wallpaperProbe = 0;
+async function detectWallpaperDark(value: string | null) {
+  const probe = ++wallpaperProbe;
+  if (!value) {
+    wallpaperDark.value = false;
+    return;
+  }
+  try {
+    const image = new Image();
+    image.src = value;
+    await image.decode();
+    if (probe !== wallpaperProbe) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+      wallpaperDark.value = true;
+      return;
+    }
+    context.drawImage(image, 0, 0, 64, 64);
+    // Sample the centre, where page text and cards actually sit.
+    const pixels = context.getImageData(16, 16, 32, 32).data;
+    const linear = (channel: number) => {
+      const value = channel / 255;
+      return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    };
+    let total = 0;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      total +=
+        0.2126 * linear(pixels[index]) +
+        0.7152 * linear(pixels[index + 1]) +
+        0.0722 * linear(pixels[index + 2]);
+      count += 1;
+    }
+    wallpaperDark.value = total / Math.max(1, count) < 0.25;
+  } catch {
+    // An unreadable image could be anything; favour the readable scrim.
+    wallpaperDark.value = true;
+  }
+}
+watch(
+  () => config.value.wallpaper,
+  (value) => void detectWallpaperDark(value),
+);
 watch(enabledPlugins, () => {
   if (
     !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
@@ -407,6 +456,7 @@ onBeforeUnmount(() => {
       'mac-native': macNative,
       'platform-windows': windowsNative,
       'has-wallpaper': showWallpaper,
+      'wallpaper-dark': showWallpaper && wallpaperDark,
       'motion-ready': ready,
       'reduce-motion': config.reduceMotion,
     }"
