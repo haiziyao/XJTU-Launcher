@@ -43,6 +43,8 @@ export interface AppConfig {
   petPosition: [number, number] | null;
   /** Give each page-level tab its own rounded backing. */
   pageTabSurfaces: boolean;
+  /** Optional HTTPS mirror for the update manifest; empty uses the built-in. */
+  updateEndpoint: string;
 }
 
 export interface CampusNotice {

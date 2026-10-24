@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Download } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import { initializeUpdates, updateStatus } from '../updates';
+import { renderMarkdown } from '../markdown';
 import type { AppConfig } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
@@ -12,6 +13,42 @@ import UiButton from './ui/UiButton.vue';
 const props = defineProps<{ config: AppConfig; saving: boolean }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
 const error = ref('');
+const endpoint = ref(props.config.updateEndpoint);
+const endpointValid = computed(() => {
+  const value = endpoint.value.trim();
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !!url.hostname;
+  } catch {
+    return false;
+  }
+});
+const notes = computed(() =>
+  updateStatus.value?.notes
+    ? renderMarkdown(updateStatus.value.notes)
+    : '<p>此版本未提供更新说明。</p>',
+);
+watch(
+  () => props.config.updateEndpoint,
+  (value) => {
+    endpoint.value = value;
+  },
+);
+function saveEndpoint() {
+  if (!endpointValid.value) return;
+  emit('update', { ...props.config, updateEndpoint: endpoint.value.trim() });
+}
+function resetEndpoint() {
+  endpoint.value = '';
+  emit('update', { ...props.config, updateEndpoint: '' });
+}
+function noteClick(event: MouseEvent) {
+  const anchor = (event.target as Element | null)?.closest('a');
+  if (!(anchor instanceof HTMLAnchorElement)) return;
+  event.preventDefault();
+  void bridge.openUrl(anchor.href);
+}
 const busy = computed(
   () =>
     !updateStatus.value ||
@@ -77,6 +114,29 @@ async function restart() {
           @toggle="emit('update', { ...config, checkAppUpdates: !config.checkAppUpdates })"
       /></SettingRow>
     </SettingGroup>
+    <SettingGroup title="更新源">
+      <SettingRow
+        title="镜像地址"
+        description="GitHub 无法访问时填写镜像的 latest.json 地址，留空使用内置地址。镜像需同时提供安装包，并把清单里的下载地址指向镜像。"
+      >
+        <div class="update-source">
+          <input
+            v-model="endpoint"
+            class="text-field"
+            placeholder="https://…/latest.json"
+            spellcheck="false"
+            autocapitalize="none"
+          />
+          <UiButton size="sm" :disabled="saving || !endpointValid" @click="saveEndpoint"
+            >保存</UiButton
+          >
+          <UiButton v-if="config.updateEndpoint" size="sm" variant="ghost" @click="resetEndpoint"
+            >恢复默认</UiButton
+          >
+        </div>
+      </SettingRow>
+      <p v-if="!endpointValid" class="update-hint">请输入 HTTPS 地址，且不要包含账号密码。</p>
+    </SettingGroup>
     <p v-if="error || updateStatus?.message" class="notice" role="alert">
       {{ error || updateStatus?.message }}
     </p>
@@ -92,7 +152,7 @@ async function restart() {
     >
       <div class="update-release">
         <strong>{{ updateStatus.version }}</strong>
-        <p>{{ updateStatus.notes || '此版本未提供更新说明。' }}</p>
+        <div class="update-notes" @click="noteClick" v-html="notes"></div>
         <template v-if="['downloading', 'installing'].includes(updateStatus.phase)"
           ><progress :value="percent" max="100" aria-label="更新下载进度" />
           <p role="status">
@@ -124,10 +184,58 @@ async function restart() {
 .update-release {
   padding: 18px 12px;
 }
-.update-release p {
-  white-space: pre-wrap;
+.update-notes {
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 16px 0;
   color: var(--text-secondary);
-  margin: 18px 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.update-notes :deep(h1),
+.update-notes :deep(h2),
+.update-notes :deep(h3) {
+  margin: 14px 0 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.update-notes :deep(h1:first-child),
+.update-notes :deep(h2:first-child),
+.update-notes :deep(h3:first-child) {
+  margin-top: 0;
+}
+.update-notes :deep(p) {
+  margin: 8px 0;
+}
+.update-notes :deep(ul),
+.update-notes :deep(ol) {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.update-notes :deep(li) {
+  margin: 3px 0;
+}
+.update-notes :deep(code) {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.update-notes :deep(a) {
+  color: var(--accent-text);
+}
+.update-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+}
+.update-source .text-field {
+  flex: 1;
+  min-width: 0;
 }
 .update-action {
   display: flex;

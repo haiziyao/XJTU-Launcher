@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   Compass,
+  Download,
   Home,
   LayoutGrid,
   LoaderCircle,
@@ -20,7 +21,7 @@ import {
   X,
 } from 'lucide-vue-next';
 import { initializeMarket } from './market';
-import { initializeUpdates } from './updates';
+import { initializeUpdates, updateStatus } from './updates';
 import { bridge, native } from './bridge';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
 import type {
@@ -42,6 +43,7 @@ import CommunityView from './components/CommunityView.vue';
 import AgentView from './components/AgentView.vue';
 import AgentSettingsView from './components/AgentSettingsView.vue';
 import HomeThemeView from './components/HomeThemeView.vue';
+import UpdateDialog from './components/UpdateDialog.vue';
 import { useSidebarResize } from './useSidebarResize';
 import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
@@ -89,6 +91,8 @@ const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', s
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
 const notices = ref<CampusNoticeBoard | null>(null);
+const updateDialogOpen = ref(false);
+let promptedUpdate = '';
 const noticesLoading = ref(false);
 const noticesError = ref('');
 const scheduleError = ref('');
@@ -122,6 +126,20 @@ const enabledPlugins = computed(() =>
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 const showWallpaper = computed(() => !!config.value.wallpaper);
+const updateReady = computed(() =>
+  ['available', 'downloading', 'installing', 'installed'].includes(updateStatus.value?.phase ?? ''),
+);
+// Open the release dialog once per version when the launch check finds one.
+watch(
+  () => [updateStatus.value?.phase, updateStatus.value?.version] as const,
+  ([phase, version]) => {
+    if (phase === 'available' && version && promptedUpdate !== version) {
+      promptedUpdate = version;
+      updateDialogOpen.value = true;
+    }
+  },
+  { immediate: true },
+);
 watch(enabledPlugins, () => {
   if (
     !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
@@ -499,6 +517,16 @@ onBeforeUnmount(() => {
         <div class="nav-spacer"></div>
         <div class="nav-section">
           <button
+            v-if="updateReady"
+            class="desktop-nav-item update-entry"
+            title="发现新版本"
+            aria-label="发现新版本"
+            @click="updateDialogOpen = true"
+          >
+            <Download :size="20" /><span>发现新版本</span
+            ><i class="update-dot" aria-hidden="true"></i>
+          </button>
+          <button
             class="desktop-nav-item"
             :class="{ selected: route === 'market' }"
             data-indicator="market"
@@ -722,4 +750,5 @@ onBeforeUnmount(() => {
       </div>
     </main>
   </div>
+  <UpdateDialog :open="updateDialogOpen" @close="updateDialogOpen = false" />
 </template>

@@ -21,7 +21,11 @@ impl Default for Status {
     fn default() -> Self {
         Self {
             current_version: env!("CARGO_PKG_VERSION"),
-            phase: if configured() { "idle" } else { "unconfigured" },
+            phase: if compiled_configured() {
+                "idle"
+            } else {
+                "unconfigured"
+            },
             version: None,
             notes: None,
             received: 0,
@@ -36,8 +40,25 @@ pub struct State {
     update: Mutex<Option<tauri_plugin_updater::Update>>,
     operation: tokio::sync::Mutex<()>,
 }
-fn configured() -> bool {
+fn compiled_configured() -> bool {
     ENDPOINT.is_some_and(|v| !v.is_empty()) && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
+}
+/// The mirror saved in the config wins; otherwise the endpoint compiled into
+/// this build is used. The public key always comes from the build.
+fn effective_endpoint(app: &tauri::AppHandle) -> Option<String> {
+    crate::config_path(app)
+        .and_then(|path| crate::config::load(&path))
+        .ok()
+        .map(|config| config.update_endpoint.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            ENDPOINT
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+}
+fn configured(app: &tauri::AppHandle) -> bool {
+    effective_endpoint(app).is_some() && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
 }
 fn snapshot(state: &State) -> Result<Status, String> {
     state
@@ -54,9 +75,19 @@ fn publish(window: &WebviewWindow, state: &State, edit: impl FnOnce(&mut Status)
 }
 
 #[tauri::command]
-pub fn update_status(window: WebviewWindow, state: tauri::State<State>) -> Result<Status, String> {
+pub fn update_status(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<State>,
+) -> Result<Status, String> {
     crate::main_only(&window)?;
-    snapshot(&state)
+    let mut status = snapshot(&state)?;
+    if !configured(&app) {
+        status.phase = "unconfigured";
+    } else if status.phase == "unconfigured" {
+        status.phase = "idle";
+    }
+    Ok(status)
 }
 
 #[tauri::command]
@@ -67,7 +98,7 @@ pub async fn check_app_update(
 ) -> Result<Status, String> {
     crate::main_only(&window)?;
     let _operation = state.operation.try_lock().map_err(|_| "正在处理更新")?;
-    if !configured() || snapshot(&state)?.phase == "installed" {
+    if !configured(&app) || snapshot(&state)?.phase == "installed" {
         return snapshot(&state);
     }
     publish(&window, &state, |s| {
@@ -75,7 +106,8 @@ pub async fn check_app_update(
         s.message = None;
     });
     let result = async {
-        let url = crate::plugins::validate_url(ENDPOINT.ok_or("更新地址未配置")?)?;
+        let endpoint = effective_endpoint(&app).ok_or("更新地址未配置")?;
+        let url = crate::plugins::validate_url(&endpoint)?;
         if url.scheme() != "https" {
             return Err("应用更新地址必须使用 HTTPS".to_string());
         }

@@ -455,6 +455,22 @@
   font-weight: 600;
 }
 
+/* Sidebar update entry: a small accent dot marks a release that is ready. */
+.update-entry .update-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  flex: none;
+  border-radius: 99px;
+  background: var(--accent);
+}
+.sidebar-collapsed .update-entry .update-dot {
+  position: absolute;
+  right: 10px;
+  top: 9px;
+  margin: 0;
+}
+
 /* macOS: the title bar is embedded; keep the top strip draggable and clear of controls. */
 .titlebar-drag {
   position: absolute;

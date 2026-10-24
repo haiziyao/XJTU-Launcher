@@ -76,6 +76,10 @@ pub struct AppConfig {
     /// Give each page-level tab its own rounded backing.
     #[serde(default)]
     pub page_tab_surfaces: bool,
+    /// Optional HTTPS mirror of the update manifest; empty uses the endpoint
+    /// compiled into this build.
+    #[serde(default)]
+    pub update_endpoint: String,
 }
 
 fn default_home_clock() -> String {
@@ -177,6 +181,7 @@ impl Default for AppConfig {
             pet_sources: default_pet_sources(),
             pet_position: None,
             page_tab_surfaces: false,
+            update_endpoint: String::new(),
         }
     }
 }
@@ -198,6 +203,27 @@ fn valid_tool_name(id: &str) -> bool {
         && id
             .bytes()
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+// An optional update mirror must be a plain HTTPS URL; credentials and plain
+// HTTP are rejected before the updater ever sees it.
+fn bad_update_endpoint(value: &str) -> bool {
+    let value = value.trim();
+    if value.is_empty() {
+        return false;
+    }
+    if value.len() > 2048 {
+        return true;
+    }
+    match url::Url::parse(value) {
+        Ok(url) => {
+            url.scheme() != "https"
+                || url.host_str().is_none()
+                || !url.username().is_empty()
+                || url.password().is_some()
+        }
+        Err(_) => true,
+    }
 }
 
 // The accent is a #rrggbb colour; older configs still use the original names.
@@ -260,6 +286,7 @@ impl AppConfig {
                 let unique: std::collections::HashSet<_> = self.pet_sources.iter().collect();
                 unique.len() != self.pet_sources.len()
             }
+            || bad_update_endpoint(&self.update_endpoint)
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 4
             || self
@@ -371,6 +398,26 @@ mod tests {
             ..AppConfig::default()
         };
         assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn update_mirror_must_be_plain_https() {
+        let good = AppConfig {
+            update_endpoint: "https://mirror.example/xjtu/latest.json".into(),
+            ..AppConfig::default()
+        };
+        good.validate().unwrap();
+        for bad in [
+            "http://mirror.example/latest.json",
+            "https://user:pass@mirror.example/latest.json",
+            "not a url",
+        ] {
+            let config = AppConfig {
+                update_endpoint: bad.into(),
+                ..AppConfig::default()
+            };
+            assert!(config.validate().is_err(), "{bad}");
+        }
     }
 
     #[test]

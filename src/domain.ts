@@ -37,6 +37,7 @@ export const defaultConfig = (): AppConfig => ({
   petSources: ['campus', 'agent', 'update'],
   petPosition: null,
   pageTabSurfaces: false,
+  updateEndpoint: '',
 });
 
 export const campusLinks = [

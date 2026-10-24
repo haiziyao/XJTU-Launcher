@@ -27,6 +27,17 @@
 
 GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest.json；若仓库私有，应使用用户无需 GitHub 凭据即可访问的自有公开更新托管。更新清单中的平台名称、下载 URL 和 `.sig` 内容由官方 Tauri Action 生成。清单里的下载 URL 是 `api.github.com/.../releases/assets/{id}` 形式，客户端下载时会带 `Accept: application/octet-stream`，公开仓库正式发布后可匿名下载。签名构建已于 2026-10-22 跑通，但尚无正式发布的版本，跨版本更新仍未实测。
 
+## 无法访问 GitHub 的用户 / 镜像更新源
+
+应用更新默认读取 GitHub Releases 的 `latest.json`。网络无法访问 GitHub 时，用户可以在「应用设置 → 软件更新 → 更新源」填写镜像地址（必须是 HTTPS，不能含账号密码）；留空则使用内置地址。
+
+镜像需要同时提供：
+
+1. `latest.json`，其中的 `platforms[*].url` 必须指向镜像自己的安装包，而不是 GitHub 的 `api.github.com/.../assets/...`；
+2. 各平台安装包 / 更新包与 `.sig`，内容与签名必须和原发布一致。
+
+只有镜像 `latest.json` 而下载地址仍指向 GitHub 时，检查更新能通过但下载仍会被网络挡住。镜像部署完成后，在客户端填入 `https://<镜像>/latest.json` 并点击「检查更新」即可验证。
+
 ## 发布后
 
 - 更新 README「下载安装」里的三条直达链接到新版本的资产名（`vX.Y.Z` 与文件名都含版本号）；否则首页按钮会指向旧版本。

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCampusLogin, type LoginApi } from './campusLogin';
-import type { CampusLogin } from './types';
+import type { CampusLogin, CampusLoginAction } from './types';
 
 function view(id: string, fields: Partial<CampusLogin> = {}): CampusLogin {
   return {
@@ -20,7 +20,7 @@ function view(id: string, fields: Partial<CampusLogin> = {}): CampusLogin {
 function api() {
   return {
     startAccountLogin: vi.fn(async (_degree, id) => view(id)),
-    advanceAccountLogin: vi.fn(async (id) => view(id)),
+    advanceAccountLogin: vi.fn(async (id: string, _action: CampusLoginAction) => view(id)),
     accountLoginState: vi.fn(async (id) => view(id)),
     accountLoginCaptcha: vi.fn(async () => 'data:image/png;base64,TEST'),
     cancelAccountLogin: vi.fn(async () => {}),
