@@ -412,7 +412,11 @@ const splitNotices = computed(() => showNotices.value && (showCourses.value || s
 .home-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row dense;
   gap: 16px;
+}
+.home-grid > * {
+  min-width: 0;
 }
 .home-grid.paired {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
@@ -431,14 +435,23 @@ const splitNotices = computed(() => showNotices.value && (showCourses.value || s
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
 }
 .home-grid.split-notices .home-notices {
+  /* An explicit cell keeps the rail independent of the widgets' CSS order,
+     which previously let a plugin card push it into the wrong row. */
   grid-column: 2;
+  grid-row: 1 / span 2;
   display: flex;
   flex-direction: column;
   align-self: stretch;
   /* Match the stacked cards on the left instead of running down the page. */
   max-height: 620px;
+}
+.home-grid.split-notices .home-plugins {
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 .home-grid.split-notices .notice-panel {
   display: flex;

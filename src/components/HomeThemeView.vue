@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Check, Clock, LayoutGrid } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, Check, Clock, LayoutGrid } from 'lucide-vue-next';
 import type { AppConfig } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 
 const props = defineProps<{ config: AppConfig; saving: boolean }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
@@ -33,6 +34,26 @@ function toggleSection(id: string, on: boolean) {
     ? [...props.config.homeSections, id]
     : props.config.homeSections.filter((item) => item !== id);
   emit('update', { ...props.config, homeSections: next });
+}
+const CARD_SECTIONS = ['timetable', 'links', 'notices', 'plugins'] as const;
+const orderedCards = computed(() => {
+  const order = props.config.widgets;
+  return [...CARD_SECTIONS].sort((left, right) => {
+    const a = order.indexOf(left);
+    const b = order.indexOf(right);
+    return (a < 0 ? Number.MAX_SAFE_INTEGER : a) - (b < 0 ? Number.MAX_SAFE_INTEGER : b);
+  });
+});
+function sectionName(id: string) {
+  return SECTIONS.find((section) => section.id === id)?.name ?? id;
+}
+function moveSection(id: string, delta: number) {
+  const list = [...props.config.widgets];
+  const index = list.indexOf(id);
+  const target = index + delta;
+  if (index < 0 || target < 0 || target >= list.length) return;
+  [list[index], list[target]] = [list[target], list[index]];
+  emit('update', { ...props.config, widgets: list });
 }
 </script>
 <template>
@@ -75,12 +96,41 @@ function toggleSection(id: string, on: boolean) {
         />
       </SettingRow>
     </SettingGroup>
+    <SettingGroup title="显示顺序">
+      <SettingRow
+        v-for="(id, index) in orderedCards"
+        :key="id"
+        :title="sectionName(id)"
+        :description="visible.has(id) ? '当前显示' : '当前关闭，顺序仍保留'"
+      >
+        <div class="order-actions">
+          <UiIconButton
+            label="上移"
+            size="sm"
+            :disabled="saving || index === 0"
+            @click="moveSection(id, -1)"
+            ><ArrowUp :size="14"
+          /></UiIconButton>
+          <UiIconButton
+            label="下移"
+            size="sm"
+            :disabled="saving || index === orderedCards.length - 1"
+            @click="moveSection(id, 1)"
+            ><ArrowDown :size="14"
+          /></UiIconButton>
+        </div>
+      </SettingRow>
+    </SettingGroup>
     <p class="theme-footnote">
       <LayoutGrid :size="13" />关闭全部元素后，主页会显示一个空状态提示。
     </p>
   </section>
 </template>
 <style scoped>
+.order-actions {
+  display: flex;
+  gap: 6px;
+}
 .clock-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
