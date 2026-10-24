@@ -399,31 +399,13 @@
      reads against a bright wallpaper. */
   --control-border: rgba(15, 23, 42, 0.1);
   --control-sunken: rgba(15, 23, 42, 0.05);
-  --sidebar-bg: rgba(241, 242, 244, 0.6);
+  /* The nav sits over the picture itself; keep the rail nearly opaque so
+     hair and other busy details cannot run through the labels. */
+  --sidebar-bg: rgba(246, 247, 249, 0.97);
   --sidebar-border: rgba(15, 23, 42, 0.08);
   /* An opaque highlight reads as a grey slab on the frosted sidebar. */
   --nav-active: var(--accent-tint);
-  /* Frosted fills lift the picture only part-way; darker body text keeps
-     small labels readable on a photo. */
-  --text-secondary: #4a5059;
-  --text-tertiary: #5c636c;
   background: transparent;
-}
-/* A dark picture under the light veil would leave dark text on ~0.3 white.
-   Raise the veil and the translucent surfaces so every page keeps a light,
-   readable base; the wallpaper still shows through as a muted backdrop. */
-.desktop-shell.has-wallpaper.wallpaper-dark {
-  --panel: rgba(255, 255, 255, 0.86);
-  --panel-border: rgba(255, 255, 255, 0.55);
-  --control-bg: rgba(255, 255, 255, 0.74);
-  --control-bg-subtle: rgba(255, 255, 255, 0.62);
-  --control-border: rgba(15, 23, 42, 0.12);
-  --control-sunken: rgba(15, 23, 42, 0.06);
-  --sidebar-bg: rgba(247, 248, 250, 0.84);
-  --sidebar-border: rgba(15, 23, 42, 0.1);
-}
-.desktop-shell.has-wallpaper.wallpaper-dark .desktop-wallpaper::after {
-  background: linear-gradient(rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.74));
 }
 .has-wallpaper .desktop-sidebar {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
