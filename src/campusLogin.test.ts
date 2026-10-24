@@ -23,6 +23,7 @@ function api() {
     advanceAccountLogin: vi.fn(async (id: string, _action: CampusLoginAction) => view(id)),
     accountLoginState: vi.fn(async (id) => view(id)),
     accountLoginCaptcha: vi.fn(async () => 'data:image/png;base64,TEST'),
+    accountLoginQr: vi.fn(async () => 'data:image/png;base64,QR'),
     cancelAccountLogin: vi.fn(async () => {}),
   } satisfies LoginApi;
 }

@@ -6,6 +6,7 @@ export interface LoginApi {
   advanceAccountLogin(id: string, action: CampusLoginAction): Promise<CampusLogin>;
   accountLoginState(id: string): Promise<CampusLogin>;
   accountLoginCaptcha(id: string): Promise<string>;
+  accountLoginQr(id: string): Promise<string>;
   cancelAccountLogin(id: string): Promise<void>;
 }
 
@@ -15,6 +16,9 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
   const busy = ref(false);
   const error = ref('');
   const captchaImage = ref('');
+  const qrImage = ref('');
+  let qrTimer: ReturnType<typeof setInterval> | undefined;
+  let pollingQr = false;
   let epoch = 0;
   let activeId: string | null = null;
   let disposed = false;
@@ -23,9 +27,58 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
   async function release(id: string | null) {
     if (id) await api.cancelAccountLogin(id);
   }
+  function stopQr() {
+    if (qrTimer) clearInterval(qrTimer);
+    qrTimer = undefined;
+    qrImage.value = '';
+    pollingQr = false;
+  }
+  async function loadQr() {
+    const current = flow.value;
+    if (disposed || !current) return;
+    try {
+      const image = await api.accountLoginQr(current.flowId);
+      if (!disposed) qrImage.value = image;
+    } catch (e) {
+      if (!disposed) error.value = message(e);
+    }
+  }
+  async function startQr() {
+    stopQr();
+    await loadQr();
+    if (disposed) return;
+    qrTimer = setInterval(() => {
+      void pollQr();
+    }, 1500);
+  }
+  async function pollQr() {
+    const current = flow.value;
+    if (pollingQr || disposed || !current || !['credentials', 'captcha'].includes(current.phase))
+      return;
+    pollingQr = true;
+    const version = epoch;
+    try {
+      const next = await api.advanceAccountLogin(current.flowId, { type: 'pollQr' });
+      if (!live(version)) return;
+      await accept(next, version, false);
+      if (!['credentials', 'captcha'].includes(next.phase)) stopQr();
+    } catch (e) {
+      if (!live(version)) return;
+      const text = message(e);
+      // Authorization that needs another factor cannot be completed by polling;
+      // network hiccups should simply be retried by the next tick.
+      if (/额外验证|阶段|重新开始/.test(text)) {
+        error.value = text;
+        stopQr();
+      }
+    } finally {
+      pollingQr = false;
+    }
+  }
   async function accept(next: CampusLogin, version: number, refresh = true) {
     if (!live(version)) return;
     flow.value = next;
+    if (next.phase !== 'credentials') stopQr();
     if (next.phase === 'success' && !next.savePending) {
       activeId = null;
       captchaImage.value = '';
@@ -61,6 +114,7 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
   }
   async function begin(degree: CampusDegree) {
     if (disposed) return;
+    stopQr();
     const version = ++epoch;
     const previous = activeId;
     activeId = null;
@@ -85,6 +139,9 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
     } finally {
       if (live(version)) busy.value = false;
     }
+  }
+  async function sendSmsCode(phone: string, captcha: string) {
+    await submit({ type: 'sendSmsCode', phone, captcha });
   }
   async function submit(action: CampusLoginAction) {
     if (busy.value || !flow.value || disposed) return;
@@ -123,6 +180,7 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
     }
   }
   async function cancel() {
+    stopQr();
     const version = ++epoch;
     const id = activeId;
     activeId = null;
@@ -139,5 +197,19 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
     disposed = true;
     void cancel();
   }
-  return { flow, busy, error, captchaImage, begin, submit, refreshCaptcha, cancel, dispose };
+  return {
+    flow,
+    busy,
+    error,
+    captchaImage,
+    qrImage,
+    begin,
+    submit,
+    sendSmsCode,
+    refreshCaptcha,
+    startQr,
+    stopQr,
+    cancel,
+    dispose,
+  };
 }

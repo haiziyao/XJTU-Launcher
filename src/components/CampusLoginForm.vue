@@ -22,6 +22,11 @@ const trust = ref(true);
 const showPassword = ref(false);
 const useSaved = ref(!!props.account?.passwordSaved);
 const captcha = ref('');
+const method = ref<'password' | 'phone' | 'qrcode'>('password');
+const phone = ref('');
+const smsCaptcha = ref('');
+const smsCode = ref('');
+const smsResendAt = ref(0);
 const code = ref('');
 const identity = ref('');
 const now = ref(Date.now());
@@ -31,8 +36,25 @@ const login = createCampusLogin(bridge, () => {
   password.value = '';
   emit('success');
 });
-const { flow, busy, error, captchaImage } = login;
+const { flow, busy, error, captchaImage, qrImage } = login;
 const retrySeconds = computed(() => Math.max(0, Math.ceil((resendAt.value - now.value) / 1000)));
+const smsRetrySeconds = computed(() =>
+  Math.max(0, Math.ceil((smsResendAt.value - now.value) / 1000)),
+);
+const phoneValid = computed(() => /^1\d{10}$/.test(phone.value.trim()));
+// QR status lives in the QR card; keep it out of the general notice bar so it
+// does not linger after switching back to password or phone.
+const QR_STATUS = new Set([
+  '请使用移动交通大学 App 扫码登录。',
+  '已扫码，请在手机上确认登录。',
+  '已在手机上取消登录，请刷新二维码。',
+  '二维码已过期，请刷新。',
+  '二维码状态异常，请刷新。',
+]);
+const visibleMessage = computed(() => {
+  const message = flow.value?.message;
+  return message && !QR_STATUS.has(message) ? message : null;
+});
 const credentials = computed(
   () => flow.value && ['credentials', 'captcha'].includes(flow.value.phase),
 );
@@ -42,8 +64,12 @@ const canSubmit = computed(
     !busy.value &&
     !!flow.value &&
     (credentials.value
-      ? (hasCredentials.value || flow.value.canContinue) &&
-        (flow.value.phase !== 'captcha' || !!captcha.value.trim())
+      ? method.value === 'phone'
+        ? phoneValid.value && /^\d{4,8}$/.test(smsCode.value.trim())
+        : method.value === 'qrcode'
+          ? false
+          : (hasCredentials.value || flow.value.canContinue) &&
+            (flow.value.phase !== 'captcha' || !!captcha.value.trim())
       : flow.value.phase === 'mfa'
         ? /^\d{4,16}$/.test(code.value.trim())
         : flow.value.phase === 'identity'
@@ -57,9 +83,34 @@ watch(flow, (next, previous) => {
   if (next?.phase !== 'credentials' && next?.phase !== 'captcha') {
     password.value = '';
     showPassword.value = false;
+    void login.stopQr();
   }
+  if (next?.message === '验证码已发送') smsResendAt.value = Date.now() + 60_000;
 });
+function switchMethod(next: 'password' | 'phone' | 'qrcode') {
+  if (busy.value || !credentials.value || method.value === next) return;
+  method.value = next;
+  error.value = '';
+  captcha.value = '';
+  smsCaptcha.value = '';
+  smsCode.value = '';
+  if (next !== 'qrcode') void login.stopQr();
+  if (next === 'qrcode') void login.startQr();
+  if (next === 'phone') void login.refreshCaptcha();
+}
+async function sendCode() {
+  if (!phoneValid.value || busy.value) return;
+  await login.sendSmsCode(phone.value.trim(), smsCaptcha.value.trim());
+  smsCaptcha.value = '';
+  void login.refreshCaptcha();
+}
 async function restart() {
+  method.value = 'password';
+  phone.value = '';
+  smsCaptcha.value = '';
+  smsCode.value = '';
+  smsResendAt.value = 0;
+  void login.stopQr();
   password.value = '';
   code.value = '';
   captcha.value = '';
@@ -71,6 +122,19 @@ async function submit() {
   if (!canSubmit.value || !flow.value) return;
   let action: CampusLoginAction;
   if (credentials.value) {
+    if (method.value === 'qrcode') return;
+    if (method.value === 'phone') {
+      action = {
+        type: 'smsLogin',
+        phone: phone.value.trim(),
+        code: smsCode.value.trim(),
+        captcha: smsCaptcha.value.trim(),
+      };
+      smsCode.value = '';
+      smsCaptcha.value = '';
+      await login.submit(action);
+      return;
+    }
     if (flow.value.canContinue && !password.value && !useSaved.value)
       action = { type: 'continue', captcha: captcha.value.trim() };
     else if (useSaved.value && props.account)
@@ -101,6 +165,7 @@ async function submit() {
   await login.submit(action);
 }
 async function cancel() {
+  void login.stopQr();
   password.value = '';
   code.value = '';
   captcha.value = '';
@@ -117,6 +182,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer);
+  void login.stopQr();
   password.value = '';
   code.value = '';
   login.dispose();
@@ -168,12 +234,12 @@ onBeforeUnmount(() => {
     </SettingGroup>
     <p v-if="error" class="notice" role="alert">{{ error }}</p>
     <p
-      v-if="flow?.message"
+      v-if="visibleMessage"
       class="notice"
-      :class="{ success: flow.message === '验证码已发送' }"
+      :class="{ success: visibleMessage === '验证码已发送' }"
       role="status"
     >
-      {{ flow.message }}
+      {{ visibleMessage }}
     </p>
     <SettingGroup
       :title="
@@ -198,48 +264,142 @@ onBeforeUnmount(() => {
       <form v-else class="campus-login-form" @submit.prevent="submit">
         <fieldset :disabled="busy">
           <template v-if="credentials">
-            <label for="campus-username">账号</label
-            ><input
-              id="campus-username"
-              v-model="username"
-              class="text-field"
-              autocomplete="username"
-              placeholder="NetID / 学号"
-              maxlength="256"
-              :readonly="useSaved"
-              autocapitalize="none"
-              spellcheck="false"
-            />
-            <label :for="useSaved ? undefined : 'campus-password'">密码</label>
-            <div v-if="useSaved" class="saved-password">
-              <ShieldCheck :size="16" /><span>使用本机保存的密码</span
-              ><UiButton variant="ghost" size="sm" type="button" @click="enterPassword"
-                >更换</UiButton
-              >
-            </div>
-            <div v-else class="field-shell">
-              <input
-                id="campus-password"
-                v-model="password"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="current-password"
-                :placeholder="flow.canContinue ? '已完成前一步，可直接继续' : '输入统一认证密码'"
-                maxlength="512"
-              /><UiIconButton
-                :label="showPassword ? '隐藏密码' : '显示密码'"
-                size="sm"
+            <div class="login-methods" role="tablist" aria-label="登录方式">
+              <button
                 type="button"
-                @click="showPassword = !showPassword"
+                role="tab"
+                :aria-selected="method === 'password'"
+                :class="{ active: method === 'password' }"
+                @click="switchMethod('password')"
               >
-                <EyeOff v-if="showPassword" :size="15" /><Eye v-else :size="15" />
-              </UiIconButton>
+                账号密码
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="method === 'phone'"
+                :class="{ active: method === 'phone' }"
+                @click="switchMethod('phone')"
+              >
+                手机号
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="method === 'qrcode'"
+                :class="{ active: method === 'qrcode' }"
+                @click="switchMethod('qrcode')"
+              >
+                扫码登录
+              </button>
             </div>
-            <template v-if="flow.phase === 'captcha'">
-              <label for="campus-captcha">图片验证码</label>
+            <template v-if="method === 'password'">
+              <label for="campus-username">账号</label
+              ><input
+                id="campus-username"
+                v-model="username"
+                class="text-field"
+                autocomplete="username"
+                placeholder="NetID / 学号"
+                maxlength="256"
+                :readonly="useSaved"
+                autocapitalize="none"
+                spellcheck="false"
+              />
+              <label :for="useSaved ? undefined : 'campus-password'">密码</label>
+              <div v-if="useSaved" class="saved-password">
+                <ShieldCheck :size="16" /><span>使用本机保存的密码</span
+                ><UiButton variant="ghost" size="sm" type="button" @click="enterPassword"
+                  >更换</UiButton
+                >
+              </div>
+              <div v-else class="field-shell">
+                <input
+                  id="campus-password"
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  autocomplete="current-password"
+                  :placeholder="flow.canContinue ? '已完成前一步，可直接继续' : '输入统一认证密码'"
+                  maxlength="512"
+                /><UiIconButton
+                  :label="showPassword ? '隐藏密码' : '显示密码'"
+                  size="sm"
+                  type="button"
+                  @click="showPassword = !showPassword"
+                >
+                  <EyeOff v-if="showPassword" :size="15" /><Eye v-else :size="15" />
+                </UiIconButton>
+              </div>
+              <template v-if="flow.phase === 'captcha'">
+                <label for="campus-captcha">图片验证码</label>
+                <div class="captcha-field">
+                  <input
+                    id="campus-captcha"
+                    v-model="captcha"
+                    class="text-field"
+                    autocomplete="off"
+                    maxlength="32"
+                  /><button
+                    type="button"
+                    class="captcha-image"
+                    title="刷新验证码"
+                    aria-label="刷新图片验证码"
+                    @click="
+                      captcha = '';
+                      login.refreshCaptcha();
+                    "
+                  >
+                    <img v-if="captchaImage" :src="captchaImage" alt="校园验证码" /><span v-else
+                      >加载验证码</span
+                    >
+                  </button>
+                </div>
+              </template>
+              <div v-if="!flow.canContinue || hasCredentials" class="login-remember">
+                <div class="login-option">
+                  <div>
+                    <strong>保存账号密码</strong
+                    ><small>登录成功后保存在本机，之后可直接重新登录</small>
+                  </div>
+                  <UiSwitch
+                    :checked="remember"
+                    label="保存账号密码"
+                    :disabled="busy"
+                    @toggle="remember = !remember"
+                  />
+                </div>
+                <div class="login-option">
+                  <div>
+                    <strong>信任本设备</strong
+                    ><small
+                      >学校会记住这台电脑，短信验证通过一次后，之后登录通常不再要求验证码</small
+                    >
+                  </div>
+                  <UiSwitch
+                    :checked="trust"
+                    label="信任本设备"
+                    :disabled="busy"
+                    @toggle="trust = !trust"
+                  />
+                </div>
+              </div>
+            </template>
+            <template v-else-if="method === 'phone'">
+              <label for="campus-phone">手机号</label>
+              <input
+                id="campus-phone"
+                v-model="phone"
+                class="text-field"
+                inputmode="tel"
+                autocomplete="tel"
+                placeholder="11 位手机号"
+                maxlength="11"
+              />
+              <label for="campus-sms-captcha">图片验证码</label>
               <div class="captcha-field">
                 <input
-                  id="campus-captcha"
-                  v-model="captcha"
+                  id="campus-sms-captcha"
+                  v-model="smsCaptcha"
                   class="text-field"
                   autocomplete="off"
                   maxlength="32"
@@ -249,7 +409,7 @@ onBeforeUnmount(() => {
                   title="刷新验证码"
                   aria-label="刷新图片验证码"
                   @click="
-                    captcha = '';
+                    smsCaptcha = '';
                     login.refreshCaptcha();
                   "
                 >
@@ -258,33 +418,48 @@ onBeforeUnmount(() => {
                   >
                 </button>
               </div>
+              <label for="campus-phone-code">短信验证码</label>
+              <div class="captcha-field">
+                <input
+                  id="campus-phone-code"
+                  v-model="smsCode"
+                  class="text-field"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="8"
+                /><UiButton
+                  size="sm"
+                  type="button"
+                  :disabled="busy || smsRetrySeconds > 0 || !phoneValid"
+                  @click="sendCode"
+                >
+                  {{ smsRetrySeconds ? smsRetrySeconds + ' 秒后重发' : '发送验证码' }}
+                </UiButton>
+              </div>
+              <p class="login-help">
+                先发送短信验证码，再输入收到的 4–8 位数字。手机号登录不会保存密码。
+              </p>
             </template>
-            <div v-if="!flow.canContinue || hasCredentials" class="login-remember">
-              <div class="login-option">
-                <div>
-                  <strong>保存账号密码</strong
-                  ><small>登录成功后保存在本机，之后可直接重新登录</small>
+            <template v-else>
+              <div class="qr-login">
+                <div class="qr-frame">
+                  <img v-if="qrImage" :src="qrImage" alt="扫码登录二维码" />
+                  <span v-else>正在生成二维码…</span>
                 </div>
-                <UiSwitch
-                  :checked="remember"
-                  label="保存账号密码"
-                  :disabled="busy"
-                  @toggle="remember = !remember"
-                />
-              </div>
-              <div class="login-option">
-                <div>
-                  <strong>信任本设备</strong
-                  ><small>学校会记住这台电脑，短信验证通过一次后，之后登录通常不再要求验证码</small>
+                <div class="qr-copy">
+                  <strong>使用手机扫码登录</strong>
+                  <p>
+                    {{
+                      flow.message ||
+                      '打开移动交通大学 App 扫描二维码并在手机上确认；微信扫一扫若能打开学校登录页也可使用。'
+                    }}
+                  </p>
+                  <UiButton size="sm" type="button" :disabled="busy" @click="login.startQr()"
+                    ><RefreshCw :size="14" />刷新二维码</UiButton
+                  >
                 </div>
-                <UiSwitch
-                  :checked="trust"
-                  label="信任本设备"
-                  :disabled="busy"
-                  @toggle="trust = !trust"
-                />
               </div>
-            </div>
+            </template>
           </template>
           <template v-else-if="flow.phase === 'mfa'">
             <p class="login-help">
@@ -325,7 +500,11 @@ onBeforeUnmount(() => {
           <p v-else class="login-help">学校认证已完成，重试保存本机账号。</p>
           <div class="login-actions">
             <UiButton type="button" @click="cancel">取消</UiButton
-            ><UiButton variant="primary" :disabled="!canSubmit">
+            ><UiButton
+              v-if="!(credentials && method === 'qrcode')"
+              variant="primary"
+              :disabled="!canSubmit"
+            >
               <LoaderCircle v-if="busy" :size="14" class="spinning" />{{
                 busy
                   ? '处理中…'
@@ -333,11 +512,9 @@ onBeforeUnmount(() => {
                     ? '重试保存'
                     : flow.phase === 'mfa'
                       ? '验证并继续'
-                      : flow.canContinue
-                        ? '继续登录'
-                        : flow.phase === 'identity'
-                          ? '继续'
-                          : '登录'
+                      : flow.phase === 'identity'
+                        ? '继续'
+                        : '登录'
               }}
             </UiButton>
           </div>
@@ -348,6 +525,71 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.login-methods {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--control-sunken);
+}
+.login-methods button {
+  flex: 1;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.login-methods button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
+.qr-login {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  padding: 4px 0 8px;
+}
+.qr-frame {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.qr-frame img {
+  display: block;
+  width: 160px;
+  height: 160px;
+}
+.qr-copy strong {
+  font-size: 13px;
+}
+.qr-copy p {
+  max-width: 280px;
+  margin: 6px 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 560px) {
+  .qr-login {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 .login-back {
   margin-bottom: 12px;
 }

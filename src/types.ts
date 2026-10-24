@@ -235,7 +235,10 @@ export type CampusLoginAction =
   | { type: 'continue'; captcha?: string }
   | { type: 'sendMfa' }
   | { type: 'verifyMfa'; code: string }
-  | { type: 'chooseIdentity'; label: string };
+  | { type: 'chooseIdentity'; label: string }
+  | { type: 'sendSmsCode'; phone: string; captcha?: string }
+  | { type: 'smsLogin'; phone: string; code: string; captcha?: string }
+  | { type: 'pollQr' };
 
 export type ModelProtocol = 'openai-compatible' | 'anthropic' | 'gemini';
 export interface ModelProvider {

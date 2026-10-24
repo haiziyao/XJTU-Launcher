@@ -101,6 +101,21 @@ pub enum Action {
     ChooseIdentity {
         label: String,
     },
+    /// Send a dynamic login code to the phone number entered in the form.
+    SendSmsCode {
+        phone: String,
+        #[serde(default)]
+        captcha: String,
+    },
+    /// Sign in with the phone number and the code from the SMS.
+    SmsLogin {
+        phone: String,
+        code: String,
+        #[serde(default)]
+        captcha: String,
+    },
+    /// Poll the CAS QR endpoint; authorized scans complete the login here.
+    PollQr,
 }
 struct Mfa {
     state: String,
@@ -120,6 +135,7 @@ struct Form {
     submit: String,
     choices: Vec<Choice>,
     mfa_enabled: bool,
+    mfa_qrcode_enabled: bool,
 }
 fn input(html: &Html, name: &str) -> Option<String> {
     html.select(&Selector::parse("input").unwrap())
@@ -149,15 +165,21 @@ fn parse_form(text: &str) -> Option<Form> {
             }
         }
     }
-    let mfa_enabled = regex::Regex::new(
+    let config = regex::Regex::new(
         r#"globalConfig\s*=\s*eval\('\('\s*\+\s*("(?:\\.|[^"\\])*")\s*\+\s*'\)'\s*\)"#,
     )
     .unwrap()
     .captures(text)
     .and_then(|c| serde_json::from_str::<String>(&c[1]).ok())
-    .and_then(|v| serde_json::from_str::<Value>(&v).ok())
-    .and_then(|v| v.get("mfaEnabled").cloned())
-    .is_none_or(|v| v != Value::Bool(false) && v != "false");
+    .and_then(|v| serde_json::from_str::<Value>(&v).ok());
+    let mfa_enabled = config
+        .as_ref()
+        .and_then(|v| v.get("mfaEnabled"))
+        .is_none_or(|v| v != &Value::Bool(false) && v != "false");
+    let mfa_qrcode_enabled = config
+        .as_ref()
+        .and_then(|v| v.get("mfaQrCodeLoginEnabled"))
+        .is_some_and(|v| v == &Value::Bool(true) || v == "true");
     Some(Form {
         execution,
         sec_state: input(&html, "secState"),
@@ -165,6 +187,7 @@ fn parse_form(text: &str) -> Option<Form> {
         submit: input(&html, "submit").unwrap_or("Login1".into()),
         choices,
         mfa_enabled,
+        mfa_qrcode_enabled,
     })
 }
 fn has_error(text: &str) -> bool {
@@ -223,6 +246,20 @@ fn encrypt_password(password: &str, pem: &str) -> Result<String, String> {
         .encrypt(&mut rand::rngs::OsRng, Pkcs1v15Encrypt, password.as_bytes())
         .map_err(|_| "无法加密校园登录密码")?;
     Ok(format!("__RSA__{}", STANDARD.encode(bytes)))
+}
+fn phone_ok(phone: &str) -> bool {
+    phone.len() == 11 && phone.starts_with('1') && phone.bytes().all(|b| b.is_ascii_digit())
+}
+fn image_data_url(bytes: &[u8], label: &str) -> Result<String, String> {
+    let kind = match image::guess_format(bytes).map_err(|_| format!("{label}未返回图片"))? {
+        image::ImageFormat::Png => "png",
+        image::ImageFormat::Jpeg => "jpeg",
+        _ => return Err(format!("{label}图片格式不受支持")),
+    };
+    Ok(format!(
+        "data:image/{kind};base64,{}",
+        STANDARD.encode(bytes)
+    ))
 }
 
 /// An unattended password login that starts at a service, so services which
@@ -410,6 +447,8 @@ pub struct Login {
     failures: u8,
     /// Auto-identity selection runs at most once per flow.
     identity_attempts: u8,
+    /// Last dynamic-code send, so the 60-second cooldown is enforced here too.
+    sms_sent: Option<Instant>,
     message: Option<String>,
     pub completed: Option<Account>,
 }
@@ -459,6 +498,7 @@ impl Login {
             chosen: None,
             failures: 0,
             identity_attempts: 0,
+            sms_sent: None,
             message: None,
             completed: None,
         };
@@ -872,15 +912,240 @@ impl Login {
             return Err("图片验证码获取失败".into());
         }
         let bytes = network::limited_bytes(response, 256 * 1024).await?;
-        let kind = match image::guess_format(&bytes).map_err(|_| "验证码未返回图片")? {
-            image::ImageFormat::Png => "png",
-            image::ImageFormat::Jpeg => "jpeg",
-            _ => return Err("验证码图片格式不受支持".into()),
-        };
-        Ok(format!(
-            "data:image/{kind};base64,{}",
-            STANDARD.encode(bytes)
-        ))
+        image_data_url(&bytes, "验证码")
+    }
+    /// Fetches one QR image for the CAS scan login. The image is bound to the
+    /// login session and can be polled with `Action::PollQr`.
+    pub async fn qrcode(&self) -> Result<String, String> {
+        self.ensure_active()?;
+        if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+            return Err("当前登录阶段无法获取二维码".into());
+        }
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_millis())
+            .unwrap_or_default();
+        let url = Url::parse(&format!("{CAS}/cas/qr/qrcode?r={millis}")).unwrap();
+        let referer = Transport::address(&page.url, self.request_mode())?;
+        let response = self
+            .transport
+            .client
+            .get(Transport::address(&url, self.request_mode())?)
+            .header("Referer", referer.as_str())
+            .send()
+            .await
+            .map_err(|_| "无法获取登录二维码")?;
+        if !response.status().is_success() {
+            return Err("登录二维码获取失败".into());
+        }
+        let bytes = network::limited_bytes(response, 256 * 1024).await?;
+        image_data_url(&bytes, "二维码")
+    }
+    async fn poll_qrcode(&mut self) -> Result<Option<Page>, String> {
+        if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+            return Err("当前登录阶段无法扫码登录".into());
+        }
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let referer = Transport::address(&page.url, self.request_mode())?;
+        let url = Url::parse(&format!("{CAS}/cas/qr/comet")).unwrap();
+        let response = self
+            .transport
+            .client
+            .post(Transport::address(&url, self.request_mode())?)
+            .header("Referer", referer.as_str())
+            .timeout(Duration::from_secs(6))
+            .send()
+            .await
+            .map_err(|_| "无法获取扫码状态")?;
+        if !response.status().is_success() {
+            return Err("无法获取扫码状态".into());
+        }
+        let value: Value =
+            serde_json::from_slice(&network::limited_bytes(response, 256 * 1024).await?)
+                .map_err(|_| "扫码状态格式异常")?;
+        match value.get("code").and_then(Value::as_i64) {
+            Some(0) => {}
+            Some(1) => {
+                self.message = Some("二维码已过期，请刷新。".into());
+                return Ok(None);
+            }
+            _ => {
+                self.message = Some("二维码状态异常，请刷新。".into());
+                return Ok(None);
+            }
+        }
+        let data = value.get("data").ok_or("扫码状态缺少数据")?;
+        let qr = data.get("qrCode").ok_or("扫码状态缺少二维码")?;
+        match qr.get("status").and_then(Value::as_str).unwrap_or("") {
+            "1" => {
+                self.message = Some("请使用移动交通大学 App 扫码登录。".into());
+                Ok(None)
+            }
+            "2" => {
+                self.message = Some("已扫码，请在手机上确认登录。".into());
+                Ok(None)
+            }
+            "4" => {
+                self.message = Some("已在手机上取消登录，请刷新二维码。".into());
+                Ok(None)
+            }
+            "3" => {
+                let user = qr
+                    .get("userId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or("扫码结果缺少登录账号")?;
+                let state = data
+                    .get("stateKey")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or("扫码结果缺少登录凭据")?;
+                let form = self
+                    .page
+                    .as_ref()
+                    .and_then(|page| parse_form(&page.html))
+                    .ok_or("校园认证页面格式发生变化，请重新开始")?;
+                if form.mfa_enabled && form.mfa_qrcode_enabled {
+                    let detect = Url::parse(&format!("{CAS}/cas/mfa/detect")).unwrap();
+                    let response = self
+                        .transport
+                        .client
+                        .post(Transport::address(&detect, self.request_mode())?)
+                        .header("Referer", referer.as_str())
+                        .form(&[
+                            ("username", user),
+                            ("password", state),
+                            ("fpVisitorId", self.visitor.as_str()),
+                            ("loginType", "qrCodeLogin"),
+                        ])
+                        .send()
+                        .await
+                        .map_err(|_| "无法检测扫码登录的额外验证")?;
+                    let data = network::json(response).await?;
+                    if data.get("need").and_then(Value::as_bool).unwrap_or(true) {
+                        return Err("扫码后需要额外验证，请改用账号密码登录".into());
+                    }
+                }
+                self.username = user.to_string();
+                self.encrypted.clear();
+                self.retained_password = None;
+                self.pending_captcha.clear();
+                let url = self.page.as_ref().ok_or("缺少校园登录页面")?.url.clone();
+                let result = self
+                    .post_form(
+                        &url,
+                        &[
+                            ("username", user.to_string()),
+                            ("password", state.to_string()),
+                            ("currentMenu", "3".into()),
+                            ("mfaState", String::new()),
+                            ("execution", form.execution),
+                            ("_eventId", "submitQrCodeKey".into()),
+                            ("geolocation", String::new()),
+                            ("fpVisitorId", self.visitor.clone()),
+                            ("trustAgent", self.trust_agent().into()),
+                        ],
+                    )
+                    .await?;
+                self.message = None;
+                Ok(Some(result))
+            }
+            _ => {
+                self.message = Some("二维码状态异常，请刷新。".into());
+                Ok(None)
+            }
+        }
+    }
+    async fn send_sms_code(
+        &mut self,
+        phone: &str,
+        captcha: String,
+    ) -> Result<Option<Page>, String> {
+        if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+            return Err("当前登录阶段无法发送短信".into());
+        }
+        if !phone_ok(phone) {
+            return Err("请输入有效的手机号".into());
+        }
+        if captcha.len() > 32 {
+            return Err("验证码格式不受支持".into());
+        }
+        if self
+            .sms_sent
+            .is_some_and(|sent| sent.elapsed() < Duration::from_secs(60))
+        {
+            return Err("验证码已发送，请稍后重试".into());
+        }
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let referer = Transport::address(&page.url, self.request_mode())?;
+        let url = Url::parse(&format!("{CAS}/cas/passwordlessTokenSend")).unwrap();
+        let response = self
+            .transport
+            .client
+            .post(Transport::address(&url, self.request_mode())?)
+            .header("Referer", referer.as_str())
+            .form(&[("username", phone), ("captcha", captcha.as_str())])
+            .send()
+            .await
+            .map_err(|_| "无法发送短信验证码")?;
+        let data = network::json(response).await?;
+        if !data
+            .get("success")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            return Err("验证码发送失败，请检查手机号和图片验证码".into());
+        }
+        self.sms_sent = Some(Instant::now());
+        self.message = Some("验证码已发送".into());
+        Ok(None)
+    }
+    async fn sms_login(
+        &mut self,
+        phone: &str,
+        code: &str,
+        captcha: String,
+    ) -> Result<Option<Page>, String> {
+        if !matches!(self.phase, Phase::Credentials | Phase::Captcha) {
+            return Err("当前登录阶段无法使用短信登录".into());
+        }
+        if !phone_ok(phone) {
+            return Err("请输入有效的手机号".into());
+        }
+        if code.len() < 4 || code.len() > 8 || !code.bytes().all(|b| b.is_ascii_digit()) {
+            return Err("请输入短信中的动态验证码".into());
+        }
+        if captcha.len() > 32 {
+            return Err("验证码格式不受支持".into());
+        }
+        let page = self.page.as_ref().ok_or("缺少校园登录页面")?;
+        let form = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请重新开始")?;
+        let url = page.url.clone();
+        self.username = phone.to_string();
+        self.encrypted.clear();
+        self.retained_password = None;
+        self.pending_captcha = captcha.clone();
+        let result = self
+            .post_form(
+                &url,
+                &[
+                    ("username", phone.to_string()),
+                    ("password", code.to_string()),
+                    ("captcha", captcha),
+                    ("currentMenu", "2".into()),
+                    ("failN", "-1".into()),
+                    ("mfaState", String::new()),
+                    ("execution", form.execution),
+                    ("_eventId", "submitPasswordlessToken".into()),
+                    ("geolocation", String::new()),
+                    ("fpVisitorId", self.visitor.clone()),
+                    ("trustAgent", self.trust_agent().into()),
+                    ("submit2", "Login2".into()),
+                ],
+            )
+            .await?;
+        Ok(Some(result))
     }
     pub async fn act(&mut self, action: Action) -> Result<(), String> {
         self.ensure_active()?;
@@ -1027,6 +1292,13 @@ impl Login {
                     .await?,
                 )
             }
+            Action::SendSmsCode { phone, captcha } => self.send_sms_code(&phone, captcha).await?,
+            Action::SmsLogin {
+                phone,
+                code,
+                captcha,
+            } => self.sms_login(&phone, &code, captcha).await?,
+            Action::PollQr => self.poll_qrcode().await?,
         };
         if let Some(page) = page {
             self.accept(page).await?;
@@ -1311,6 +1583,7 @@ mod tests {
                 chosen: None,
                 failures: 3,
                 identity_attempts: 0,
+                sms_sent: None,
                 message: None,
                 completed: None,
             };
@@ -1375,6 +1648,20 @@ mod tests {
                 .mfa_enabled
         );
     }
+    #[test]
+    fn phone_login_accepts_only_eleven_digit_mobile_numbers() {
+        assert!(phone_ok("13800138000"));
+        for bad in [
+            "1380013800",
+            "138001380000",
+            "23800138000",
+            "1380013800a",
+            "",
+        ] {
+            assert!(!phone_ok(bad), "{bad}");
+        }
+    }
+
     #[test]
     fn picks_the_identity_matching_the_selected_degree() {
         let choices = vec![

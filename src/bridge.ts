@@ -212,6 +212,10 @@ export const bridge = {
     requireNative();
     return invoke('account_login_captcha', { flowId });
   },
+  async accountLoginQr(flowId: string): Promise<string> {
+    requireNative();
+    return invoke('account_login_qr', { flowId });
+  },
   async cancelAccountLogin(flowId: string): Promise<void> {
     requireNative();
     return invoke('cancel_account_login', { flowId });

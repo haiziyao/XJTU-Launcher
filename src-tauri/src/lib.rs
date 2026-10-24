@@ -383,6 +383,19 @@ async fn advance_account_login(
     Ok(login.view())
 }
 
+/// Fetches a QR image for the scan login bound to this flow's CAS session.
+#[tauri::command]
+async fn account_login_qr(
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    flow_id: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let handle = state.auth.get(&flow_id)?;
+    let login = handle.login.lock().await;
+    login.qrcode().await
+}
+
 #[tauri::command]
 async fn account_login_captcha(
     window: WebviewWindow,
@@ -2345,6 +2358,7 @@ pub fn run() {
             start_account_login,
             advance_account_login,
             account_login_captcha,
+            account_login_qr,
             cancel_account_login,
             list_accounts,
             switch_account,
