@@ -168,6 +168,12 @@ fn has_error(text: &str) -> bool {
                 || e.value().attr("title").is_some_and(|s| !s.is_empty())
         })
 }
+/// The verification endpoint reports `status: 2` on success. Older responses
+/// only signal failure through the wrapper's `code` and omit the field, so a
+/// missing status counts as passed rather than as a rejected code.
+fn mfa_code_accepted(data: &Value) -> bool {
+    data.get("status").is_none_or(|v| v == 2 || v == "2")
+}
 fn parse_public_key(pem: &str) -> Result<RsaPublicKey, String> {
     // The campus endpoint returns an unwrapped Base64 line. Decode the supported
     // PEM envelopes explicitly; keep RSA DER validation strict.
@@ -887,7 +893,7 @@ impl Login {
                         &json!({"gid":mfa.gid,"code":code}),
                     )
                     .await?;
-                if !matches!(data.get("status"),Some(v) if v==2 || v=="2") {
+                if !mfa_code_accepted(&data) {
                     return Err("手机验证码验证未通过".into());
                 }
                 self.mfa.as_mut().unwrap().verified = true;
@@ -1264,5 +1270,14 @@ mod tests {
                 .unwrap()
                 .mfa_enabled
         );
+    }
+    #[test]
+    fn a_verified_mfa_code_passes_without_an_explicit_status() {
+        assert!(mfa_code_accepted(&json!({"status": 2})));
+        assert!(mfa_code_accepted(&json!({"status": "2"})));
+        assert!(mfa_code_accepted(&json!({})));
+        assert!(mfa_code_accepted(&Value::Null));
+        assert!(!mfa_code_accepted(&json!({"status": 0})));
+        assert!(!mfa_code_accepted(&json!({"status": "1"})));
     }
 }
