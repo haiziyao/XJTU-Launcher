@@ -53,7 +53,10 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
       }
     }
     if (live(version) && flow.value?.phase === 'credentials' && flow.value.canContinue) {
-      error.value = '学校返回了额外的确认页面，请点击“继续登录”。';
+      // Never leave a confirmation button behind: end this flow and let the
+      // user start again, which is the only interaction the user expects.
+      error.value = '学校返回了额外的确认页面，请重新开始登录。';
+      await cancel();
     }
   }
   async function begin(degree: CampusDegree) {

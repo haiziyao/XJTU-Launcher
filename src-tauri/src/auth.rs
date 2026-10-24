@@ -178,6 +178,19 @@ fn has_error(text: &str) -> bool {
 /// The verification endpoint reports `status: 2` on success. Older responses
 /// only signal failure through the wrapper's `code` and omit the field, so a
 /// missing status counts as passed rather than as a rejected code.
+/// The reference client picks the identity that matches the degree chosen in
+/// the form. Doing it here removes a second confirmation step from a normal
+/// login; choices are only shown when no identity matches.
+fn matching_choice<'a>(choices: &'a [Choice], degree: &str) -> Option<&'a Choice> {
+    let keyword = if degree == "postgraduate" {
+        "研究"
+    } else {
+        "本科"
+    };
+    choices
+        .iter()
+        .find(|choice| choice.label.contains(keyword) || choice.name.contains(keyword))
+}
 fn mfa_code_accepted(data: &Value) -> bool {
     data.get("status").is_none_or(|v| v == 2 || v == "2")
 }
@@ -395,6 +408,8 @@ pub struct Login {
     choices: Vec<Choice>,
     chosen: Option<String>,
     failures: u8,
+    /// Auto-identity selection runs at most once per flow.
+    identity_attempts: u8,
     message: Option<String>,
     pub completed: Option<Account>,
 }
@@ -443,6 +458,7 @@ impl Login {
             choices: vec![],
             chosen: None,
             failures: 0,
+            identity_attempts: 0,
             message: None,
             completed: None,
         };
@@ -751,6 +767,36 @@ impl Login {
                 self.phase = Phase::Mfa;
                 self.init_mfa().await?;
             } else if !form.choices.is_empty() {
+                // The form already asked which campus identity to use. Pick the
+                // one matching the degree chosen in our own form so the user
+                // never sees a second confirmation; only show the choices when
+                // nothing matches.
+                let choice = if self.identity_attempts == 0 {
+                    matching_choice(&form.choices, &self.degree).cloned()
+                } else {
+                    None
+                };
+                if let Some(choice) = choice {
+                    self.identity_attempts = 1;
+                    self.chosen = Some(choice.label.clone());
+                    let url = self.page.as_ref().ok_or("缺少身份选择页面")?.url.clone();
+                    let result = self
+                        .post_form(
+                            &url,
+                            &[
+                                ("execution", form.execution),
+                                ("_eventId", "submit".into()),
+                                ("geolocation", String::new()),
+                                ("fpVisitorId", self.visitor.clone()),
+                                ("trustAgent", self.trust_agent().into()),
+                                ("username", choice.label),
+                                ("useDefault", "false".into()),
+                            ],
+                        )
+                        .await?;
+                    page = result;
+                    continue;
+                }
                 self.choices = form.choices;
                 self.phase = Phase::Identity;
             } else {
@@ -1264,6 +1310,7 @@ mod tests {
                 choices: vec![],
                 chosen: None,
                 failures: 3,
+                identity_attempts: 0,
                 message: None,
                 completed: None,
             };
@@ -1328,6 +1375,29 @@ mod tests {
                 .mfa_enabled
         );
     }
+    #[test]
+    fn picks_the_identity_matching_the_selected_degree() {
+        let choices = vec![
+            Choice {
+                name: "本科生".into(),
+                label: "undergraduate-label".into(),
+            },
+            Choice {
+                name: "研究生".into(),
+                label: "postgraduate-label".into(),
+            },
+        ];
+        assert_eq!(
+            matching_choice(&choices, "undergraduate").map(|c| c.label.as_str()),
+            Some("undergraduate-label")
+        );
+        assert_eq!(
+            matching_choice(&choices, "postgraduate").map(|c| c.label.as_str()),
+            Some("postgraduate-label")
+        );
+        assert!(matching_choice(&choices[..1], "postgraduate").is_none());
+    }
+
     #[test]
     fn a_verified_mfa_code_passes_without_an_explicit_status() {
         assert!(mfa_code_accepted(&json!({"status": 2})));
