@@ -44,6 +44,26 @@ describe('campus login lifecycle', () => {
     expect(service.cancelAccountLogin).toHaveBeenCalledWith(id);
     expect(login.busy.value).toBe(false);
   });
+  it('follows an inputless confirmation page without a second click', async () => {
+    const service = api();
+    const success = vi.fn();
+    const login = createCampusLogin(service, success);
+    await login.begin('undergraduate');
+    service.advanceAccountLogin
+      .mockImplementationOnce(async (flowId) => view(flowId, { canContinue: true }))
+      .mockImplementationOnce(async (flowId) => view(flowId, { phase: 'success' }));
+    await login.submit({
+      type: 'credentials',
+      username: 'test',
+      password: 'test-password',
+      rememberPassword: false,
+    });
+    expect(service.advanceAccountLogin).toHaveBeenCalledTimes(2);
+    expect(service.advanceAccountLogin.mock.calls[1][1]).toEqual({ type: 'continue' });
+    expect(success).toHaveBeenCalledTimes(1);
+    expect(login.busy.value).toBe(false);
+    login.dispose();
+  });
   it('restores the backend phase after partial network failure without sending SMS', async () => {
     const service = api();
     const login = createCampusLogin(service, vi.fn());

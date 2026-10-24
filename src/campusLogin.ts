@@ -35,6 +35,27 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
       if (live(version)) captchaImage.value = image;
     } else if (next.phase !== 'captcha') captchaImage.value = '';
   }
+  // The school's CAS can answer a password submission with an extra page that
+  // needs no input; follow it here so a second "continue" click never appears.
+  // Stop at a page that needs the user, and cap the chain to avoid a loop.
+  async function followContinuations(version: number) {
+    for (let step = 0; step < 2; step += 1) {
+      const current = flow.value;
+      if (!live(version) || !current || current.phase !== 'credentials' || !current.canContinue) {
+        return;
+      }
+      try {
+        const next = await api.advanceAccountLogin(current.flowId, { type: 'continue' });
+        await accept(next, version);
+      } catch (e) {
+        if (live(version)) error.value = message(e);
+        return;
+      }
+    }
+    if (live(version) && flow.value?.phase === 'credentials' && flow.value.canContinue) {
+      error.value = '学校返回了额外的确认页面，请点击“继续登录”。';
+    }
+  }
   async function begin(degree: CampusDegree) {
     if (disposed) return;
     const version = ++epoch;
@@ -55,6 +76,7 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
         return;
       }
       await accept(next, version);
+      await followContinuations(version);
     } catch (e) {
       if (live(version)) error.value = message(e);
     } finally {
@@ -69,6 +91,7 @@ export function createCampusLogin(api: LoginApi, success: () => void) {
     busy.value = true;
     try {
       await accept(await api.advanceAccountLogin(id, action), version);
+      await followContinuations(version);
     } catch (e) {
       if (!live(version)) return;
       error.value = message(e);
