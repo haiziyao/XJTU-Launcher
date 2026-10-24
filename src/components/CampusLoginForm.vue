@@ -68,8 +68,7 @@ const canSubmit = computed(
         ? phoneValid.value && /^\d{4,8}$/.test(smsCode.value.trim())
         : method.value === 'qrcode'
           ? false
-          : (hasCredentials.value || flow.value.canContinue) &&
-            (flow.value.phase !== 'captcha' || !!captcha.value.trim())
+          : hasCredentials.value && (flow.value.phase !== 'captcha' || !!captcha.value.trim())
       : flow.value.phase === 'mfa'
         ? /^\d{4,16}$/.test(code.value.trim())
         : flow.value.phase === 'identity'
@@ -135,9 +134,7 @@ async function submit() {
       await login.submit(action);
       return;
     }
-    if (flow.value.canContinue && !password.value && !useSaved.value)
-      action = { type: 'continue', captcha: captcha.value.trim() };
-    else if (useSaved.value && props.account)
+    if (useSaved.value && props.account)
       action = {
         type: 'savedCredentials',
         accountId: props.account.id,
@@ -319,7 +316,7 @@ onBeforeUnmount(() => {
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
                   autocomplete="current-password"
-                  :placeholder="flow.canContinue ? '已完成前一步，可直接继续' : '输入统一认证密码'"
+                  :placeholder="'输入统一认证密码'"
                   maxlength="512"
                 /><UiIconButton
                   :label="showPassword ? '隐藏密码' : '显示密码'"
