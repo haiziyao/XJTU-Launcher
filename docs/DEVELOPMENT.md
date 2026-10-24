@@ -165,6 +165,8 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 
 验证：Rust 115 项测试、前端 24 项测试、Clippy（`-D warnings`）、`cargo fmt --check`、Prettier 与构建通过。真实 App：最小化后桌宠按保存位置出现，还原后隐藏；点击横条还原主窗口；双击 → 金色确认 → 菜单可用；只保留桌宠可隐藏横条；打开应用设置会还原并切到桌面宠物页；拖动后位置写回配置；关闭主窗口进程退出。未验证：真实校园通知 / Agent / 更新通知的展示、Windows、桌面背景的真实模糊；桌宠素材的最终审美由用户验收。
 
+2026-10-24 页面标签底框（按用户要求做成设置项）：之前试验过的“每个标签各自浅色圆角底框”保留为可选项 `pageTabSurfaces`，默认关闭，在「应用设置 → 外观与交互 → 页面标签」中开启。开启后 `PageTabs` 的未选中标签使用正文色 + 字重 500 和浅色圆角底框：壁纸模式下为半透明白，普通页面为白底细边；选中标签保持原来的强调胶囊并加粗。关闭时外观与之前完全一致。浏览器式标签条、文字光晕等被否定的方案没有保留。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。

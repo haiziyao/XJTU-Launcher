@@ -73,6 +73,9 @@ pub struct AppConfig {
     /// Last floating-window position in physical pixels.
     #[serde(default)]
     pub pet_position: Option<[i32; 2]>,
+    /// Give each page-level tab its own rounded backing.
+    #[serde(default)]
+    pub page_tab_surfaces: bool,
 }
 
 fn default_home_clock() -> String {
@@ -158,6 +161,7 @@ impl Default for AppConfig {
             pet_bubble_enabled: true,
             pet_sources: default_pet_sources(),
             pet_position: None,
+            page_tab_surfaces: false,
         }
     }
 }

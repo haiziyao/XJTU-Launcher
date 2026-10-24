@@ -41,6 +41,8 @@ export interface AppConfig {
   petSources: string[];
   /** Last floating-window position in physical pixels. */
   petPosition: [number, number] | null;
+  /** Give each page-level tab its own rounded backing. */
+  pageTabSurfaces: boolean;
 }
 
 export interface PetDesktopSettings {

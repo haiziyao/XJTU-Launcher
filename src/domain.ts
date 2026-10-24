@@ -36,6 +36,7 @@ export const defaultConfig = (): AppConfig => ({
   petBubbleEnabled: true,
   petSources: ['campus', 'agent', 'update'],
   petPosition: null,
+  pageTabSurfaces: false,
 });
 
 export const campusLinks = [

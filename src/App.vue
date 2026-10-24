@@ -407,6 +407,7 @@ onBeforeUnmount(() => {
       'mac-native': macNative,
       'platform-windows': windowsNative,
       'has-wallpaper': showWallpaper,
+      'tab-surfaces': config.pageTabSurfaces,
       'motion-ready': ready,
       'reduce-motion': config.reduceMotion,
     }"

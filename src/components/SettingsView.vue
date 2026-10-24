@@ -161,6 +161,19 @@ function previewPet() {
                 </button>
               </div>
             </SettingGroup>
+            <SettingGroup title="页面标签">
+              <SettingRow
+                title="标签底框"
+                description="给页面顶部的横向标签加上浅色圆角底框，壁纸下更容易看清"
+              >
+                <UiSwitch
+                  :checked="config.pageTabSurfaces"
+                  label="标签底框"
+                  :disabled="saving"
+                  @toggle="emit('update', { ...config, pageTabSurfaces: !config.pageTabSurfaces })"
+                />
+              </SettingRow>
+            </SettingGroup>
             <SettingGroup title="动态效果">
               <SettingRow title="减少动态效果" description="关闭导航、侧栏和页面的过渡动画">
                 <UiSwitch

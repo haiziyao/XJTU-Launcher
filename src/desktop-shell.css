@@ -430,6 +430,31 @@
   background: var(--surface-pressed);
 }
 
+/* Optional page-tab backing (应用设置 → 外观与交互). With a wallpaper the fill
+   is translucent so the tab stays readable over the picture; on a plain page
+   it is a quiet white chip. */
+.desktop-shell.tab-surfaces .page-tabs button:not(.active) {
+  color: var(--text);
+  font-weight: 500;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.desktop-shell.tab-surfaces.has-wallpaper .page-tabs button:not(.active) {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.desktop-shell.tab-surfaces .page-tabs button:not(.active):hover {
+  background: var(--surface-hover);
+}
+.desktop-shell.tab-surfaces.has-wallpaper .page-tabs button:not(.active):hover {
+  background: rgba(255, 255, 255, 0.86);
+}
+.desktop-shell.tab-surfaces .page-tabs button.active {
+  font-weight: 600;
+}
+
 /* macOS: the title bar is embedded; keep the top strip draggable and clear of controls. */
 .titlebar-drag {
   position: absolute;
