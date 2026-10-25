@@ -13,15 +13,15 @@
 <UiButton variant="ghost" size="sm" danger @click="remove">删除</UiButton>
 ```
 
-| 属性 | 取值 | 默认 | 用途 |
-| --- | --- | --- | --- |
-| `variant` | `secondary` | ✓ | 白底描边，页面里的普通操作 |
-| | `primary` | | 每处流程只放一个主操作：保存、提交、下载更新 |
-| | `tinted` | | 浅蓝底的轻量操作，如侧栏“新对话”“工作区” |
-| | `ghost` | | 无边框，用于标题旁、行内、表单取消 |
-| `size` | `md` | ✓ | 高 30px，用于表单和页面主操作 |
-| | `sm` | | 高 26px，用于行尾、分组标题和工具条 |
-| `danger` | 布尔 | `false` | 只改文字颜色；与 `ghost` 搭配是破坏性操作的常见写法 |
+| 属性      | 取值        | 默认    | 用途                                                |
+| --------- | ----------- | ------- | --------------------------------------------------- |
+| `variant` | `secondary` | ✓       | 白底描边，页面里的普通操作                          |
+|           | `primary`   |         | 每处流程只放一个主操作：保存、提交、下载更新        |
+|           | `tinted`    |         | 浅蓝底的轻量操作，如侧栏“新对话”“工作区”            |
+|           | `ghost`     |         | 无边框，用于标题旁、行内、表单取消                  |
+| `size`    | `md`        | ✓       | 高 30px，用于表单和页面主操作                       |
+|           | `sm`        |         | 高 26px，用于行尾、分组标题和工具条                 |
+| `danger`  | 布尔        | `false` | 只改文字颜色；与 `ghost` 搭配是破坏性操作的常见写法 |
 
 `type`、`disabled`、`aria-*`、`@click` 等原生属性直接透传到 `<button>`；组件不设置默认 `type`，表单内的提交行为与改动前一致。图标放在默认插槽里，尺寸用 13–14。
 
@@ -31,28 +31,40 @@
 
 ```vue
 <UiIconButton label="刷新课表" @click="reload"><RefreshCw :size="14" /></UiIconButton>
-<UiIconButton variant="accent" size="md" label="新对话" @click="newChat"><Plus :size="15" /></UiIconButton>
-<UiIconButton variant="primary" size="md" shape="circle" type="submit" label="发送" :disabled="!canSend">
+<UiIconButton
+  variant="accent"
+  size="md"
+  label="新对话"
+  @click="newChat"
+><Plus :size="15" /></UiIconButton>
+<UiIconButton
+  variant="primary"
+  size="md"
+  shape="circle"
+  type="submit"
+  label="发送"
+  :disabled="!canSend"
+>
   <ArrowUp :size="15" />
 </UiIconButton>
 <UiIconButton variant="danger" label="删除记忆" @click="remove"><Trash2 :size="14" /></UiIconButton>
 ```
 
-| 属性 | 取值 | 默认 | 用途 |
-| --- | --- | --- | --- |
-| `label` | 字符串 | 必填 | 无障碍名称；同时作为 hover 提示之外的读屏文本 |
-| `variant` | `quiet` | ✓ | 行尾、字段内的操作；hover 为淡灰底 |
-| | `accent` | | Agent 工具条等强调型图标；hover 为淡蓝底和蓝字 |
-| | `primary` | | 实心主按钮，如发送（配合 `circle`） |
-| | `neutral` | | 实心但低调的状态，如“停止生成” |
-| | `danger` | | 删除类操作；hover 为淡红底红字 |
-| | `inherit` | | 跟随容器颜色，用于提示条上的关闭按钮 |
-| `size` | `xs` | | 20px，行内小关闭按钮 |
-| | `sm` | ✓ | 24px，行尾和字段操作的默认值 |
-| | `md` | | 28px，工具栏 |
-| `shape` | `square` | ✓ | 圆角 6px |
-| | `circle` | | 正圆，用于发送 / 停止 |
-| `active` | 布尔 | `false` | 当前选中或开启状态的底色；需要读屏状态时另行传 `aria-pressed` |
+| 属性      | 取值      | 默认    | 用途                                                          |
+| --------- | --------- | ------- | ------------------------------------------------------------- |
+| `label`   | 字符串    | 必填    | 无障碍名称；同时作为 hover 提示之外的读屏文本                 |
+| `variant` | `quiet`   | ✓       | 行尾、字段内的操作；hover 为淡灰底                            |
+|           | `accent`  |         | Agent 工具条等强调型图标；hover 为淡蓝底和蓝字                |
+|           | `primary` |         | 实心主按钮，如发送（配合 `circle`）                           |
+|           | `neutral` |         | 实心但低调的状态，如“停止生成”                                |
+|           | `danger`  |         | 删除类操作；hover 为淡红底红字                                |
+|           | `inherit` |         | 跟随容器颜色，用于提示条上的关闭按钮                          |
+| `size`    | `xs`      |         | 20px，行内小关闭按钮                                          |
+|           | `sm`      | ✓       | 24px，行尾和字段操作的默认值                                  |
+|           | `md`      |         | 28px，工具栏                                                  |
+| `shape`   | `square`  | ✓       | 圆角 6px                                                      |
+|           | `circle`  |         | 正圆，用于发送 / 停止                                         |
+| `active`  | 布尔      | `false` | 当前选中或开启状态的底色；需要读屏状态时另行传 `aria-pressed` |
 
 按钮自身的样式写在组件内；页面只通过外层容器控制间距，不再覆盖图标按钮的尺寸和 hover。需要“默认厂商”这类一次性着色时，可以给组件加类（例如 ProvidersView 的 `class="ui-icon-button accent"` 对应的 `.ui-icon-button.accent`）。
 
@@ -74,12 +86,12 @@
 
 有壁纸时，页面和卡片是半透明的（`--panel`），控件不能再用纯白盖住壁纸，也不能各写一套颜色。统一使用下面的 token（定义在 `style.css`，`desktop-shell.css` 的 `.desktop-shell.has-wallpaper` 负责切换）：
 
-| token | 无壁纸 | 有壁纸 | 用途 |
-| --- | --- | --- | --- |
-| `--control-bg` | `#fff` | `rgba(255,255,255,.55)` | 按钮、输入框、选择器、周次选择 |
-| `--control-bg-subtle` | `#f7f8fa` | `rgba(255,255,255,.4)` | 页头搜索框等次要输入 |
-| `--control-border` | `#d4d7dc` | `rgba(15,23,42,.1)` | 控件描边；壁纸下仍要能看出边界 |
-| `--control-sunken` | `#f1f2f4` | `rgba(15,23,42,.05)` | 分段标签的轨道 |
+| token                 | 无壁纸    | 有壁纸                  | 用途                           |
+| --------------------- | --------- | ----------------------- | ------------------------------ |
+| `--control-bg`        | `#fff`    | `rgba(255,255,255,.55)` | 按钮、输入框、选择器、周次选择 |
+| `--control-bg-subtle` | `#f7f8fa` | `rgba(255,255,255,.4)`  | 页头搜索框等次要输入           |
+| `--control-border`    | `#d4d7dc` | `rgba(15,23,42,.1)`     | 控件描边；壁纸下仍要能看出边界 |
+| `--control-sunken`    | `#f1f2f4` | `rgba(15,23,42,.05)`    | 分段标签的轨道                 |
 
 - 大面板继续用 `--panel` / `--panel-border`；控件只改底色和描边，不改尺寸。
 - 原生 `<select>` 一律 `appearance: none`，箭头用 `--chevron-down`（12px 灰色 chevron，与 lucide 图标一致），不要再让 macOS 画出白色胶囊。

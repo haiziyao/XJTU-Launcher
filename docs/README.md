@@ -1,6 +1,6 @@
 # 开发文档
 
-此目录的开发资料集中维护在 `dev` 分支。`main` 保留产品 README 与插件使用协议，日常开发从 `dev` 开始。
+此目录的开发资料随代码一起维护，`main` 上的内容与最新发布版一致；日常开发在 `codex/*` 分支进行，完成后合入 `main`。
 
 ## 从这里开始
 
@@ -11,16 +11,17 @@
 
 ## 功能与协议
 
-| 文档                                           | 内容                                           |
-| ---------------------------------------------- | ---------------------------------------------- |
-| [按钮与通用控件](UI_COMPONENTS.md)             | `UiButton` / `UiIconButton` 的样式、变体和用法 |
-| [插件格式](PLUGINS.md)                         | 声明式插件、安装和管理，对 main / dev 共用     |
-| [插件市场与更新](PLUGIN_MARKET_AND_UPDATES.md) | 已获准方案、实现及部署边界                     |
-| [插件服务](../tools/plugin-server/README.md)   | 本地服务、目录契约和真实 HTTP 联调             |
-| [发布指南](RELEASING.md)                       | 签名更新、发布变量与草稿工作流                 |
-| [校园功能接续](CAMPUS_FEATURES.md)             | 适配清单、评教后台与尚未完成的 Agent           |
-| [Agent 与 Agent 设置](AGENT.md)                | 2026-10-23 最新决定、当前实现状态与实现顺序    |
-| [参考项目](REFERENCE_PROJECT.md)               | XJTUToolBox 研究入口和许可边界                 |
+| 文档                                           | 内容                                            |
+| ---------------------------------------------- | ----------------------------------------------- |
+| [按钮与通用控件](UI_COMPONENTS.md)             | `UiButton` / `UiIconButton` 的样式、变体和用法  |
+| [插件格式](PLUGINS.md)                         | 声明式插件、安装和管理                          |
+| [插件市场与更新](PLUGIN_MARKET_AND_UPDATES.md) | 已获准方案、实现及部署边界                      |
+| [插件服务](../tools/plugin-server/README.md)   | 本地服务、目录契约和真实 HTTP 联调              |
+| [发布指南](RELEASING.md)                       | 签名更新、镜像更新源、发布变量与草稿工作流      |
+| [安装包签名](SIGNING.md)                       | macOS Developer ID 与公证、Windows 代码签名进度 |
+| [校园功能接续](CAMPUS_FEATURES.md)             | 适配清单、评教后台与写能力边界                  |
+| [Agent 与 Agent 设置](AGENT.md)                | 2026-10-23 最新决定、当前实现状态与实现顺序     |
+| [参考项目](REFERENCE_PROJECT.md)               | XJTUToolBox 研究入口和许可边界                  |
 
 ## 设计与历史
 

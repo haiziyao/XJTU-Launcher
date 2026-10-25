@@ -4,10 +4,10 @@
 
 最新五项反馈涉及侧栏动画、个人页、独立应用设置、社区入口与多厂商模型配置。因当前缺少出图工具，用户明确“那就直接试着实现”，授权本轮直接实现。这一例外不扩展到其他未授权页面。Agent 与论坛服务本身尚未实现。
 
-| 参考图 | 完整生成提示词 |
-| --- | --- |
-| [账户设置与添加账号](accounts-login-v1.png) | [提示词](prompts/accounts-login-v1.md) |
-| [Agent 与插件市场](agent-market-v1.png) | [提示词](prompts/agent-market-v1.md) |
+| 参考图                                          | 完整生成提示词                               |
+| ----------------------------------------------- | -------------------------------------------- |
+| [账户设置与添加账号](accounts-login-v1.png)     | [提示词](prompts/accounts-login-v1.md)       |
+| [Agent 与插件市场](agent-market-v1.png)         | [提示词](prompts/agent-market-v1.md)         |
 | [课程表与校园导航](timetable-navigation-v1.png) | [提示词](prompts/timetable-navigation-v1.md) |
 
 图中账号、对话与课程仅为示例，不能作为真实数据实现。课表时间不是已核实的学校作息表；实际实现以校园数据为准。Agent 和在线市场仍需遵守既定版本边界，图中工具入口不代表已有运行时。

@@ -1,6 +1,6 @@
-# 安装包签名与公证（2026-10-23）
+# 安装包签名与公证（2026-10-26）
 
-当前 v0.3.0 的 macOS 安装包**未签名、未公证**，Windows 安装包**未做 Authenticode 签名**：macOS 首次打开会被 Gatekeeper 拦截（需右键打开或 `xattr -d com.apple.quarantine`），Windows 会弹 SmartScreen“未知发布者”。Tauri 更新包自身还有一套 minisign 签名（`TAURI_SIGNING_PRIVATE_KEY`），与系统证书无关，已配置。
+当前 v0.5.1 的 macOS 安装包**未签名、未公证**，Windows 安装包**未做 Authenticode 签名**：macOS 首次打开会被 Gatekeeper 拦截（需右键打开或 `xattr -d com.apple.quarantine`），Windows 会弹 SmartScreen“未知发布者”。Tauri 更新包自身还有一套 minisign 签名（`TAURI_SIGNING_PRIVATE_KEY`），与系统证书无关，已配置。
 
 自签名证书不能消除上述提示，只能使用公共 CA 的代码签名证书。
 

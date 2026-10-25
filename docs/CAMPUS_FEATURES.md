@@ -20,24 +20,24 @@
 
 参考本地 `/Users/bilibili/Developer/HZY/References/XJTUToolBox`，提交 `e6a2d3b603ff7a803cc1d658a1fb5d52ca6b511b`。参考仓库含 GPL-3.0 许可证；本批通过阅读接口路径、请求参数和响应字段编写独立 Rust 适配代码，未把 Python 模块、评价模板或 UI 素材复制入仓库。后续需要直接复用上游代码时另行核对许可证及分发安排。
 
-| 功能 | 参考入口 | 本批状态 |
-| --- | --- | --- |
-| 账号、WebVPN、课表 | `auth/`、`attendance/` | 既有实现，用户已验证登录及课表 |
-| 本科成绩 | `jwxt/score.py` | Rust 查询、分页与结果归一化；未实机验收 |
-| 本科评教 | `jwxt/judge.py` | Rust 问卷列表、预览、模板/自定义答案、逐份提交与取消；未实机验收 |
-| 考试安排 | `jwxt/schedule.py` | Rust 查询适配；未实机验收 |
-| 空闲教室 | `jwxt/empty_room.py`、`jwxt/util.py` | Rust 校区/楼宇选项、学生身份选择、按日期节次查询；未实机验收 |
-| 全校课程 | `jwxt/school_course.py` | Rust 学期/课程名/校区筛选及分页；未实机验收 |
-| 校历 | `jwxt/calendar.py` | Rust 图片链接解析，未知学年保留为空；未实机验收 |
-| 研究生成绩、课表与评教 | `gmis/`、`gste/` | 待适配；不能套用本科接口 |
-| 考勤统计与流水 | `attendance/attendance.py` | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收 |
-| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*` | 只读适配：课程列表、按类型分类的活动列表（`LmsCourses` / `LmsActivities`）、活动详情（`LmsActivity`，含说明文本、作业提交与成绩概况、附件）、附件打开与下载、录播回放地址；已用真实账号验证登录、详情、回放地址与附件下载。作业提交、讨论与问卷正文未做 |
-| 通知订阅与推送 | `app/threads/NoticeThread.py` | 待适配 |
-| 校园卡余额与流水 | `card/campus_card.py` | Rust 查询适配：CAS Cookie 换 ncard 令牌，余额与流水分页；未实机验收 |
-| 图书馆座位与预约 | `library/seats.py` | 部分适配：楼层清单、区域名与实时座位状态（`Query::LibraryFloors` / `LibraryAreas` / `LibrarySeats`）；预约与签到未开放；仅校园网直连；未实机验收 |
-| 体测成绩 | `fitness/score.py` | Rust 查询适配：学年列表与成绩明细（含项目分项）；未实机验收 |
-| 场馆查询与预约 | `app/sessions/venue_session.py` | 部分适配：场馆清单、可订/锁定时段与订单查询（`Query::VenueList` / `VenueSlots` / `VenueOrders`）；预订和取消未开放给 Agent 或自动流程；仅校园网直连；未实机验收 |
-| 学籍档案 | `app/sessions/hello_session.py` | Rust 适配：OAuth 落地 JWT 写入 `sites.profile`，查询姓名、学号、校区、书院、专业、班级与班主任/辅导员；未实机验收 |
+| 功能                       | 参考入口                             | 本批状态                                                                                                                                                                                                                                                |
+| -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 账号、WebVPN、课表         | `auth/`、`attendance/`               | 既有实现，用户已验证登录及课表                                                                                                                                                                                                                          |
+| 本科成绩                   | `jwxt/score.py`                      | Rust 查询、分页与结果归一化；未实机验收                                                                                                                                                                                                                 |
+| 本科评教                   | `jwxt/judge.py`                      | Rust 问卷列表、预览、模板/自定义答案、逐份提交与取消；未实机验收                                                                                                                                                                                        |
+| 考试安排                   | `jwxt/schedule.py`                   | Rust 查询适配；未实机验收                                                                                                                                                                                                                               |
+| 空闲教室                   | `jwxt/empty_room.py`、`jwxt/util.py` | Rust 校区/楼宇选项、学生身份选择、按日期节次查询；未实机验收                                                                                                                                                                                            |
+| 全校课程                   | `jwxt/school_course.py`              | Rust 学期/课程名/校区筛选及分页；未实机验收                                                                                                                                                                                                             |
+| 校历                       | `jwxt/calendar.py`                   | Rust 图片链接解析，未知学年保留为空；未实机验收                                                                                                                                                                                                         |
+| 研究生成绩、课表与评教     | `gmis/`、`gste/`                     | 待适配；不能套用本科接口                                                                                                                                                                                                                                |
+| 考勤统计与流水             | `attendance/attendance.py`           | Rust 查询适配：`Query::AttendanceStreams` / `AttendanceRecords`，复用账号的考勤业务 token；未实机验收                                                                                                                                                   |
+| 思源学堂、作业、资料、回放 | `lms/lms.py`、`app/threads/LMS*`     | 只读适配：课程列表、按类型分类的活动列表（`LmsCourses` / `LmsActivities`）、活动详情（`LmsActivity`，含说明文本、作业提交与成绩概况、附件）、附件打开与下载、录播回放地址；已用真实账号验证登录、详情、回放地址与附件下载。作业提交、讨论与问卷正文未做 |
+| 通知订阅与推送             | `app/threads/NoticeThread.py`        | 待适配                                                                                                                                                                                                                                                  |
+| 校园卡余额与流水           | `card/campus_card.py`                | Rust 查询适配：CAS Cookie 换 ncard 令牌，余额与流水分页；未实机验收                                                                                                                                                                                     |
+| 图书馆座位与预约           | `library/seats.py`                   | 部分适配：楼层清单、区域名与实时座位状态（`Query::LibraryFloors` / `LibraryAreas` / `LibrarySeats`）；预约与签到未开放；仅校园网直连；未实机验收                                                                                                        |
+| 体测成绩                   | `fitness/score.py`                   | Rust 查询适配：学年列表与成绩明细（含项目分项）；未实机验收                                                                                                                                                                                             |
+| 场馆查询与预约             | `app/sessions/venue_session.py`      | 部分适配：场馆清单、可订/锁定时段与订单查询（`Query::VenueList` / `VenueSlots` / `VenueOrders`）；预订和取消未开放给 Agent 或自动流程；仅校园网直连；未实机验收                                                                                         |
+| 学籍档案                   | `app/sessions/hello_session.py`      | Rust 适配：OAuth 落地 JWT 写入 `sites.profile`，查询姓名、学号、校区、书院、专业、班级与班主任/辅导员；未实机验收                                                                                                                                       |
 
 参考仓库有实现不代表学校当前环境必然可用；所有新服务的真实账号联调单独记录。
 
