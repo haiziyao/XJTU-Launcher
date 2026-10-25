@@ -7,13 +7,16 @@ if (signed && (!endpoint || !pubkey || !signingKey))
   throw new Error(
     'Signed updates require XJTU_UPDATE_ENDPOINT, XJTU_UPDATE_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY.',
   );
+let insecureTransport = false;
 if (signed) {
   const url = new URL(endpoint);
   // P0: the mirror is temporarily served over plain HTTP (docs/P0.md).
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('The update endpoint must use HTTP(S) without credentials.');
-  if (url.protocol === 'http:')
+  if (url.protocol === 'http:') {
+    insecureTransport = true;
     console.warn('P0: plain HTTP update mirror; switch to HTTPS once a domain is ready.');
+  }
 }
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const tauri = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
@@ -37,7 +40,15 @@ await writeFile(
   JSON.stringify(
     {
       bundle: { createUpdaterArtifacts: signed },
-      plugins: { updater: { pubkey: signed ? pubkey : '', endpoints: signed ? [endpoint] : [] } },
+      plugins: {
+        updater: {
+          pubkey: signed ? pubkey : '',
+          endpoints: signed ? [endpoint] : [],
+          // Release builds abort at startup when an endpoint is not HTTPS
+          // unless this flag is set; it stays off once the mirror has TLS.
+          dangerousInsecureTransportProtocol: signed && insecureTransport,
+        },
+      },
     },
     null,
     2,
