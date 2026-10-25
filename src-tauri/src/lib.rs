@@ -36,6 +36,9 @@ struct AppState {
     providers_lock: Mutex<()>,
     mcp_lock: Mutex<()>,
     auth_lock: tokio::sync::Mutex<()>,
+    /// Serializes direct-session logins so the startup warm-up and the first
+    /// direct-only tool cannot sign in twice at the same time.
+    direct_lock: tokio::sync::Mutex<()>,
     generation: AtomicU64,
     auth: auth::Manager,
     school_lock: tokio::sync::Mutex<()>,
@@ -238,7 +241,7 @@ struct AccountStatus {
     api_key_set: bool,
     /// Current access mode: some services are only reachable directly.
     access_mode: Option<network::AccessMode>,
-    /// Whether this account also holds a direct session for card/fitness/profile.
+    /// Whether this account also holds a direct session for card/fitness.
     direct_session: bool,
 }
 
@@ -768,6 +771,8 @@ struct NetworkCheck {
     /// campus | vpn | manual | neutral
     tone: &'static str,
     message: String,
+    /// Whether the account holds a direct CAS session for card/fitness.
+    direct_session: bool,
 }
 
 enum SessionRefresh {
@@ -839,30 +844,38 @@ async fn refresh_saved_session(
 }
 
 /// Services such as the campus card refuse WebVPN sessions, so they get a CAS
-/// session of their own. The UI calls this before opening one of those tools and
-/// the self-check renews it in the background; a captcha or phone step falls
-/// back to the "VPN 下不可用" label.
+/// session of their own. The app warms this up as soon as the account is ready;
+/// the self-check and the first direct-only tool also call it as a fallback.
+/// A captcha or phone step falls back to the "VPN 下不可用" label. `force`
+/// bypasses the "already prepared" shortcut when a stored session has expired.
 #[tauri::command]
 async fn refresh_direct_session(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
+    force: bool,
 ) -> Result<bool, String> {
     main_only(&window)?;
-    renew_direct_session(&app, &state).await?;
+    renew_direct_session(&app, &state, force).await?;
     Ok(true)
 }
 
-/// Shared by the command above and the self-check's quiet renewal.
+/// Shared by the command above, the startup warm-up and the self-check.
 async fn renew_direct_session(
     app: &tauri::AppHandle,
     state: &tauri::State<'_, AppState>,
+    force: bool,
 ) -> Result<(), String> {
+    let _flight = state.direct_lock.lock().await;
     let path = accounts_path(app)?;
     let (account_id, username, password) = {
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
+        // Another call may have finished the same warm-up while this one waited.
+        if !force && record.direct_cookies.is_some() {
+            return Ok(());
+        }
         let saved = record
             .password
             .as_ref()
@@ -1124,8 +1137,12 @@ async fn check_network(
         return Ok(NetworkCheck {
             tone: "neutral",
             message: "未绑定校园账号，无法检测校园网络".into(),
+            direct_session: false,
         });
     };
+    let mut direct_session = account
+        .as_ref()
+        .is_some_and(|account| account.direct_cookies.is_some());
     let direct = campus::reachable(&session, network::AccessMode::Direct).await;
     let vpn = !direct && campus::reachable(&session, network::AccessMode::Webvpn).await;
     if generation != state.generation.load(Ordering::SeqCst) {
@@ -1139,6 +1156,7 @@ async fn check_network(
         return Ok(NetworkCheck {
             tone: "neutral",
             message: "校园网和 vpn 均不可用".into(),
+            direct_session,
         });
     };
     // A bound account can outlive its VPN session; refresh it on the spot when
@@ -1155,12 +1173,14 @@ async fn check_network(
                 return Ok(NetworkCheck {
                     tone: "manual",
                     message: "校园会话已失效，请手动重新登录".into(),
+                    direct_session,
                 })
             }
             Err(error) => {
                 return Ok(NetworkCheck {
                     tone: "manual",
                     message: format!("自动登录失败：{error}，请手动重新登录"),
+                    direct_session,
                 })
             }
         }
@@ -1172,11 +1192,16 @@ async fn check_network(
         if account.mode == network::AccessMode::Webvpn
             && account.direct_cookies.is_none()
             && account.password.is_some()
+            && renew_direct_session(&app, &state, false).await.is_ok()
         {
-            let _ = renew_direct_session(&app, &state).await;
+            direct_session = true;
         }
     }
-    Ok(NetworkCheck { tone, message })
+    Ok(NetworkCheck {
+        tone,
+        message,
+        direct_session,
+    })
 }
 /// Public notice boards shown on the home page. No account or cookies are
 /// involved; the closed channel list lives in `school::notices`.

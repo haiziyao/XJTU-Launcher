@@ -131,13 +131,15 @@ export interface AccountStatus {
   degree: 'undergraduate' | 'postgraduate' | null;
   apiKeySet: boolean;
   accessMode?: 'direct' | 'webvpn' | null;
-  /** Whether this account also holds a direct session for card/fitness/profile. */
+  /** Whether this account also holds a direct session for card/fitness. */
   directSession?: boolean;
 }
 /** Result of the sidebar network self-check. */
 export interface NetworkCheck {
   tone: 'campus' | 'vpn' | 'manual' | 'neutral';
   message: string;
+  /** Whether the account holds a direct CAS session for card/fitness. */
+  directSession: boolean;
 }
 /** Animation state of the sidebar pet. */
 export type PetState = 'idle' | 'checking' | 'ok' | 'warn';

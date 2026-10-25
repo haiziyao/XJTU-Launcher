@@ -2,19 +2,20 @@ import { bridge } from './bridge';
 import type { SchoolQuery } from './types';
 
 // Services such as the campus card reject WebVPN sessions, so they need a CAS
-// session of their own before the first query. Concurrent opens share one login.
-let pending: Promise<void> | null = null;
+// session of their own before the first query. Concurrent opens share one login;
+// a forced renewal is used when an existing direct session has expired.
+const pending = new Map<boolean, Promise<void>>();
 
-export function ensureDirectSession(): Promise<void> {
-  if (!pending) {
-    pending = bridge
-      .refreshDirectSession()
+export function ensureDirectSession(force = false): Promise<void> {
+  let flight = pending.get(force);
+  if (!flight) {
+    flight = bridge
+      .refreshDirectSession(force)
       .then(() => undefined)
-      .finally(() => {
-        pending = null;
-      });
+      .finally(() => pending.delete(force));
+    pending.set(force, flight);
   }
-  return pending;
+  return flight;
 }
 
 const expired = (error: unknown) =>
@@ -26,7 +27,7 @@ export async function directQuery<T>(query: SchoolQuery, cache?: string): Promis
     return (await bridge.schoolQuery(query, cache)) as T;
   } catch (error) {
     if (!expired(error)) throw error;
-    await ensureDirectSession();
+    await ensureDirectSession(true);
     return (await bridge.schoolQuery(query, cache)) as T;
   }
 }

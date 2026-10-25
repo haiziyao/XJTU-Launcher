@@ -23,6 +23,7 @@ import {
 import { initializeMarket } from './market';
 import { initializeUpdates, updateStatus } from './updates';
 import { bridge, native } from './bridge';
+import { ensureDirectSession } from './campusSession';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
 import type {
   AccountStatus,
@@ -190,6 +191,22 @@ async function refreshAccountStatus() {
     error.value = errorText(e);
   }
 }
+/**
+ * Prepare the extra direct CAS session (card, fitness) as soon as an account is
+ * ready, rather than waiting for the first direct-only tool. Failures stay
+ * silent: opening the tool retries and explains the reason.
+ */
+async function warmDirectSession(status: AccountStatus) {
+  if (status.accessMode !== 'webvpn' || status.directSession) return;
+  const generation = accountGeneration;
+  try {
+    await ensureDirectSession();
+  } catch {
+    return;
+  }
+  if (disposed || generation !== accountGeneration) return;
+  account.value = { ...account.value, directSession: true };
+}
 const timetableEnabled = computed(() =>
   sortedPlugins.value.some(
     (p) => p.page.type === 'timetable' && !config.value.disabledPlugins.includes(p.id),
@@ -270,14 +287,24 @@ async function checkNetwork() {
   let next: PetState = 'warn';
   let tone: ToastTone = 'neutral';
   let message = '';
+  let directSession = false;
   try {
     const result = await bridge.checkNetwork();
     message = result.message;
     tone = result.tone;
+    directSession = result.directSession;
     next = result.tone === 'campus' || result.tone === 'vpn' ? 'ok' : 'warn';
   } catch (e) {
     message = errorText(e);
   }
+  // The self-check may have prepared the direct session in the background; pick
+  // that up so card/fitness stop showing "需直连" without opening them first.
+  if (account.value.accessMode === 'webvpn' && directSession && !account.value.directSession) {
+    account.value = { ...account.value, directSession: true };
+  }
+  // A failed launch-time timetable fetch may have run before the self-check
+  // renewed the campus session; try it again now that the check passed.
+  if (scheduleError.value && next === 'ok') void refreshTimetable();
   // Keep the thinking pose on screen long enough to read.
   await new Promise((resolve) =>
     setTimeout(resolve, Math.max(0, 900 - (performance.now() - started))),
@@ -376,8 +403,10 @@ onMounted(async () => {
   } else error.value = errorText(results[0].reason);
   if (results[1].status === 'fulfilled') pluginList.value = results[1].value;
   else error.value = errorText(results[1].reason);
-  if (results[2].status === 'fulfilled') account.value = results[2].value;
-  else error.value = errorText(results[2].reason);
+  if (results[2].status === 'fulfilled') {
+    account.value = results[2].value;
+    void warmDirectSession(results[2].value);
+  } else error.value = errorText(results[2].reason);
   try {
     const stop = await bridge.onAuth(async (event) => {
       if (disposed) return;
@@ -385,13 +414,15 @@ onMounted(async () => {
         const generation = ++accountGeneration;
         timetable.value = null;
         scheduleError.value = '';
+        let next: AccountStatus | undefined;
         try {
-          const next = await bridge.account();
+          next = await bridge.account();
           if (!disposed && generation === accountGeneration) account.value = next;
         } catch (e) {
           error.value = errorText(e);
         }
         if (!disposed && generation === accountGeneration) void primeTimetable();
+        if (next && !disposed && generation === accountGeneration) void warmDirectSession(next);
       } else if (event.state === 'error') error.value = event.message;
     });
     if (disposed) stop();

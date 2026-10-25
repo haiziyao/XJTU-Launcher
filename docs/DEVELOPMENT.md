@@ -181,6 +181,12 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 
 2026-10-24 0.5.0 登录方式（按用户要求）：登录页改为「账号密码 / 手机号 / 扫码登录」三选一，沿用现有分段标签与表单样式。手机号登录走 CAS 的手机动态码：`/cas/passwordlessTokenSend` 发送（同一会话、60 秒冷却），`submitPasswordlessToken` 提交手机号与 4–8 位动态码，图片验证码共用 `/cas/captcha.jpg`。扫码登录走 CAS 的 `/cas/qr/qrcode` 取 PNG，前端每 1.5 秒轮询 `/cas/qr/comet`，授权后用 `currentMenu=3`、`submitQrCodeKey` 提交。两种方式都进入同一个登录状态机，后续 MFA / 身份选择 / 账号保存与密码登录一致；账号用户名分别记为手机号或扫码返回的 userId，手机号与扫码均不保存密码。该二维码是学校统一认证的扫码登录（移动交通大学 App），不是单独的微信 OAuth；界面文案允许微信扫一扫打开学校登录页时使用。手机号与扫码登录尚未用真实账号完成验证，待用户验收。
 
+2026-10-25 侧栏宠物重绘（按用户批准的概念稿）：六只保留原名与性格，改成独立配色的矢量形象——嘻嘻（薄荷绿嫩芽）、安安（奶油猫，闭眼与铃铛）、娇娇（樱粉兔，蝴蝶结）、彤彤（熊猫，黑眼圈与竹叶）、哒哒（鹅黄小鸡，呆毛与橙喙）、雪雪（冰蓝雪精灵，雪花与围巾）。`PetArt.vue` 按 `data-pet` 输出各自图形，`pet-art.css` 用 `--pet-*` 变量定义每套配色；侧栏的呼吸、检测倾斜、成功跳跃、异常摇头、思考小点与星光动画保持不变，安安和雪雪本来就是闭眼造型，不参与眨眼。设置里的宠物选择器同步使用新形象，40px 与侧栏 56px 均确认无裁切。
+
+2026-10-25 直连会话初始化（按用户反馈）：校园卡、体测只接受直连，原来的启动自检会在后台用保存的密码建立 `directCookies`，但结果没有同步给界面，所以仍显示“需直连”，点开时又重复登录一次。现在 `App.vue` 在账号就绪（启动读到账号、登录成功或切换账号）后调用 `ensureDirectSession()` 预热，成功后更新账号的 `directSession`；`check_network` 也返回 `directSession`，自检在后台建立的会话会直接反映到界面，无需额外读取账号。`ensureDirectSession` 按 `force` 复用并发请求；Rust 的 `refresh_direct_session` 新增 `force` 参数，并用 `AppState.direct_lock` 串行化登录：已有直连 Cookie 时非强制调用直接返回，查询发现失效时才强制续期。预热失败（未保存密码、验证码、手机验证等）保持静默，点开工具仍会重试并显示原因。思源学堂、图书馆、场馆等站点会话各自是独立登录，继续按需建立，不在启动时批量发起。自检成功后还会重试启动时失败的课表请求，避免校园会话刷新了但首页仍停在错误状态。
+
+验证：Rust 119 项测试（10 项默认忽略）、前端 29 项测试、Clippy（`-D warnings`）、`cargo fmt --check`、Prettier 与构建通过。真实 App 重启后打开畅行校园，校园卡与体测显示“可用”；并发预热去重与失效后的强制续期由新增前端测试覆盖，未用无 `directCookies` 的新账号观察首次预热，也未等待直连会话自然过期做实机续期。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。

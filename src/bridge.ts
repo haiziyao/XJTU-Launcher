@@ -166,9 +166,9 @@ export const bridge = {
     requireNative();
     return invoke('check_network');
   },
-  async refreshDirectSession(): Promise<boolean> {
+  async refreshDirectSession(force = false): Promise<boolean> {
     requireNative();
-    return invoke('refresh_direct_session');
+    return invoke('refresh_direct_session', { force });
   },
   // Each campus service keeps its own cookie or token session.
   async refreshProfileSession(): Promise<boolean> {
