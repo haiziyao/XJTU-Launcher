@@ -42,6 +42,17 @@ GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest
 
 在拿到域名和证书之前，内置更新地址使用 HTTP 直连 IP。安装包的 minisign 校验仍然有效，但清单本身可能被篡改，存在降级或拒绝服务风险。迁移步骤、代码位置和退出条件见 [P0.md](P0.md)。恢复 HTTPS 后，必须同时收紧 `src-tauri/src/config.rs`、`src/components/AppUpdateSettings.vue` 和 `tools/prepare-release.mjs` 三处校验。
 
+### 当前镜像内容（2026-10-25）
+
+服务器 `8.152.100.169` 上由 nginx 直接提供静态文件：
+
+- `/srv/xjtu-launcher/public/latest.json`：改写后的清单，`platforms[*].url` 指向本镜像的 `v0.5.0/` 目录，`notes` 与 Release 说明一致；`signature` 原样保留。
+- `/srv/xjtu-launcher/public/v0.5.0/`：两个 `.dmg`、两个 `.app.tar.gz`、`_x64-setup.exe` 及各自的 `.sig`。
+
+上线时逐个文件与 GitHub Release 的 `sha256` 摘要比对通过，从镜像完整下载 Windows 安装包后哈希同样一致；`latest.json` 返回 `200`、`application/json`，安装包支持 `Range`（`206`）。服务器出口带宽约 3.4 Mbps，25 MB 的更新包大约需要一分钟。
+
+下一个版本发布后，把新资产上传到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，再覆盖 `latest.json`。旧版本目录保留，已发布客户端仍可能请求。
+
 ## 发布后
 
 - 更新 README「下载安装」里的三条直达链接到新版本的资产名（`vX.Y.Z` 与文件名都含版本号）；否则首页按钮会指向旧版本。
