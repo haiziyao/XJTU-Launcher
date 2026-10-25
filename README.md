@@ -92,9 +92,9 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 先确认你的电脑，再点对应的链接，下载后直接安装即可：
 
-- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.0/XJTU.Launcher_0.5.0_aarch64.dmg)**
-- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.0/XJTU.Launcher_0.5.0_x64.dmg)**
-- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.0/XJTU.Launcher_0.5.0_x64-setup.exe)**
+- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_aarch64.dmg)**
+- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_x64.dmg)**
+- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_x64-setup.exe)**
 
 不确定自己是什么芯片？Mac 左上角 →「关于本机」，看“芯片”一栏：写着 Apple M 系列就选第一个，写着 Intel 就选第二个。
 
