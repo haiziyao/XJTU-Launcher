@@ -9,8 +9,11 @@ if (signed && (!endpoint || !pubkey || !signingKey))
   );
 if (signed) {
   const url = new URL(endpoint);
-  if (url.protocol !== 'https:' || url.username || url.password)
-    throw new Error('The update endpoint must use HTTPS without credentials.');
+  // P0: the mirror is temporarily served over plain HTTP (docs/P0.md).
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+    throw new Error('The update endpoint must use HTTP(S) without credentials.');
+  if (url.protocol === 'http:')
+    console.warn('P0: plain HTTP update mirror; switch to HTTPS once a domain is ready.');
 }
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const tauri = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));

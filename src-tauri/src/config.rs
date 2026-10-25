@@ -76,8 +76,9 @@ pub struct AppConfig {
     /// Give each page-level tab its own rounded backing.
     #[serde(default)]
     pub page_tab_surfaces: bool,
-    /// Optional HTTPS mirror of the update manifest; empty uses the endpoint
-    /// compiled into this build.
+    /// Optional HTTP(S) mirror of the update manifest; empty uses the endpoint
+    /// compiled into this build. Plain HTTP is a P0 stopgap until the mirror
+    /// gets a domain and certificate; see docs/P0.md.
     #[serde(default)]
     pub update_endpoint: String,
 }
@@ -205,8 +206,10 @@ fn valid_tool_name(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
-// An optional update mirror must be a plain HTTPS URL; credentials and plain
-// HTTP are rejected before the updater ever sees it.
+// P0: plain HTTP is accepted only as a temporary stopgap while the mirror has
+// no domain or certificate (docs/P0.md). Credentials and malformed URLs are
+// rejected before the updater ever sees them. Restore HTTPS-only once the
+// mirror is served over TLS.
 fn bad_update_endpoint(value: &str) -> bool {
     let value = value.trim();
     if value.is_empty() {
@@ -217,7 +220,7 @@ fn bad_update_endpoint(value: &str) -> bool {
     }
     match url::Url::parse(value) {
         Ok(url) => {
-            url.scheme() != "https"
+            !["http", "https"].contains(&url.scheme())
                 || url.host_str().is_none()
                 || !url.username().is_empty()
                 || url.password().is_some()
@@ -401,15 +404,22 @@ mod tests {
     }
 
     #[test]
-    fn update_mirror_must_be_plain_https() {
-        let good = AppConfig {
-            update_endpoint: "https://mirror.example/xjtu/latest.json".into(),
-            ..AppConfig::default()
-        };
-        good.validate().unwrap();
+    fn update_mirror_accepts_http_until_the_p0_cleanup() {
+        for good in [
+            "https://mirror.example/xjtu/latest.json",
+            // P0 stopgap: the mirror is reachable only by IP for now.
+            "http://192.0.2.10/xjtu-launcher/latest.json",
+        ] {
+            let config = AppConfig {
+                update_endpoint: good.into(),
+                ..AppConfig::default()
+            };
+            config.validate().unwrap();
+        }
         for bad in [
-            "http://mirror.example/latest.json",
+            "http://user:pass@mirror.example/latest.json",
             "https://user:pass@mirror.example/latest.json",
+            "ftp://mirror.example/latest.json",
             "not a url",
         ] {
             let config = AppConfig {

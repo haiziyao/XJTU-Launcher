@@ -19,7 +19,9 @@ const endpointValid = computed(() => {
   if (!value) return true;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password && !!url.hostname;
+    return (
+      ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !!url.hostname
+    );
   } catch {
     return false;
   }
@@ -135,7 +137,7 @@ async function restart() {
           >
         </div>
       </SettingRow>
-      <p v-if="!endpointValid" class="update-hint">请输入 HTTPS 地址，且不要包含账号密码。</p>
+      <p v-if="!endpointValid" class="update-hint">请输入有效地址，且不要包含账号密码。</p>
     </SettingGroup>
     <p v-if="error || updateStatus?.message" class="notice" role="alert">
       {{ error || updateStatus?.message }}

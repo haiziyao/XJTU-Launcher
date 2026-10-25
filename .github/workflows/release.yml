@@ -26,7 +26,8 @@ jobs:
             bundles: nsis
     runs-on: ${{ matrix.os }}
     env:
-      XJTU_UPDATE_ENDPOINT: ${{ vars.XJTU_UPDATE_ENDPOINT }}
+      # P0: hard-coded plain HTTP mirror until it gets a domain and certificate.
+      XJTU_UPDATE_ENDPOINT: http://8.152.100.169/xjtu-launcher/latest.json
       XJTU_UPDATE_PUBLIC_KEY: ${{ vars.XJTU_UPDATE_PUBLIC_KEY }}
       XJTU_PLUGIN_SERVER: ${{ vars.XJTU_PLUGIN_SERVER }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

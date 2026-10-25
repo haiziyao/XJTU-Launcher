@@ -16,7 +16,7 @@
 ## 首次部署
 
 1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
-2. 在仓库 Variables 中设置 `XJTU_UPDATE_ENDPOINT`（HTTPS 的静态更新 JSON 地址）和 `XJTU_UPDATE_PUBLIC_KEY`。可选设置 `XJTU_PLUGIN_SERVER`。
+2. 更新地址目前写死在 `.github/workflows/release.yml`（P0 临时 HTTP），只需在仓库 Variables 中设置 `XJTU_UPDATE_PUBLIC_KEY`。可选设置 `XJTU_PLUGIN_SERVER`。
 3. 在 Secrets 中设置 `TAURI_SIGNING_PRIVATE_KEY` 和相应的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。不把私钥写入仓库。
 4. 保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
 5. 手动运行 `Signed desktop release` 工作流，构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与草稿 Release。检查安装包和更新清单后再正式发布；公钥配置必须已包含在用户当前安装的客户端中。
@@ -29,14 +29,18 @@ GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest
 
 ## 无法访问 GitHub 的用户 / 镜像更新源
 
-应用更新默认读取 GitHub Releases 的 `latest.json`。网络无法访问 GitHub 时，用户可以在「应用设置 → 软件更新 → 更新源」填写镜像地址（必须是 HTTPS，不能含账号密码）；留空则使用内置地址。
+应用更新默认读取内置更新地址。2026-10-25 起该地址临时写死为 `http://8.152.100.169/xjtu-launcher/latest.json`（P0，见 [P0.md](P0.md)）；用户在「应用设置 → 软件更新 → 更新源」仍可填写其他镜像地址（HTTP 或 HTTPS，不能含账号密码），留空则使用内置地址。
 
 镜像需要同时提供：
 
 1. `latest.json`，其中的 `platforms[*].url` 必须指向镜像自己的安装包，而不是 GitHub 的 `api.github.com/.../assets/...`；
 2. 各平台安装包 / 更新包与 `.sig`，内容与签名必须和原发布一致。
 
-只有镜像 `latest.json` 而下载地址仍指向 GitHub 时，检查更新能通过但下载仍会被网络挡住。镜像部署完成后，在客户端填入 `https://<镜像>/latest.json` 并点击「检查更新」即可验证。
+只有镜像 `latest.json` 而下载地址仍指向 GitHub 时，检查更新能通过但下载仍会被网络挡住。镜像部署完成后，在客户端填入 `http://<镜像>/latest.json` 并点击「检查更新」即可验证。
+
+### P0：当前使用 HTTP 镜像
+
+在拿到域名和证书之前，内置更新地址使用 HTTP 直连 IP。安装包的 minisign 校验仍然有效，但清单本身可能被篡改，存在降级或拒绝服务风险。迁移步骤、代码位置和退出条件见 [P0.md](P0.md)。恢复 HTTPS 后，必须同时收紧 `src-tauri/src/config.rs`、`src/components/AppUpdateSettings.vue` 和 `tools/prepare-release.mjs` 三处校验。
 
 ## 发布后
 

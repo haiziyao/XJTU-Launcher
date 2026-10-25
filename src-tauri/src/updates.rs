@@ -5,6 +5,10 @@ use tauri_plugin_updater::UpdaterExt;
 
 const ENDPOINT: Option<&str> = option_env!("XJTU_UPDATE_ENDPOINT");
 const PUBLIC_KEY: Option<&str> = option_env!("XJTU_UPDATE_PUBLIC_KEY");
+// P0: the mirror has no domain or certificate yet, so it is served over plain
+// HTTP (docs/P0.md). Baked in so release builds reach it without the user
+// configuring anything; a build variable still takes precedence.
+const DEFAULT_ENDPOINT: &str = "http://8.152.100.169/xjtu-launcher/latest.json";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,22 +44,23 @@ pub struct State {
     update: Mutex<Option<tauri_plugin_updater::Update>>,
     operation: tokio::sync::Mutex<()>,
 }
-fn compiled_configured() -> bool {
-    ENDPOINT.is_some_and(|v| !v.is_empty()) && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
+fn builtin_endpoint() -> &'static str {
+    ENDPOINT
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_ENDPOINT)
 }
-/// The mirror saved in the config wins; otherwise the endpoint compiled into
-/// this build is used. The public key always comes from the build.
+fn compiled_configured() -> bool {
+    !builtin_endpoint().is_empty() && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
+}
+/// The mirror saved in the config wins; otherwise the built-in endpoint is
+/// used. The public key always comes from the build.
 fn effective_endpoint(app: &tauri::AppHandle) -> Option<String> {
     crate::config_path(app)
         .and_then(|path| crate::config::load(&path))
         .ok()
         .map(|config| config.update_endpoint.trim().to_string())
         .filter(|value| !value.is_empty())
-        .or_else(|| {
-            ENDPOINT
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        })
+        .or_else(|| Some(builtin_endpoint().to_string()))
 }
 fn configured(app: &tauri::AppHandle) -> bool {
     effective_endpoint(app).is_some() && PUBLIC_KEY.is_some_and(|v| !v.is_empty())
@@ -107,10 +112,9 @@ pub async fn check_app_update(
     });
     let result = async {
         let endpoint = effective_endpoint(&app).ok_or("更新地址未配置")?;
+        // P0: HTTP is tolerated while the built-in mirror has no certificate;
+        // validate_url still rejects credentials and non-HTTP schemes.
         let url = crate::plugins::validate_url(&endpoint)?;
-        if url.scheme() != "https" {
-            return Err("应用更新地址必须使用 HTTPS".to_string());
-        }
         let updater = app
             .updater_builder()
             .pubkey(PUBLIC_KEY.ok_or("更新公钥未配置")?)
