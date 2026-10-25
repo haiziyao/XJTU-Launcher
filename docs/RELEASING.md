@@ -48,10 +48,10 @@ HTTP 端点必须在发布配置里带上 `dangerousInsecureTransportProtocol: t
 
 服务器 `8.152.100.169` 上由 nginx 直接提供静态文件：
 
-- `/srv/xjtu-launcher/public/latest.json`：改写后的清单，`platforms[*].url` 指向本镜像的 `v0.5.0/` 目录，`notes` 与 Release 说明一致；`signature` 原样保留。
-- `/srv/xjtu-launcher/public/v0.5.0/`：两个 `.dmg`、两个 `.app.tar.gz`、`_x64-setup.exe` 及各自的 `.sig`。
+- `/srv/xjtu-launcher/public/latest.json`：改写后的清单，`platforms[*].url` 指向本镜像的 `v0.5.1/` 目录，`notes` 与 Release 说明一致；`signature` 原样保留。
+- `/srv/xjtu-launcher/public/v0.5.1/`：两个 `.dmg`、两个 `.app.tar.gz`、`_x64-setup.exe` 及各自的 `.sig`。
 
-上线时逐个文件与 GitHub Release 的 `sha256` 摘要比对通过，从镜像完整下载 Windows 安装包后哈希同样一致；`latest.json` 返回 `200`、`application/json`，安装包支持 `Range`（`206`）。服务器出口带宽约 3.4 Mbps，25 MB 的更新包大约需要一分钟。
+上线时逐个文件与 GitHub Release 的 `sha256` 摘要比对通过，从镜像完整下载 Windows 安装包后哈希同样一致；`latest.json` 返回 `200`、`application/json`，安装包支持 `Range`（`206`）。服务器出口带宽约 3.4 Mbps，25 MB 的更新包大约需要一分钟。0.5.0 因启动缺陷已撤回，其目录与清单未保留。
 
 下一个版本发布后，把新资产上传到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，再覆盖 `latest.json`。旧版本目录保留，已发布客户端仍可能请求。
 
