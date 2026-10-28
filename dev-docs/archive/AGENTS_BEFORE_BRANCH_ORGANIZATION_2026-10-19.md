@@ -1,5 +1,7 @@
 # 项目工作约定
 
+> 历史归档：本文保留当时原文，文中的 `docs/...` 路径属于旧目录结构。当前规则见 [CONVENTIONS.md](../CONVENTIONS.md)，需求见 [need-do.md](../need-do.md)，实现状态见 [DEVELOPMENT.md](../DEVELOPMENT.md)。
+
 - 最新授权（2026-10-19）：用户明确“好的，开始实现吧”及“开始实现”，批准 `docs/design/plugin-market-v2/` 的市场三分区、来源确认编辑和软件更新设计，现可实现。本条覆盖下文该组图待确认记录；Agent、评教旧稿仍未确认。
 
 - 2026-10-19 插件需求补充：市场分校园功能、远端市场及已安装；启用和侧栏显示独立。设置中的服务端地址默认只读，必须点击“确认更改”并确认危险提示才能编辑。软件更新已接入 Tauri Updater，正式发布地址与公钥待配置。新版参考图 `docs/design/plugin-market-v2/` 已获上方明确授权并实施。详见 `docs/PLUGIN_MARKET_AND_UPDATES.md`。

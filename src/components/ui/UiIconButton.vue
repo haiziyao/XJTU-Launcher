@@ -3,7 +3,7 @@
  * Square or round button that contains only an icon; the visible icon carries
  * no text, so `label` is required for the accessible name. Use UiButton for
  * anything with a text label. Variants and sizes are listed in
- * docs/UI_COMPONENTS.md.
+ * dev-docs/UI_COMPONENTS.md.
  */
 withDefaults(
   defineProps<{

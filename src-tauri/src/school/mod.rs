@@ -1,4 +1,4 @@
-//! Campus business adapters. Protocol research: docs/CAMPUS_FEATURES.md on the dev branch.
+//! Campus business adapters. Protocol research: dev-docs/CAMPUS_FEATURES.md.
 //! This module never submits passwords or sends evaluation answers during a query.
 mod attendance;
 mod card;

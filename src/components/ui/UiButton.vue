@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Standard action button. Wraps the shared `.btn` styles in ui.css so pages do
- * not repeat class strings; see docs/UI_COMPONENTS.md for the variant table.
+ * not repeat class strings; see dev-docs/UI_COMPONENTS.md for the variant table.
  * The native <button> attributes (type, disabled, aria-*, @click) fall through.
  */
 withDefaults(

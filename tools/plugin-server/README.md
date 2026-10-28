@@ -8,7 +8,7 @@
 
 - `GET /catalog.json`：`schemaVersion: 1`、`plugins` 数组。
 - 目录项：`id`、`name`、`description`、语义版本 `version`、`minAppVersion`、`downloadUrl`、十六进制 `sha256`。
-- `downloadUrl` 指向同源的原始 plugin.json。包格式沿用 `docs/PLUGINS.md`，当前远端只接受声明式导航，不支持 JS、Rust 动态库或任意命令。包上限 64 KiB，目录上限 1 MiB / 256 项。
+- `downloadUrl` 指向同源的原始 plugin.json。包格式沿用 `dev-docs/PLUGINS.md`，当前远端只接受声明式导航，不支持 JS、Rust 动态库或任意命令。包上限 64 KiB，目录上限 1 MiB / 256 项。
 - 客户端重新获取目录，核对选择的版本，验证包摘要、清单、兼容版本和来源；新安装先暂存后原子移动，更新原子替换包含清单与来源的单个文件。
 - 已安装来源不同或同 ID 本地插件不会被覆盖；同版本和降级会被拒绝。
 - 服务端重定向不被跟随；生产使用 HTTPS，本机开发允许 localhost / 127.0.0.1 / ::1 的 HTTP。

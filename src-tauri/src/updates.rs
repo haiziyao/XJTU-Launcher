@@ -6,7 +6,7 @@ use tauri_plugin_updater::UpdaterExt;
 const ENDPOINT: Option<&str> = option_env!("XJTU_UPDATE_ENDPOINT");
 const PUBLIC_KEY: Option<&str> = option_env!("XJTU_UPDATE_PUBLIC_KEY");
 // P0: the mirror has no domain or certificate yet, so it is served over plain
-// HTTP (docs/P0.md). Baked in so release builds reach it without the user
+// HTTP (dev-docs/P0.md). Baked in so release builds reach it without the user
 // configuring anything; a build variable still takes precedence.
 const DEFAULT_ENDPOINT: &str = "http://8.152.100.169/xjtu-launcher/latest.json";
 

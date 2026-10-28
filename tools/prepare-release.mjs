@@ -10,7 +10,7 @@ if (signed && (!endpoint || !pubkey || !signingKey))
 let insecureTransport = false;
 if (signed) {
   const url = new URL(endpoint);
-  // P0: the mirror is temporarily served over plain HTTP (docs/P0.md).
+  // P0: the mirror is temporarily served over plain HTTP (dev-docs/P0.md).
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('The update endpoint must use HTTP(S) without credentials.');
   if (url.protocol === 'http:') {

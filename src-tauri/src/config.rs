@@ -78,7 +78,7 @@ pub struct AppConfig {
     pub page_tab_surfaces: bool,
     /// Optional HTTP(S) mirror of the update manifest; empty uses the endpoint
     /// compiled into this build. Plain HTTP is a P0 stopgap until the mirror
-    /// gets a domain and certificate; see docs/P0.md.
+    /// gets a domain and certificate; see dev-docs/P0.md.
     #[serde(default)]
     pub update_endpoint: String,
 }
@@ -207,7 +207,7 @@ fn valid_tool_name(id: &str) -> bool {
 }
 
 // P0: plain HTTP is accepted only as a temporary stopgap while the mirror has
-// no domain or certificate (docs/P0.md). Credentials and malformed URLs are
+// no domain or certificate (dev-docs/P0.md). Credentials and malformed URLs are
 // rejected before the updater ever sees them. Restore HTTPS-only once the
 // mirror is served over TLS.
 fn bad_update_endpoint(value: &str) -> bool {

@@ -14,6 +14,6 @@
 
 图片为静态设计稿，示例插件、示例服务端域名和示例新版本均不代表现有线上服务或可下载版本。当前客户端本体版本为 0.1.0；0.1.1 只用于表现“发现更新”。
 
-完整行为说明见 [市场与更新方案](../../PLUGIN_MARKET_AND_UPDATES.md)。
+完整行为说明见 [市场与更新方案](../../../dev-docs/PLUGIN_MARKET_AND_UPDATES.md)。
 
 生成：`swift docs/design/plugin-market-v2/render.swift docs/design/plugin-market-v2`。

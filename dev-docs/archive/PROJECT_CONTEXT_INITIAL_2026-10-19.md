@@ -1,5 +1,7 @@
 # XJTU-Launcher 项目交接文档
 
+> 历史归档：本文保留当时原文，文中的 `docs/...` 路径属于旧目录结构。当前规则见 [CONVENTIONS.md](../CONVENTIONS.md)，需求见 [need-do.md](../need-do.md)，实现状态见 [DEVELOPMENT.md](../DEVELOPMENT.md)。
+
 更新时间：2026-10-19（Asia/Shanghai）
 
 项目目录：`/Users/bilibili/Developer/HZY/XJTU-Launcher`
