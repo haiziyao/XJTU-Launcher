@@ -101,6 +101,8 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 > ⚠️ **系统要求**：macOS 12+ 或 Windows 10 / 11；Windows 需要 WebView2（Windows 11 已内置，缺失时安装程序会下载安装）。
 
+> 校园登录报「未收到预期的校园认证页面，请重新开始」，且括号里没有主机名？这是 **0.3.3 及更早版本**的提示，学校登录页改版后旧版会误判 WebVPN 登录结果。请重新下载上面的 0.5.1 安装包覆盖安装；0.4.0 起已修复，新版报错会带上实际落地的网站域名，便于反馈。
+
 其他版本、更新说明和历史安装包都在 **[Releases 页面](https://github.com/haiziyao/XJTU-Launcher/releases)**。
 
 > 安装包目前**没有系统代码签名**：macOS 首次打开可能提示“无法验证开发者”（右键 →「打开」即可），Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [dev-docs/SIGNING.md](dev-docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。

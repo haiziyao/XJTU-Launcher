@@ -217,6 +217,21 @@ fn matching_choice<'a>(choices: &'a [Choice], degree: &str) -> Option<&'a Choice
 fn mfa_code_accepted(data: &Value) -> bool {
     data.get("status").is_none_or(|v| v == 2 || v == "2")
 }
+/// Whether a page seen before the campus step proves the WebVPN session is up:
+/// the portal itself after a CAS form was served, or a page the portal mapped
+/// from the expected campus host. Both are structural, so a wording change on
+/// the portal cannot break the fallback the way the old title check did.
+fn vpn_ready(page: &Page, form_seen: bool, campus_host: Option<&str>) -> bool {
+    if !page.status.is_success() {
+        return false;
+    }
+    let at_campus = page.url.scheme() == "https"
+        && page.url.port_or_known_default() == Some(443)
+        && page.url.username().is_empty()
+        && page.url.password().is_none()
+        && campus_host.is_some_and(|host| page.url.host_str() == Some(host));
+    at_campus || (form_seen && network::webvpn_host(&page.url))
+}
 fn parse_public_key(pem: &str) -> Result<RsaPublicKey, String> {
     // The campus endpoint returns an unwrapped Base64 line. Decode the supported
     // PEM envelopes explicitly; keep RSA DER validation strict.
@@ -694,79 +709,78 @@ impl Login {
     async fn accept(&mut self, mut page: Page) -> Result<(), String> {
         loop {
             // A successful service callback is mandatory. An arbitrary page without an error is not login success.
-            if self.step == Step::Campus {
-                if let Some((request, ticket)) = campus::callback(&page.url, &self.degree) {
-                    let url = Url::parse(&format!(
-                        "https://{}/sa/auth/cas/exchange",
-                        campus::domain(&self.degree)?
-                    ))
-                    .unwrap();
-                    let response = self
-                        .transport
-                        .client
-                        .post(Transport::address(&url, self.mode)?)
-                        .json(&json!({"loginRequestId":request,"ticket":ticket}))
-                        .send()
-                        .await
-                        .map_err(|_| "校园业务换票失败")?;
-                    let data = network::json(response).await?;
-                    let token = data
-                        .get("tokenValue")
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                        .ok_or("校园业务未返回会话")?
-                        .to_string();
-                    let (name, student_id) = self.profile().await.unwrap_or((None, None));
-                    self.completed = Some(Account {
-                        id: Uuid::new_v4().to_string(),
-                        username: self.username.clone(),
-                        degree: self.degree.clone(),
-                        name,
-                        student_id: student_id.or(self.chosen.clone()),
-                        avatar: None,
-                        password: self.retained_password.take(),
-                        mode: self.mode,
-                        token,
-                        cookies: self.transport.snapshot()?,
-                        direct_cookies: None,
-                        sites: Default::default(),
-                    });
-                    self.phase = Phase::Success;
-                    self.page = None;
-                    self.encrypted.clear();
-                    self.pending_captcha.clear();
-                    self.mfa = None;
-                    self.choices.clear();
-                    return Ok(());
-                }
-                if self.mode == AccessMode::Webvpn && network::webvpn_host(&page.url) {
-                    // The VPN proxy answers unauthenticated requests with its own
-                    // login page, so the ticket from CAS was never accepted.
-                    return Err("WebVPN 认证未完成，请重新开始登录".into());
-                }
-            } else if self.page.is_some()
-                && page.status.is_success()
-                && network::webvpn_host(&page.url)
-            {
-                // CAS hands its ticket back to the WebVPN portal. Do not match
-                // the portal's wording, which the school can change without
-                // notice: switch to the campus step and prove the VPN session
-                // by fetching the campus entry. A ticket the portal rejected
-                // lands on its login page there instead.
-                self.step = Step::Campus;
-                self.mfa = None;
-                self.failures = 0;
-                self.pending_captcha.clear();
-                let target = Url::parse(&format!(
-                    "https://{}/sa/auth/cas/login/student-pc",
+            if let Some((request, ticket)) = campus::callback(&page.url, &self.degree) {
+                let url = Url::parse(&format!(
+                    "https://{}/sa/auth/cas/exchange",
                     campus::domain(&self.degree)?
                 ))
                 .unwrap();
-                page = self
+                let response = self
                     .transport
-                    .page(&target, self.mode, &self.degree)
-                    .await?;
-                continue;
+                    .client
+                    .post(Transport::address(&url, self.mode)?)
+                    .json(&json!({"loginRequestId":request,"ticket":ticket}))
+                    .send()
+                    .await
+                    .map_err(|_| "校园业务换票失败")?;
+                let data = network::json(response).await?;
+                let token = data
+                    .get("tokenValue")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .ok_or("校园业务未返回会话")?
+                    .to_string();
+                let (name, student_id) = self.profile().await.unwrap_or((None, None));
+                self.completed = Some(Account {
+                    id: Uuid::new_v4().to_string(),
+                    username: self.username.clone(),
+                    degree: self.degree.clone(),
+                    name,
+                    student_id: student_id.or(self.chosen.clone()),
+                    avatar: None,
+                    password: self.retained_password.take(),
+                    mode: self.mode,
+                    token,
+                    cookies: self.transport.snapshot()?,
+                    direct_cookies: None,
+                    sites: Default::default(),
+                });
+                self.phase = Phase::Success;
+                self.page = None;
+                self.encrypted.clear();
+                self.pending_captcha.clear();
+                self.mfa = None;
+                self.choices.clear();
+                return Ok(());
+            }
+            let campus_host = campus::domain(&self.degree).ok();
+            if self.step == Step::Webvpn {
+                if vpn_ready(&page, self.page.is_some(), campus_host) {
+                    // CAS hands its ticket back to the WebVPN portal, or the
+                    // portal forwards straight to the mapped campus site. Do
+                    // not match the portal's wording, which the school can
+                    // change without notice: switch to the campus step and
+                    // prove the VPN session by fetching the campus entry. A
+                    // ticket the portal rejected lands on its login page there.
+                    self.step = Step::Campus;
+                    self.mfa = None;
+                    self.failures = 0;
+                    self.pending_captcha.clear();
+                    let target = Url::parse(&format!(
+                        "https://{}/sa/auth/cas/login/student-pc",
+                        campus::domain(&self.degree)?
+                    ))
+                    .unwrap();
+                    page = self
+                        .transport
+                        .page(&target, self.mode, &self.degree)
+                        .await?;
+                    continue;
+                }
+            } else if self.mode == AccessMode::Webvpn && network::webvpn_host(&page.url) {
+                // The VPN proxy answers unauthenticated requests with its own
+                // login page, so the ticket from CAS was never accepted.
+                return Err("WebVPN 认证未完成，请重新开始登录".into());
             }
             if page.url.host_str() != Some("login.xjtu.edu.cn")
                 || !page.url.path().starts_with("/cas/")
@@ -1618,6 +1632,57 @@ mod tests {
         assert_eq!(form.choices[0].label, "20260000");
         assert!(form.mfa_enabled);
         assert!(parse_form("<title>Unexpected gateway</title>").is_none());
+    }
+    #[test]
+    fn webvpn_success_is_detected_by_address_and_status_not_page_wording() {
+        let page = |url: &str, status| Page {
+            url: Url::parse(url).unwrap(),
+            html: String::new(),
+            status,
+        };
+        let campus = Some("bk-kq.xjtu.edu.cn");
+        assert!(vpn_ready(
+            &page("https://webvpn.xjtu.edu.cn/", StatusCode::OK),
+            true,
+            campus
+        ));
+        // The portal page is only accepted after the CAS form was served; a
+        // fresh login that lands there never proved a VPN session.
+        assert!(!vpn_ready(
+            &page("https://webvpn.xjtu.edu.cn/", StatusCode::OK),
+            false,
+            campus
+        ));
+        // The portal may forward to the mapped campus site instead of its home.
+        assert!(vpn_ready(
+            &page(
+                "https://bk-kq.xjtu.edu.cn/sa/auth/cas/login/student-pc",
+                StatusCode::OK
+            ),
+            false,
+            campus
+        ));
+        assert!(!vpn_ready(
+            &page(
+                "https://yjs-kq.xjtu.edu.cn/sa/auth/cas/login/student-pc",
+                StatusCode::OK
+            ),
+            false,
+            campus
+        ));
+        assert!(!vpn_ready(
+            &page("https://webvpn.xjtu.edu.cn/", StatusCode::UNAUTHORIZED),
+            true,
+            campus
+        ));
+        assert!(!vpn_ready(
+            &page(
+                "http://bk-kq.xjtu.edu.cn/sa/auth/cas/login/student-pc",
+                StatusCode::OK
+            ),
+            false,
+            campus
+        ));
     }
     #[test]
     fn password_encryption_matches_rsa_pkcs1_protocol_and_never_returns_plaintext() {
