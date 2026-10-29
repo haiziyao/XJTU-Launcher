@@ -30,6 +30,9 @@ jobs:
       XJTU_UPDATE_ENDPOINT: http://8.152.100.169/xjtu-launcher/latest.json
       XJTU_UPDATE_PUBLIC_KEY: ${{ vars.XJTU_UPDATE_PUBLIC_KEY }}
       XJTU_PLUGIN_SERVER: ${{ vars.XJTU_PLUGIN_SERVER }}
+      # No Developer ID yet: ad-hoc sign the bundle so macOS does not report
+      # "the app is damaged". A real certificate secret overrides this.
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:

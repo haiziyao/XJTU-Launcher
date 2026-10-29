@@ -105,7 +105,14 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 其他版本、更新说明和历史安装包都在 **[Releases 页面](https://github.com/haiziyao/XJTU-Launcher/releases)**。
 
-> 安装包目前**没有系统代码签名**：macOS 首次打开可能提示“无法验证开发者”（右键 →「打开」即可），Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [dev-docs/SIGNING.md](dev-docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。
+> **macOS 提示“已损坏，无法打开”**：0.5.1 及更早的 macOS 安装包只有二进制签名，应用包本身没有签名，Gatekeeper 会判定为损坏。临时处理：
+>
+> ```bash
+> sudo codesign --force --deep --sign - "/Applications/XJTU Launcher.app"
+> sudo xattr -dr com.apple.quarantine "/Applications/XJTU Launcher.app"
+> ```
+>
+> 后续构建已改为 ad-hoc 签名，不会再报“已损坏”。安装包仍**没有 Developer ID 与公证**：首次打开可能提示“无法验证开发者”，右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [dev-docs/SIGNING.md](dev-docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。
 
 ## 开发
 

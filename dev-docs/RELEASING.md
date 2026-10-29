@@ -11,13 +11,13 @@
 - 签名密钥已在本机生成（`~/.tauri/xjtu-launcher.key`，无密码）；私钥不入仓库，需自行备份并填入 GitHub Secret。丢失私钥后无法再为已发布客户端签名更新。
 - 仓库 Variables 与 Secret 已于 2026-10-22 配置完毕，签名构建可跑通。
 
-系统代码签名（Gatekeeper / SmartScreen）尚未配置，步骤见 [SIGNING.md](SIGNING.md)。未签名不影响自动更新的 minisign 校验，但首次安装会触发系统警告。
+系统代码签名（Gatekeeper / SmartScreen）尚未配置：macOS 构建自 2026-10-29 起由工作流做 ad-hoc 签名（`APPLE_SIGNING_IDENTITY` 未配置时取 `-`），避免 0.5.1 出现的“已损坏，无法打开”；Developer ID 与公证仍未配置，首次安装仍会提示“无法验证开发者”，需要右键打开。Windows 仍无 Authenticode。步骤见 [SIGNING.md](SIGNING.md)。系统签名不影响自动更新的 minisign 校验。
 
 ## 首次部署
 
 1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
 2. 更新地址目前写死在 `.github/workflows/release.yml`（P0 临时 HTTP），只需在仓库 Variables 中设置 `XJTU_UPDATE_PUBLIC_KEY`。可选设置 `XJTU_PLUGIN_SERVER`。
-3. 在 Secrets 中设置 `TAURI_SIGNING_PRIVATE_KEY` 和相应的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。不把私钥写入仓库。
+3. 在 Secrets 中设置 `TAURI_SIGNING_PRIVATE_KEY` 和相应的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。不把私钥写入仓库。可选设置 `APPLE_SIGNING_IDENTITY`：留空时 macOS 用 `-` 做 ad-hoc 签名；拿到 Developer ID 证书后填证书名（配合 [SIGNING.md](SIGNING.md) 的导入步骤）。
 4. 保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
 5. 手动运行 `Signed desktop release` 工作流，构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与草稿 Release。检查安装包和更新清单后再正式发布；公钥配置必须已包含在用户当前安装的客户端中。
 
