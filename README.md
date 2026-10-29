@@ -93,26 +93,21 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 先确认你的电脑，再点对应的链接，下载后直接安装即可：
 
-- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_aarch64.dmg)**
-- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_x64.dmg)**
-- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.1/XJTU.Launcher_0.5.1_x64-setup.exe)**
+- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.2/XJTU.Launcher_0.5.2_aarch64.dmg)**
+- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.2/XJTU.Launcher_0.5.2_x64.dmg)**
+- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.2/XJTU.Launcher_0.5.2_x64-setup.exe)**
 
 不确定自己是什么芯片？Mac 左上角 →「关于本机」，看“芯片”一栏：写着 Apple M 系列就选第一个，写着 Intel 就选第二个。
 
 > ⚠️ **系统要求**：macOS 12+ 或 Windows 10 / 11；Windows 需要 WebView2（Windows 11 已内置，缺失时安装程序会下载安装）。
 
-> 校园登录报「未收到预期的校园认证页面，请重新开始」，且括号里没有主机名？这是 **0.3.3 及更早版本**的提示，学校登录页改版后旧版会误判 WebVPN 登录结果。请重新下载上面的 0.5.1 安装包覆盖安装；0.4.0 起已修复，新版报错会带上实际落地的网站域名，便于反馈。
+> 校园登录报「未收到预期的校园认证页面，请重新开始」，且括号里没有主机名？这是 **0.3.3 及更早版本**的提示，学校登录页改版后旧版会误判 WebVPN 登录结果。请重新下载上面的 0.5.2 安装包覆盖安装；0.4.0 起已修复，新版报错会带上实际落地的网站域名，便于反馈。
 
 其他版本、更新说明和历史安装包都在 **[Releases 页面](https://github.com/haiziyao/XJTU-Launcher/releases)**。
 
-> **macOS 提示“已损坏，无法打开”**：0.5.1 及更早的 macOS 安装包只有二进制签名，应用包本身没有签名，Gatekeeper 会判定为损坏。临时处理：
+> **0.5.1 已撤回**：该版本的 macOS 包只有二进制签名，应用包本身未签名，打开会提示“已损坏，无法打开”。请下载上面的 0.5.2 覆盖安装；已经装过 0.5.1 的用户也直接覆盖，不需要先修复旧版。
 >
-> ```bash
-> sudo codesign --force --deep --sign - "/Applications/XJTU Launcher.app"
-> sudo xattr -dr com.apple.quarantine "/Applications/XJTU Launcher.app"
-> ```
->
-> 后续构建已改为 ad-hoc 签名，不会再报“已损坏”。安装包仍**没有 Developer ID 与公证**：首次打开可能提示“无法验证开发者”，右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [dev-docs/SIGNING.md](dev-docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。
+> 0.5.2 起 macOS 安装包做了 ad-hoc 签名，不会再报“已损坏”。但仍**没有 Developer ID 与公证**：首次打开可能提示“无法验证开发者”，右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。签名方案与进度见 [dev-docs/SIGNING.md](dev-docs/SIGNING.md)。macOS 自动更新已实测通过（0.1.1 → 0.3.1），Windows 安装与升级仍待实机验收。
 
 ## 开发
 

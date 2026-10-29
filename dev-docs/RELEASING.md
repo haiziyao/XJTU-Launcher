@@ -42,7 +42,7 @@ GitHub Releases 公共仓库可将更新端点配置为发布资产中的 latest
 
 在拿到域名和证书之前，内置更新地址使用 HTTP 直连 IP。安装包的 minisign 校验仍然有效，但清单本身可能被篡改，存在降级或拒绝服务风险。迁移步骤、代码位置和退出条件见 [P0.md](P0.md)。恢复 HTTPS 后，必须同时收紧 `src-tauri/src/config.rs`、`src/components/AppUpdateSettings.vue` 和 `tools/prepare-release.mjs` 三处校验。
 
-HTTP 端点必须在发布配置里带上 `dangerousInsecureTransportProtocol: true`，否则 release 构建在插件初始化阶段直接退出（0.5.0 即因此无法启动，见 [P0.md](P0.md)）。`tools/prepare-release.mjs` 已按端点协议自动写入；发布前用 release 构建实跑一次，确认能打开窗口再打标签。
+HTTP 端点必须在发布配置里带上 `dangerousInsecureTransportProtocol: true`，否则 release 构建在插件初始化阶段直接退出（0.5.0 即因此无法启动，见 [P0.md](P0.md)）。`tools/prepare-release.mjs` 已按端点协议自动写入。发布前必须用 release 配置实跑一次：macOS 直接启动 `XJTU Launcher.app/Contents/MacOS/xjtu-launcher`，确认进程存活再打标签；工作流在 macOS 构建后也会执行同样的 10 秒启动检查。Windows 仍无法在 CI 里可靠启动，发布前必须在真机安装并打开一次。
 
 ### 当前镜像内容（2026-10-25）
 

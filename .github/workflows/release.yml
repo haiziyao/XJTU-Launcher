@@ -58,3 +58,19 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config .release/tauri.conf.json
+      # 0.5.0 exited during plugin init and 0.5.1's bundle was unsigned, so
+      # launch the real release build and require it to survive startup.
+      - name: Smoke-test the macOS app
+        if: matrix.os == 'macos-latest'
+        run: |
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/XJTU Launcher.app"
+          "$app/Contents/MacOS/xjtu-launcher" > "$RUNNER_TEMP/app.log" 2>&1 &
+          pid=$!
+          sleep 10
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "App exited during startup:"
+            cat "$RUNNER_TEMP/app.log"
+            exit 1
+          fi
+          kill "$pid"
+          echo "App stayed alive for 10s."
