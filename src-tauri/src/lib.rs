@@ -11,6 +11,7 @@ mod plugins;
 mod providers;
 mod school;
 mod timetable_custom;
+mod tool_names;
 mod updates;
 mod vault;
 

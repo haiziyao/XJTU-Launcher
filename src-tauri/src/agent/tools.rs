@@ -48,24 +48,32 @@ fn campus(
     }
 }
 
+fn choice(values: &[&str], description: &str) -> Value {
+    json!({ "type": "string", "enum": values, "description": description })
+}
+
+/// One read-only tool per domain. `action` selects the query; the write tools
+/// (`campus_timetable_edit`, `campus_evaluations_submit`, `campus_lms_submit`)
+/// stay separate so they can be disabled on the local MCP endpoint without
+/// hiding read access.
 pub fn builtin() -> Vec<ToolDef> {
     let term =
         json!({ "type": "string", "description": "学期，例如 2025-2026-1；留空使用当前学期" });
     let page = json!({ "type": "integer", "minimum": 1, "maximum": 500, "description": "页码，从 1 开始" });
     let date = json!({ "type": "string", "description": "日期，格式 YYYY-MM-DD" });
     vec![
-        campus("campus_timetable", "查询当前学期的课程表", json!({}), &[]),
         campus(
-            "campus_timetable_customizations",
-            "列出本机对课表的修改：改过的教务课程、隐藏的课程和自建课程。",
+            "campus_timetable",
+            "查询课表。action=current（默认）返回当前学期课程；action=customizations 列出本机对课表的修改：改过的教务课程、隐藏的课程和自建课程。",
             json!({
-                "semester": { "type": "string", "description": "可选，默认当前已同步的学期" }
+                "action": choice(&["current", "customizations"], "current 查当前课表；customizations 查本机课表修改"),
+                "semester": { "type": "string", "description": "customizations 可选，默认当前已同步的学期" }
             }),
             &[],
         ),
         campus(
             "campus_timetable_edit",
-            "修改课表（写操作，只影响本机）。save 新增自建课程或修改现有课程；hide 隐藏课程；reset 恢复默认或删除自建课程。先不带 confirm 调用查看预览，用户明确同意后再带 confirm=true。",
+            "修改课表（写操作，只影响本机）。save 新增自建课程或修改现有课程；hide 隐藏课程；reset 恢复默认或删除自建课程。先不带 confirm 调用查看预览，用户明确同意后再带 confirm=true。先查 campus_timetable 的 action=current 拿课程 id。",
             json!({
                 "action": {
                     "type": "string",
@@ -94,169 +102,119 @@ pub fn builtin() -> Vec<ToolDef> {
             }),
             &["action"],
         ),
-        campus("campus_terms", "列出可选学期", json!({}), &[]),
         campus(
-            "campus_grades",
-            "查询本科成绩",
-            json!({ "term": term }),
-            &[],
-        ),
-        campus("campus_exams", "查询考试安排", json!({ "term": term }), &[]),
-        campus(
-            "campus_calendar",
-            "查询校历图片地址和学年信息",
-            json!({}),
-            &[],
-        ),
-        campus(
-            "campus_attendance_streams",
-            "查询考勤流水",
-            json!({ "start": date, "end": date, "page": page }),
-            &[],
-        ),
-        campus(
-            "campus_attendance_records",
-            "按日期范围查询课程考勤",
-            json!({ "start": date, "end": date, "page": page }),
-            &["start", "end"],
-        ),
-        campus("campus_card", "查询校园卡余额", json!({}), &[]),
-        campus(
-            "campus_card_transactions",
-            "查询校园卡流水",
-            json!({ "start": date, "end": date, "page": page }),
-            &["start", "end"],
-        ),
-        campus("campus_fitness", "查询体测概览", json!({}), &[]),
-        campus(
-            "campus_fitness_score",
-            "查询某一学年的体测成绩",
-            json!({ "year": json!({ "type": "string", "description": "学年，例如 2024-2025" }) }),
-            &["year"],
-        ),
-        campus(
-            "campus_room_options",
-            "列出自习教室查询可用的校区和楼宇",
-            json!({}),
-            &[],
-        ),
-        campus(
-            "campus_rooms",
-            "查询空闲教室",
+            "campus_academic",
+            "教务查询。action=terms 列出可选学期；grades 查询本科成绩；exams 查询考试安排；calendar 查询校历；profile 查询学籍档案；courses 按名称查询全校课程（需要 name 和 campus）。",
             json!({
-                "campus": { "type": "string" },
-                "building": { "type": "string" },
+                "action": choice(&["terms", "grades", "exams", "calendar", "profile", "courses"], "要查询的内容"),
+                "term": term,
+                "name": { "type": "string", "description": "courses 必填，课程名称关键词" },
+                "campus": { "type": "string", "description": "courses 必填，校区" }
+            }),
+            &["action"],
+        ),
+        campus(
+            "campus_attendance",
+            "考勤查询。action=streams 查询考勤流水，start / end 可选；action=records 按日期范围查询课程考勤，需要 start 和 end。",
+            json!({
+                "action": choice(&["streams", "records"], "streams 查流水；records 按日期查课程考勤"),
+                "start": date,
+                "end": date,
+                "page": page
+            }),
+            &["action"],
+        ),
+        campus(
+            "campus_card",
+            "校园卡查询。action=balance（默认）查询余额；action=transactions 查询流水（需要 start 和 end）。",
+            json!({
+                "action": choice(&["balance", "transactions"], "balance 查余额；transactions 查流水"),
+                "start": date,
+                "end": date,
+                "page": page
+            }),
+            &[],
+        ),
+        campus(
+            "campus_fitness",
+            "体测查询。action=overview（默认）查询体测概览；action=score 查询某一学年成绩（需要 year）。",
+            json!({
+                "action": choice(&["overview", "score"], "overview 查概览；score 查某一学年成绩"),
+                "year": { "type": "string", "description": "score 必填，学年，例如 2024-2025" }
+            }),
+            &[],
+        ),
+        campus(
+            "campus_classroom",
+            "教室查询。action=options 列出自习教室查询可用的校区和楼宇；action=rooms 查询空闲教室（需要 campus、building、date、start、end）。",
+            json!({
+                "action": choice(&["options", "rooms"], "options 查可选校区楼宇；rooms 查空闲教室"),
+                "campus": { "type": "string", "description": "rooms 必填，校区" },
+                "building": { "type": "string", "description": "rooms 必填，楼宇，来自 action=options" },
                 "date": date,
-                "start": { "type": "integer", "minimum": 1, "maximum": 14 },
-                "end": { "type": "integer", "minimum": 1, "maximum": 14 }
+                "start": { "type": "integer", "minimum": 1, "maximum": 14, "description": "rooms 必填，开始节次" },
+                "end": { "type": "integer", "minimum": 1, "maximum": 14, "description": "rooms 必填，结束节次" }
             }),
-            &["campus", "building", "date", "start", "end"],
+            &["action"],
         ),
         campus(
-            "campus_courses",
-            "按名称查询全校课程",
+            "campus_evaluation",
+            "评教。action=list（默认）列出教学评价（只读）；action=preview 自动填写待评问卷并生成预览（不会提交）。ids 来自 list 返回的问卷 id；rank 1 最高、5 最低；comments 可按问卷编号为每位老师单独设置文字评语。",
             json!({
+                "action": choice(&["list", "preview"], "list 查评教列表；preview 生成预览"),
                 "term": term,
-                "name": { "type": "string" },
-                "campus": { "type": "string" }
-            }),
-            &["name", "campus"],
-        ),
-        campus(
-            "campus_evaluations",
-            "列出教学评价（只读，不会提交任何评价）",
-            json!({
-                "term": term,
-                "finished": { "type": "boolean", "description": "true 查看已评，false 查看待评" }
-            }),
-            &[],
-        ),
-        campus(
-            "campus_evaluations_preview",
-            "自动填写待评问卷并生成预览（不会提交）。ids 来自 campus_evaluations 的 id；rank 1 最高、5 最低；comments 可按问卷编号为每位老师单独设置文字评语。",
-            json!({
+                "finished": { "type": "boolean", "description": "list 可选，true 查看已评，false 查看待评" },
                 "ids": {
                     "type": "array",
                     "minItems": 1,
                     "maxItems": 32,
                     "items": { "type": "string" },
-                    "description": "问卷编号列表，来自 campus_evaluations"
+                    "description": "preview 必填，问卷编号列表，来自 action=list"
                 },
-                "rank": { "type": "integer", "minimum": 1, "maximum": 5, "description": "评分档位，1 最高、5 最低，默认 2" },
-                "comment": { "type": "string", "description": "默认文字评语，用于所有必填文字题" },
+                "rank": { "type": "integer", "minimum": 1, "maximum": 5, "description": "preview 可选，评分档位，1 最高、5 最低，默认 2" },
+                "comment": { "type": "string", "description": "preview 可选，默认文字评语，用于所有必填文字题" },
                 "comments": {
                     "type": "object",
                     "additionalProperties": { "type": "string" },
-                    "description": "按问卷编号覆盖该老师的文字评语"
+                    "description": "preview 可选，按问卷编号覆盖该老师的文字评语"
                 }
             }),
-            &["ids"],
+            &[],
         ),
         campus(
             "campus_evaluations_submit",
             "提交已经生成的评教预览（写操作）。只有用户看到预览并明确要求提交时才带 confirm=true；结果不明的问卷不会被自动重试。",
             json!({
-                "previewId": { "type": "string", "description": "campus_evaluations_preview 返回的 id" },
+                "previewId": { "type": "string", "description": "campus_evaluation 的 action=preview 返回的 id" },
                 "confirm": { "type": "boolean", "description": "默认 false；用户明确确认提交时设为 true" }
             }),
             &["previewId"],
         ),
         campus(
-            "campus_notice_channels",
-            "列出可读取的校园通知栏目（教务处、学生处、研究生院、网络信息中心）",
-            json!({}),
-            &[],
-        ),
-        campus(
             "campus_notices",
-            "读取某个校园通知栏目最近发布的公告标题、分类、日期与链接（公开页面，只读）",
+            "校园通知。action=channels 列出可读取的栏目（教务处、学生处、研究生院、网络信息中心）；action=list（默认）读取某个栏目最近发布的公告（需要 channel）。",
             json!({
-                "channel": { "type": "string", "description": "栏目编号，来自 campus_notice_channels" },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "最多返回条数，默认 20" }
+                "action": choice(&["channels", "list"], "channels 列栏目；list 读公告"),
+                "channel": { "type": "string", "description": "list 必填，栏目编号，来自 action=channels" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "list 可选，最多返回条数，默认 20" }
             }),
-            &["channel"],
-        ),
-        campus(
-            "campus_profile",
-            "查询学籍档案（姓名、学号、学院、专业、班级等）",
-            json!({}),
             &[],
         ),
         campus(
-            "campus_lms_courses",
-            "列出思源学堂课程及各课程的学期、教师信息",
-            json!({}),
-            &[],
-        ),
-        campus(
-            "campus_lms_activities",
-            "列出思源学堂某门课程的全部活动（作业、资料、回放、讨论、问卷等）",
+            "campus_lms",
+            "思源学堂（只读）。action=courses 列出课程；activities 列出某门课程的活动（需要 course）；activity 查看活动详情（需要 activity）；submissions 查看某次作业的我的提交记录（需要 activity）。",
             json!({
-                "course": { "type": "integer", "minimum": 1, "description": "课程编号，来自 campus_lms_courses" }
+                "action": choice(&["courses", "activities", "activity", "submissions"], "要查询的内容"),
+                "course": { "type": "integer", "minimum": 1, "description": "activities 必填，课程编号，来自 action=courses" },
+                "activity": { "type": "integer", "minimum": 1, "description": "activity / submissions 必填，活动编号，来自 action=activities" }
             }),
-            &["course"],
-        ),
-        campus(
-            "campus_lms_activity",
-            "查看思源学堂活动详情：说明、附件、提交与成绩概况",
-            json!({
-                "activity": { "type": "integer", "minimum": 1, "description": "活动编号，来自 campus_lms_activities" }
-            }),
-            &["activity"],
-        ),
-        campus(
-            "campus_lms_submissions",
-            "查看思源学堂某次作业的我的提交记录、分数与教师批语（只读）",
-            json!({
-                "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms_activities" }
-            }),
-            &["activity"],
+            &["action"],
         ),
         campus(
             "campus_lms_submit",
             "提交思源学堂作业（写操作）。默认只返回预览，不上传也不提交；预览中核对课程、作业和文件，并向用户复述确认后，用户明确要求提交时才带 confirm=true 再次调用。文件必须是用户明确指定的本地绝对路径，仅支持常见文档、代码和媒体类型，最大 100 MB/个、200 MB/次。不要重试结果不明的提交。",
             json!({
-                "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms_activities" },
+                "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms 的 action=activities" },
                 "comment": { "type": "string", "description": "文字答案或作业说明，可留空" },
                 "files": {
                     "type": "array",
@@ -270,41 +228,23 @@ pub fn builtin() -> Vec<ToolDef> {
             &["activity"],
         ),
         campus(
-            "campus_library_floors",
-            "列出图书馆可选楼层",
-            json!({}),
+            "campus_library",
+            "图书馆。action=floors（默认）列出可选楼层；areas 列出某楼层区域（需要 floor）；seats 查询某区域当前可选座位（需要 area）。",
+            json!({
+                "action": choice(&["floors", "areas", "seats"], "要查询的内容"),
+                "floor": { "type": "string", "description": "areas 必填，楼层编号，来自 action=floors" },
+                "area": { "type": "string", "description": "seats 必填，区域编号，来自 action=areas" }
+            }),
             &[],
         ),
         campus(
-            "campus_library_areas",
-            "列出图书馆某一楼层的区域",
+            "campus_venues",
+            "场馆。action=list（默认）列出可预约的场馆；slots 查询某场馆某日期的可预约时段（需要 venue 和 date）；orders 查询我的场馆预约记录。",
             json!({
-                "floor": { "type": "string", "description": "楼层编号，来自 campus_library_floors" }
-            }),
-            &["floor"],
-        ),
-        campus(
-            "campus_library_seats",
-            "查询图书馆某区域当前可选座位",
-            json!({
-                "area": { "type": "string", "description": "区域编号，来自 campus_library_areas" }
-            }),
-            &["area"],
-        ),
-        campus("campus_venues", "列出可预约的场馆", json!({}), &[]),
-        campus(
-            "campus_venue_slots",
-            "查询某场馆某日期的可预约时段",
-            json!({
-                "venue": { "type": "integer", "minimum": 1, "description": "场馆编号，来自 campus_venues" },
+                "action": choice(&["list", "slots", "orders"], "要查询的内容"),
+                "venue": { "type": "integer", "minimum": 1, "description": "slots 必填，场馆编号，来自 action=list" },
                 "date": date
             }),
-            &["venue", "date"],
-        ),
-        campus(
-            "campus_venue_orders",
-            "查询我的场馆预约记录",
-            json!({}),
             &[],
         ),
     ]
@@ -376,6 +316,16 @@ fn small(args: &Value, key: &str) -> Result<u8, String> {
         .ok_or_else(|| format!("缺少有效的整数参数 {key}"))
 }
 
+/// The selected action, falling back to the action that keeps a pre-merge
+/// call working (`campus_card` without `action` still returns the balance).
+fn action_of(args: &Value, default: &str) -> String {
+    text(args, "action").unwrap_or_else(|| default.to_string())
+}
+
+fn invalid_action(tool: &str, action: &str, allowed: &str) -> String {
+    format!("{tool} 不支持 action={action}，可选 {allowed}")
+}
+
 fn timetable_request(args: &Value) -> Result<crate::timetable_custom::Request, String> {
     use crate::timetable_custom::{Action, Draft, Request, Weeks};
     let action = match required(args, "action")?.as_str() {
@@ -432,87 +382,159 @@ fn timetable_request(args: &Value) -> Result<crate::timetable_custom::Request, S
 
 fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
     let query = match name {
-        "campus_terms" => school::Query::Terms,
-        "campus_grades" => school::Query::Grades {
-            term: text(args, "term"),
+        "campus_academic" => match action_of(args, "").as_str() {
+            "terms" => school::Query::Terms,
+            "grades" => school::Query::Grades {
+                term: text(args, "term"),
+            },
+            "exams" => school::Query::Exams {
+                term: text(args, "term"),
+            },
+            "calendar" => school::Query::Calendar,
+            "profile" => school::Query::Profile,
+            "courses" => school::Query::Courses {
+                term: text(args, "term"),
+                name: required(args, "name")?,
+                campus: required(args, "campus")?,
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_academic",
+                    other,
+                    "terms、grades、exams、calendar、profile、courses",
+                ))
+            }
         },
-        "campus_exams" => school::Query::Exams {
-            term: text(args, "term"),
+        "campus_attendance" => match action_of(args, "").as_str() {
+            "streams" => school::Query::AttendanceStreams {
+                start: text(args, "start"),
+                end: text(args, "end"),
+                page: number(args, "page", 1),
+            },
+            "records" => school::Query::AttendanceRecords {
+                start: required(args, "start")?,
+                end: required(args, "end")?,
+                page: number(args, "page", 1),
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_attendance",
+                    other,
+                    "streams、records",
+                ))
+            }
         },
-        "campus_calendar" => school::Query::Calendar,
-        "campus_attendance_streams" => school::Query::AttendanceStreams {
-            start: text(args, "start"),
-            end: text(args, "end"),
-            page: number(args, "page", 1),
+        "campus_card" => match action_of(args, "balance").as_str() {
+            "balance" => school::Query::Card,
+            "transactions" => school::Query::CardTransactions {
+                start: required(args, "start")?,
+                end: required(args, "end")?,
+                page: number(args, "page", 1),
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_card",
+                    other,
+                    "balance、transactions",
+                ))
+            }
         },
-        "campus_attendance_records" => school::Query::AttendanceRecords {
-            start: required(args, "start")?,
-            end: required(args, "end")?,
-            page: number(args, "page", 1),
+        "campus_fitness" => match action_of(args, "overview").as_str() {
+            "overview" => school::Query::Fitness,
+            "score" => school::Query::FitnessScore {
+                year: required(args, "year")?,
+            },
+            other => return Err(invalid_action("campus_fitness", other, "overview、score")),
         },
-        "campus_card" => school::Query::Card,
-        "campus_card_transactions" => school::Query::CardTransactions {
-            start: required(args, "start")?,
-            end: required(args, "end")?,
-            page: number(args, "page", 1),
+        "campus_classroom" => match action_of(args, "").as_str() {
+            "options" => school::Query::RoomOptions,
+            "rooms" => school::Query::Rooms {
+                campus: required(args, "campus")?,
+                building: required(args, "building")?,
+                date: required(args, "date")?,
+                start: number(args, "start", 0) as u8,
+                end: number(args, "end", 0) as u8,
+            },
+            other => return Err(invalid_action("campus_classroom", other, "options、rooms")),
         },
-        "campus_fitness" => school::Query::Fitness,
-        "campus_fitness_score" => school::Query::FitnessScore {
-            year: required(args, "year")?,
+        "campus_evaluation" => match action_of(args, "list").as_str() {
+            "list" => school::Query::Evaluations {
+                term: text(args, "term"),
+                finished: args
+                    .get("finished")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_evaluation",
+                    other,
+                    "list；preview 由预览流程处理",
+                ))
+            }
         },
-        "campus_room_options" => school::Query::RoomOptions,
-        "campus_rooms" => school::Query::Rooms {
-            campus: required(args, "campus")?,
-            building: required(args, "building")?,
-            date: required(args, "date")?,
-            start: number(args, "start", 0) as u8,
-            end: number(args, "end", 0) as u8,
+        "campus_notices" => match action_of(args, "list").as_str() {
+            "channels" => school::Query::NoticeChannels,
+            "list" => school::Query::Notices {
+                channel: required(args, "channel")?,
+                limit: args
+                    .get("limit")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(20)
+                    .clamp(1, 50) as u32,
+            },
+            other => return Err(invalid_action("campus_notices", other, "channels、list")),
         },
-        "campus_courses" => school::Query::Courses {
-            term: text(args, "term"),
-            name: required(args, "name")?,
-            campus: required(args, "campus")?,
+        "campus_lms" => match action_of(args, "").as_str() {
+            "courses" => school::Query::LmsCourses,
+            "activities" => school::Query::LmsActivities {
+                course: id(args, "course")?,
+            },
+            "activity" => school::Query::LmsActivity {
+                activity: id(args, "activity")?,
+            },
+            "submissions" => school::Query::LmsSubmissions {
+                activity: id(args, "activity")?,
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_lms",
+                    other,
+                    "courses、activities、activity、submissions",
+                ))
+            }
         },
-        "campus_evaluations" => school::Query::Evaluations {
-            term: text(args, "term"),
-            finished: args
-                .get("finished")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
+        "campus_library" => match action_of(args, "floors").as_str() {
+            "floors" => school::Query::LibraryFloors,
+            "areas" => school::Query::LibraryAreas {
+                floor: required(args, "floor")?,
+            },
+            "seats" => school::Query::LibrarySeats {
+                area: required(args, "area")?,
+            },
+            other => {
+                return Err(invalid_action(
+                    "campus_library",
+                    other,
+                    "floors、areas、seats",
+                ))
+            }
         },
-        "campus_notice_channels" => school::Query::NoticeChannels,
-        "campus_notices" => school::Query::Notices {
-            channel: required(args, "channel")?,
-            limit: args
-                .get("limit")
-                .and_then(Value::as_u64)
-                .unwrap_or(20)
-                .clamp(1, 50) as u32,
+        "campus_venues" => match action_of(args, "list").as_str() {
+            "list" => school::Query::VenueList,
+            "slots" => school::Query::VenueSlots {
+                venue: id(args, "venue")?,
+                date: required(args, "date")?,
+            },
+            "orders" => school::Query::VenueOrders,
+            other => {
+                return Err(invalid_action(
+                    "campus_venues",
+                    other,
+                    "list、slots、orders",
+                ))
+            }
         },
-        "campus_profile" => school::Query::Profile,
-        "campus_lms_courses" => school::Query::LmsCourses,
-        "campus_lms_activities" => school::Query::LmsActivities {
-            course: id(args, "course")?,
-        },
-        "campus_lms_activity" => school::Query::LmsActivity {
-            activity: id(args, "activity")?,
-        },
-        "campus_lms_submissions" => school::Query::LmsSubmissions {
-            activity: id(args, "activity")?,
-        },
-        "campus_library_floors" => school::Query::LibraryFloors,
-        "campus_library_areas" => school::Query::LibraryAreas {
-            floor: required(args, "floor")?,
-        },
-        "campus_library_seats" => school::Query::LibrarySeats {
-            area: required(args, "area")?,
-        },
-        "campus_venues" => school::Query::VenueList,
-        "campus_venue_slots" => school::Query::VenueSlots {
-            venue: id(args, "venue")?,
-            date: required(args, "date")?,
-        },
-        "campus_venue_orders" => school::Query::VenueOrders,
         other => return Err(format!("未知的校园工具 {other}")),
     };
     Ok(query)
@@ -545,19 +567,26 @@ impl ToolDef {
     pub async fn call(&self, app: &AppHandle, args: Value) -> Result<String, String> {
         match &self.kind {
             Kind::Campus(name) => match *name {
-                "campus_timetable" => {
-                    let timetable = crate::run_timetable(app).await?;
-                    Ok(truncate(
-                        serde_json::to_string(&timetable).map_err(|_| "无法序列化课表")?,
-                    ))
-                }
-                "campus_timetable_customizations" => {
-                    let data = crate::timetable_customizations(app, text(&args, "semester"))?;
-                    Ok(truncate(
-                        serde_json::to_string_pretty(&data)
-                            .map_err(|_| "无法序列化课表修改记录")?,
-                    ))
-                }
+                "campus_timetable" => match action_of(&args, "current").as_str() {
+                    "current" => {
+                        let timetable = crate::run_timetable(app).await?;
+                        Ok(truncate(
+                            serde_json::to_string(&timetable).map_err(|_| "无法序列化课表")?,
+                        ))
+                    }
+                    "customizations" => {
+                        let data = crate::timetable_customizations(app, text(&args, "semester"))?;
+                        Ok(truncate(
+                            serde_json::to_string_pretty(&data)
+                                .map_err(|_| "无法序列化课表修改记录")?,
+                        ))
+                    }
+                    other => Err(invalid_action(
+                        "campus_timetable",
+                        other,
+                        "current、customizations",
+                    )),
+                },
                 "campus_timetable_edit" => {
                     let confirm = args
                         .get("confirm")
@@ -570,23 +599,34 @@ impl ToolDef {
                             .map_err(|_| "无法序列化课表修改结果")?,
                     ))
                 }
-                "campus_evaluations_preview" => {
-                    let request = school::evaluation::Prepare {
-                        ids: strings(&args, "ids")?,
-                        rank: args
-                            .get("rank")
-                            .and_then(Value::as_u64)
-                            .unwrap_or(2)
-                            .clamp(1, 5) as u8,
-                        comment: text(&args, "comment").unwrap_or_default(),
-                        overrides: BTreeMap::new(),
-                        comments: comments(&args)?,
-                    };
-                    let data = crate::prepare_evaluations(app, request).await?;
-                    Ok(truncate(
-                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化评教预览")?,
-                    ))
-                }
+                "campus_evaluation" => match action_of(&args, "list").as_str() {
+                    "preview" => {
+                        let request = school::evaluation::Prepare {
+                            ids: strings(&args, "ids")?,
+                            rank: args
+                                .get("rank")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(2)
+                                .clamp(1, 5) as u8,
+                            comment: text(&args, "comment").unwrap_or_default(),
+                            overrides: BTreeMap::new(),
+                            comments: comments(&args)?,
+                        };
+                        let data = crate::prepare_evaluations(app, request).await?;
+                        Ok(truncate(
+                            serde_json::to_string_pretty(&data)
+                                .map_err(|_| "无法序列化评教预览")?,
+                        ))
+                    }
+                    "list" => {
+                        let query = query_for(name, &args)?;
+                        let data = crate::run_school_query(app, query, None).await?;
+                        Ok(truncate(
+                            serde_json::to_string(&data).map_err(|_| "无法序列化查询结果")?,
+                        ))
+                    }
+                    other => Err(invalid_action("campus_evaluation", other, "list、preview")),
+                },
                 "campus_evaluations_submit" => {
                     let preview_id = required(&args, "previewId")?;
                     let confirm = args
@@ -639,6 +679,19 @@ impl ToolDef {
             }
         }
     }
+}
+
+/// Translate a saved MCP call before dispatch. The stored arguments are kept
+/// and the merged action is added, so old clients do not need to change.
+pub fn legacy(name: &str, args: &Value) -> Option<(&'static str, Value)> {
+    let (tool, action) = crate::tool_names::merged(name)?;
+    let mut args = args.clone();
+    if let Some(action) = action {
+        if let Some(map) = args.as_object_mut() {
+            map.insert("action".into(), json!(action));
+        }
+    }
+    Some((tool, args))
 }
 
 /// Built-in tools plus the tools of every enabled MCP server.
@@ -758,50 +811,106 @@ mod tests {
     }
 
     #[test]
-    fn maps_tool_names_to_queries() {
+    fn maps_actions_to_queries() {
         assert!(matches!(
-            query_for("campus_grades", &json!({"term": "2025-2026-1"})).unwrap(),
+            query_for(
+                "campus_academic",
+                &json!({"action": "grades", "term": "2025-2026-1"})
+            )
+            .unwrap(),
             school::Query::Grades { .. }
+        ));
+        assert!(matches!(
+            query_for("campus_academic", &json!({"action": "profile"})).unwrap(),
+            school::Query::Profile
         ));
         assert!(matches!(
             query_for("campus_card", &json!({})).unwrap(),
             school::Query::Card
         ));
-        assert!(query_for("campus_attendance_records", &json!({})).is_err());
+        assert!(matches!(
+            query_for(
+                "campus_card",
+                &json!({"action": "transactions", "start": "2026-01-01", "end": "2026-01-31"})
+            )
+            .unwrap(),
+            school::Query::CardTransactions { .. }
+        ));
+        assert!(query_for("campus_attendance", &json!({"action": "records"})).is_err());
+        assert!(query_for("campus_attendance", &json!({"action": "streams"})).is_ok());
         assert!(query_for("nope", &json!({})).is_err());
         assert!(matches!(
-            query_for("campus_lms_activities", &json!({"course": 12})).unwrap(),
+            query_for("campus_lms", &json!({"action": "activities", "course": 12})).unwrap(),
             school::Query::LmsActivities { course: 12 }
         ));
-        assert!(query_for("campus_lms_activities", &json!({"course": 0})).is_err());
+        assert!(query_for("campus_lms", &json!({"action": "activities", "course": 0})).is_err());
         assert!(matches!(
-            query_for("campus_library_seats", &json!({"area": "A"})).unwrap(),
+            query_for("campus_library", &json!({"action": "seats", "area": "A"})).unwrap(),
             school::Query::LibrarySeats { .. }
         ));
         assert!(matches!(
-            query_for("campus_evaluations", &json!({"finished": true})).unwrap(),
+            query_for("campus_evaluation", &json!({"finished": true})).unwrap(),
             school::Query::Evaluations { finished: true, .. }
         ));
+        assert!(matches!(
+            query_for("campus_venues", &json!({})).unwrap(),
+            school::Query::VenueList
+        ));
+        assert!(matches!(
+            query_for("campus_notices", &json!({"channel": "dean"})).unwrap(),
+            school::Query::Notices { .. }
+        ));
+    }
+
+    #[test]
+    fn merged_tools_cover_every_query_and_stay_small() {
         let defs = builtin();
         let names: Vec<&str> = defs.iter().map(|def| def.name.as_str()).collect();
-        for name in [
-            "campus_profile",
-            "campus_timetable_customizations",
-            "campus_timetable_edit",
-            "campus_evaluations_preview",
-            "campus_evaluations_submit",
-            "campus_notice_channels",
-            "campus_notices",
-            "campus_lms_courses",
-            "campus_lms_activity",
-            "campus_lms_submissions",
-            "campus_lms_submit",
-            "campus_venues",
-            "campus_venue_slots",
-            "campus_venue_orders",
-        ] {
-            assert!(names.contains(&name), "{name}");
+        assert_eq!(
+            names,
+            vec![
+                "campus_timetable",
+                "campus_timetable_edit",
+                "campus_academic",
+                "campus_attendance",
+                "campus_card",
+                "campus_fitness",
+                "campus_classroom",
+                "campus_evaluation",
+                "campus_evaluations_submit",
+                "campus_notices",
+                "campus_lms",
+                "campus_lms_submit",
+                "campus_library",
+                "campus_venues",
+            ]
+        );
+        for def in &defs {
+            assert_eq!(def.parameters["type"], "object");
         }
+    }
+
+    #[test]
+    fn legacy_names_are_translated_to_merged_actions() {
+        let (tool, args) = legacy("campus_grades", &json!({"term": "2025-2026-1"})).unwrap();
+        assert_eq!(tool, "campus_academic");
+        assert_eq!(args["action"], "grades");
+        assert_eq!(args["term"], "2025-2026-1");
+
+        let (tool, args) = legacy("campus_evaluations_preview", &json!({"ids": ["q"]})).unwrap();
+        assert_eq!(tool, "campus_evaluation");
+        assert_eq!(args["action"], "preview");
+
+        assert!(legacy("campus_card", &json!({})).is_none());
+        assert!(legacy("campus_grades", &json!({})).is_some());
+        assert_eq!(
+            crate::tool_names::canonical_name("campus_card_transactions"),
+            "campus_card"
+        );
+        assert_eq!(
+            crate::tool_names::canonical_name("campus_card"),
+            "campus_card"
+        );
     }
 
     #[test]

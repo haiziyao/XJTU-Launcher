@@ -6,6 +6,8 @@ mod config;
 mod market;
 #[path = "../src/plugins.rs"]
 mod plugins;
+#[path = "../src/tool_names.rs"]
+mod tool_names;
 fn main() {
     tauri::async_runtime::block_on(async {
         let config = config::AppConfig {

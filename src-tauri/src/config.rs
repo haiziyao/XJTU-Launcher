@@ -321,13 +321,28 @@ impl AppConfig {
     }
 }
 
+/// Pre-merge tool names map to the merged tool, so a setting written by an
+/// older build keeps the same capability hidden. Order is kept and duplicates
+/// are dropped.
+fn canonical_tool_names(names: &[String]) -> Vec<String> {
+    let mut canonical: Vec<String> = Vec::with_capacity(names.len());
+    for name in names {
+        let name = crate::tool_names::canonical_name(name);
+        if !canonical.iter().any(|existing| existing == name) {
+            canonical.push(name.to_string());
+        }
+    }
+    canonical
+}
+
 pub fn load(path: &Path) -> Result<AppConfig, String> {
     if !path.exists() {
         return Ok(AppConfig::default());
     }
     let bytes = fs::read(path).map_err(|_| "无法读取本地配置".to_string())?;
-    let config: AppConfig = serde_json::from_slice(&bytes)
+    let mut config: AppConfig = serde_json::from_slice(&bytes)
         .map_err(|_| "配置文件损坏，已保留原文件，请修复后重试".to_string())?;
+    config.mcp_server_disabled_tools = canonical_tool_names(&config.mcp_server_disabled_tools);
     config.validate()?;
     Ok(config)
 }

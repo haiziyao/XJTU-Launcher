@@ -185,31 +185,16 @@ pub fn tools() -> Vec<Tool> {
 /// Kept in the backend so the page and `tools/list` describe the same tools.
 fn category(name: &str) -> &'static str {
     match name {
-        "campus_timetable"
-        | "campus_timetable_customizations"
-        | "campus_timetable_edit"
-        | "campus_terms"
-        | "campus_grades"
-        | "campus_exams"
-        | "campus_courses" => "课程与成绩",
-        "campus_attendance_streams" | "campus_attendance_records" => "考勤",
-        "campus_card" | "campus_card_transactions" => "校园卡",
-        "campus_fitness" | "campus_fitness_score" => "体测",
-        "campus_evaluations" | "campus_evaluations_preview" | "campus_evaluations_submit" => "评教",
-        "campus_profile" => "学籍档案",
-        "campus_notice_channels" | "campus_notices" => "校园通知",
-        "campus_lms_courses"
-        | "campus_lms_activities"
-        | "campus_lms_activity"
-        | "campus_lms_submissions"
-        | "campus_lms_submit" => "思源学堂",
-        "campus_library_floors"
-        | "campus_library_areas"
-        | "campus_library_seats"
-        | "campus_venues"
-        | "campus_venue_slots"
-        | "campus_venue_orders" => "图书馆与场馆",
-        _ => "教室与校历",
+        "campus_timetable" | "campus_timetable_edit" | "campus_academic" => "教务与成绩",
+        "campus_attendance" => "考勤",
+        "campus_card" => "校园卡",
+        "campus_fitness" => "体测",
+        "campus_evaluation" | "campus_evaluations_submit" => "评教",
+        "campus_notices" => "校园通知",
+        "campus_lms" | "campus_lms_submit" => "思源学堂",
+        "campus_library" | "campus_venues" => "图书馆与场馆",
+        "campus_classroom" => "教室与校历",
+        _ => "其他",
     }
 }
 
@@ -319,11 +304,11 @@ fn open_tools(disabled: &[String]) -> Vec<tools::ToolDef> {
 }
 
 async fn call_tool(state: &ServerState, request: &Value) -> Result<Value, (i64, String)> {
-    let name = request
+    let requested = request
         .pointer("/params/name")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    if name.is_empty() {
+    if requested.is_empty() {
         return Err((-32602, "缺少工具名称".into()));
     }
     let arguments = request
@@ -333,6 +318,12 @@ async fn call_tool(state: &ServerState, request: &Value) -> Result<Value, (i64, 
     if !arguments.is_object() {
         return Err((-32602, "工具参数必须是对象".into()));
     }
+    // A saved pre-merge name is translated before the exposure check, so the
+    // merged tool's on/off setting applies to both names.
+    let (name, arguments) = match tools::legacy(requested, &arguments) {
+        Some((tool, args)) => (tool, args),
+        None => (requested, arguments),
+    };
     let Some(tool) = open_tools(&read_config(&state.app)?.mcp_server_disabled_tools)
         .into_iter()
         .find(|tool| tool.name == name)
