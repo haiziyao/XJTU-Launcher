@@ -18,7 +18,7 @@
 | MCP 后端                 | 已实现：配置存 `~/.xjtu-launcher/mcp.json`，stdio 与 Streamable HTTP 两种传输的 JSON-RPC 客户端，启停 / 探测 / 目录安装命令                                                                                                                                                                                                                  |
 | Agent 设置插件           | 已实现：内置插件 `cn.xjtu.agent-settings`，标签为模型服务 / 接入工具 / 角色预设 / 全局记忆 / 市场；模型配置已从应用设置移出                                                                                                                                                                                                                  |
 | 插件市场                 | 恢复三分区，MCP 标签页已移除                                                                                                                                                                                                                                                                                                                 |
-| Agent 运行时             | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（33 个校园工具，含思源学堂作业提交、评教预览 / 提交、本机课表自定义与公开通知 + MCP），角色提示词、Skill 自动/手动加载、全局记忆注入与 `remember` 工具，单条对话串行、可取消，对话持久化                                                                                 |
+| Agent 运行时             | 已实现：OpenAI 兼容、Anthropic、Gemini 三种协议的流式响应，工具循环（14 个校园工具，只读查询按领域合并并用 `action` 选择；含思源学堂作业提交、评教预览 / 提交、本机课表自定义与公开通知 + MCP），角色提示词、Skill 自动/手动加载、全局记忆注入与 `remember` 工具，单条对话串行、可取消，对话持久化                                                                                 |
 | Agent 对话页             | 已实现：单列对话、左上角“对话管理”抽屉（覆盖式，不挤压页面；置顶、按最近时间排序、搜索 / 重命名 / 置顶 / 删除、工作区）、新对话、模型选择（按厂商获取的列表）、上下文用量圆环、余额、`+` 角色与预设任务、`@` Skill、流式文本（正文按 Markdown 渲染，图片与脚本会被过滤）、可折叠工具行、停止生成、右侧轮次刻度（悬停看当时的问题，点击跳转） |
 | 角色 / Skills / 预设任务 | 已实现：存于 `~/.xjtu-launcher/agent/presets.json`；Skill 目录注入提示词，模型可用 `use_skill` 加载，用户也可以在输入框用 `/` 指定                                                                                                                                                                                                           |
 | 全局记忆                 | 已实现：存于 `~/.xjtu-launcher/agent/memory.json`，自动注入系统提示词，可在 Agent 设置中增删改，模型也可通过 `remember` 工具写入                                                                                                                                                                                                             |
@@ -65,7 +65,7 @@
 - 模型配置：沿用现有的加密文件与 `auth.json` 边界，不把 API Key 写入日志。
 - 对话记录：`~/.xjtu-launcher/agent/conversations.json`；角色、Skills 与预设任务在 `presets.json`；全局记忆在 `memory.json`。
 - 校园查询工具复用 `school_query` 的封闭枚举，不接受任意 URL；账号切换时旧请求必须按会话代次丢弃。
-- Agent 的写工具只有两个。`campus_lms_submit`：`confirm=false` 只预览；`confirm=true` 才上传附件并提交。文件只允许用户明确指定的绝对路径、常见文档 / 代码 / 媒体扩展名，拒绝凭据目录与符号链接，单文件 100 MB、单次 200 MB。提交结果不明（网络中断、5xx）时不重试、不清理可能已被引用的上传，并提示用户到思源学堂确认；明确 4xx 拒绝才清理本次上传。`campus_evaluations_submit`：必须先由 `campus_evaluations_preview` 生成预览并拿到 `previewId`，再带 `confirm=true` 提交；预览 15 分钟过期，绑定账号与会话代次，结果不明时标记为未知且不自动重试。
+- Agent 的写工具只有两个。`campus_lms_submit`：`confirm=false` 只预览；`confirm=true` 才上传附件并提交。文件只允许用户明确指定的绝对路径、常见文档 / 代码 / 媒体扩展名，拒绝凭据目录与符号链接，单文件 100 MB、单次 200 MB。提交结果不明（网络中断、5xx）时不重试、不清理可能已被引用的上传，并提示用户到思源学堂确认；明确 4xx 拒绝才清理本次上传。`campus_evaluations_submit`：必须先由 `campus_evaluation` 的 `action=preview` 生成预览并拿到 `previewId`，再带 `confirm=true` 提交；预览 15 分钟过期，绑定账号与会话代次，结果不明时标记为未知且不自动重试。
 - 本地 MCP 会启动子进程，安装或编辑时界面必须显示实际命令；不把市场目录里的命令当作可信输入静默执行。
 
 ## 尚未确定

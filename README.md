@@ -64,10 +64,10 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 个人页可以打开 **MCP 模式**，把校园能力直接开放给 Claude Code 等编程 Agent：
 
 - 在 `http://127.0.0.1:39217/mcp` 提供 MCP 服务，端口可自行修改，应用失败会回到原端口并说明原因
-- 内置 33 个校园工具，覆盖课程与成绩、教室与校历、考勤、校园卡、体测、评教、学籍档案、思源学堂、图书馆与场馆，以及教务处、学生处、研究生院与网络信息中心的公开通知，按分类展示名称、说明与当前可达性
+- 内置 14 个校园工具：只读查询按领域合并，用 `action` 参数选择具体查询（学期、成绩、考试、校历、学籍、全校课程等），写操作保持独立；覆盖教务、教室与校历、考勤、校园卡、体测、评教、思源学堂、图书馆与场馆，以及教务处、学生处、研究生院与网络信息中心的公开通知，按分类展示名称、说明与当前可达性
 - 逐项勾选开放哪些工具；未勾选的工具不会出现在 `tools/list` 中
 - 一键复制地址与 `claude mcp add` 命令，也能实际检查校园会话是否可用
-- 仅监听本机回环地址，不经过启动器账号。写工具只有三个：`campus_lms_submit` 默认只预览作业，`confirm=true` 才上传并提交；`campus_evaluations_submit` 必须先由 `campus_evaluations_preview` 生成预览，再带 `confirm=true` 提交，结果不明时不重试；`campus_timetable_edit` 只改本机课表，默认返回改动前后的对照，用户确认后再带 `confirm=true`。接口无请求认证，请勿把端口暴露到局域网
+- 仅监听本机回环地址，不经过启动器账号。写工具只有三个：`campus_lms_submit` 默认只预览作业，`confirm=true` 才上传并提交；`campus_evaluations_submit` 必须先由 `campus_evaluation` 的 `action=preview` 生成预览，再带 `confirm=true` 提交，结果不明时不重试；`campus_timetable_edit` 只改本机课表，默认返回改动前后的对照，用户确认后再带 `confirm=true`。接口无请求认证，请勿把端口暴露到局域网
 
 <p align="center"><img src="docs/screenshots/mcp.png" alt="个人页 MCP 模式：端口、地址、复制命令与工具数量" width="900"></p>
 
