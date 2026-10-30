@@ -24,7 +24,7 @@
 7. **自动发版**：`main` 更新后 `release.yml` 自动执行：版本与记录检查 → 测试与静态检查 → 三平台串行构建 → macOS 启动冒烟 → 完整资产与 `latest.json` 校验 → 正式发布并标记 Latest。已有同版本正式 Release 时跳过，所以同版本的其他 `main` 提交不会重复发版。
 8. **发布后核对**：下载 Release 资产，检查 macOS 应用包签名（`codesign --verify --deep --strict`）、`Info.plist` 版本、双架构启动、DMG 校验和，以及全部资产的 `sha256` 与 GitHub 摘要一致。
 9. **更新镜像**：上传资产到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，覆盖 `latest.json`；旧版本目录保留。镜像没有自动化凭据，仍需手动执行。
-10. **收尾**：把版本记录的「验证」改为实际结果，`dev-docs/DEVELOPMENT.md` 追加一条发布记录。
+10. **收尾**：把版本记录的「验证」改为实际结果，`dev-docs/DEVELOPMENT.md` 追加一条发布记录。把 `main` 合回 `dev`，让测试分支包含正式发布提交，下一个版本从最新 `main` 拉出。
 11. **撤回时**：删除 Release 与标签、删除镜像目录，把版本记录状态改为「已撤回」并写明原因与替代版本，再更新 README 与索引。
 
 ## 自动发版（`main` 更新）
