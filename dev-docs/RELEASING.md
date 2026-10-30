@@ -20,7 +20,7 @@
 3. **同步入口**：根 README 的三条下载链接改为新版本资产名（`v<版本>` 与文件名都含版本号），`dev-docs/CONVENTIONS.md` 的当前版本同步更新。
 4. **本地验证**：`cargo test`、`npm test`、Clippy（`-D warnings`）、格式检查；再用发布配置构建一次，真机启动 10 秒以上。
 5. **合入 `dev` 测试**：把 `dev-v<版本>` 合入 `dev` 并推送，交给测试人员验证真实登录、关键流程与安装包。未测试通过不得合入 `main`。
-6. **合入 `main`**：测试通过后由 `dev` 创建 PR 合入 `main`。`main-guard` 会拒绝非 `dev` 来源的 PR；`main` 的规则禁止直接推送。
+6. **合入 `main`**：测试通过后由 `dev` 创建 PR 合入 `main`，测试人员给 PR 加 `tested` 标签。`main-guard` 会拒绝非 `dev` 来源的 PR，`tested-label` 检查在标签出现前保持失败；`main` 的规则禁止直接推送。
 7. **自动发版**：`main` 更新后 `release.yml` 自动执行：版本与记录检查 → 测试与静态检查 → 三平台串行构建 → macOS 启动冒烟 → 完整资产与 `latest.json` 校验 → 正式发布并标记 Latest。已有同版本正式 Release 时跳过，所以同版本的其他 `main` 提交不会重复发版。
 8. **发布后核对**：下载 Release 资产，检查 macOS 应用包签名（`codesign --verify --deep --strict`）、`Info.plist` 版本、双架构启动、DMG 校验和，以及全部资产的 `sha256` 与 GitHub 摘要一致。
 9. **更新镜像**：上传资产到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，覆盖 `latest.json`；旧版本目录保留。镜像没有自动化凭据，仍需手动执行。

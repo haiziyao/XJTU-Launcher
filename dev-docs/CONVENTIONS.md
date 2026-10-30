@@ -57,7 +57,7 @@
 
 ## 6. 分支、提交与发布
 
-- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only` 与三平台 `desktop` 检查通过，只允许 merge 提交；当前最新发布版为 **0.5.2**，`main` 应与它一致。
+- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；`tested-label` 表示测试人员已在 `dev` 验证并给 PR 加了 `tested` 标签。当前最新发布版为 **0.5.2**，`main` 应与它一致。
 - `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），不再使用 `codex/*`。分支先合入 `dev`，由测试人员验证；验证通过后只能由 `dev` 创建 PR 合入 `main`。Git 不允许 `dev` 与 `dev/v0.6.0` 同时存在，所以版本分支用连字符。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
 - 推送功能分支与合入 `dev` 可按当次任务执行；合入 `main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](RELEASING.md)。
