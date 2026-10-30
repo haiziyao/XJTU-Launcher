@@ -13,7 +13,7 @@
 - **写操作**：评教与作业提交都必须"先预览、用户明确要求、再 `confirm=true`"。结果不明不自动重试；取消不宣称撤回。
 - **插件与更新**：插件只有启用开关，侧栏入口跟随启用状态；服务端地址默认只读，确认危险提示后才可编辑。远端包只支持声明式导航。不要写入假域名、假版本或伪造插件。
 - **P0**：更新镜像暂用 HTTP `http://8.152.100.169/xjtu-launcher/latest.json`；拿到域名与证书后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验，见 [P0.md](dev-docs/P0.md)。
-- **分支与推送**：`main` 为默认分支，日常在 `codex/<主题>` 分支；推送、打标签、发布 Release 只按用户当次明确要求执行，不擅自扩大范围。提交身份用仓库级 `haiziyao <1754203003@qq.com>`。
+- **分支与推送**：`main` 只接受从 `dev` 合入；功能 / 版本分支用 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），先合入 `dev` 测试，验证后再由 `dev` 合入 `main`。不再新建 `codex/*`。`main` 更新后由工作流自动发版；提交身份用仓库级 `haiziyao <1754203003@qq.com>`。
 - **版本记录**：每次发版都按 [模板](docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md` 并登记到 [索引](docs/releases/README.md)；GitHub Release 说明、镜像 `latest.json` 的 `notes` 与 README 下载链接必须指向同一版本。
 - **验收表述**：区分"代码实现 / 自动测试通过 / 真实账号或真机验证 / 用户验收"。未部署的服务、未测试的平台、未获准的设计必须如实说明。开发与验收使用真正的 Tauri App。
 - **文档分工**：`docs/` 面向使用者与产品（用户文档、设计稿、发布说明）；`dev-docs/` 面向开发者（约定、实现、发布流程、需求与归档）。规则只改 `dev-docs/CONVENTIONS.md`，需求只改 `dev-docs/need-do.md`，再同步本文件的摘要。

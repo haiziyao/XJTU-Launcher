@@ -57,10 +57,10 @@
 
 ## 6. 分支、提交与发布
 
-- `main` 为 GitHub 默认分支，随发布更新为已验证的代码、面向用户的 README 与开发文档；当前最新发布版为 **0.5.2**，`main` 应与它一致。
-- 日常开发在从发布提交拉出的 `codex/<主题>` 分支进行（当前 `codex/v0.5.2`），旧分支保留用于追溯。`dev` 停止作为独立主线，发布时与 `main` 一起快进。
+- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送；当前最新发布版为 **0.5.2**，`main` 应与它一致。
+- `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），不再使用 `codex/*`。分支先合入 `dev`，由测试人员验证；验证通过后只能由 `dev` 创建 PR 合入 `main`。Git 不允许 `dev` 与 `dev/v0.6.0` 同时存在，所以版本分支用连字符。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
-- 推送分支、打标签与发布 Release **按用户当次明确要求执行**；2026-10-25 的用户要求已包含推送、发布与撤回 Release，同一发布周期内可继续操作，不擅自扩大到其他仓库或服务，也不变更远端分支保护。
+- 推送功能分支与合入 `dev` 可按当次任务执行；合入 `main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](RELEASING.md)。
 - GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`，本仓库提交身份为 `haiziyao <1754203003@qq.com>`。使用仓库级 `git config --local`，不改全局身份和 SSH 密钥，不要覆盖原密钥。
 - 升版本时同时修改 `package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` / `Cargo.lock`；发布流程见 [RELEASING.md](RELEASING.md)。
 - **每次发版都必须写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，写入新增、修复、变更、验证程度、已知限制与下载方式，并登记到 [版本记录索引](../docs/releases/README.md)。发布前先写，发布后补实际验证结果；撤回的版本保留记录并写明原因与替代版本。

@@ -15,15 +15,28 @@
 
 ## 每次发布的顺序
 
-1. **定版本**：确认上一个版本可用，没有待撤回的问题；把 `package.json`、`package-lock.json`（两处）、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json` 改成同一个版本号。`tools/prepare-release.mjs` 会校验这几处一致，不一致直接报错。
-2. **写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，登记到 [索引](../docs/releases/README.md)。此时「验证」一节写计划，发布后补实际结果。
-3. **本地验证**：`cargo test`、`npm test`、Clippy（`-D warnings`）、格式检查；再用发布配置构建一次，真机启动 10 秒以上。
-4. **打标签**：提交后在 `codex/<主题>` 打 `v<版本>` 标签并推送，触发 `release.yml`。确认 macOS 冒烟检查在两个架构上通过。
-5. **核对产物**：下载 Release 资产，检查 macOS 应用包签名（`codesign --verify --deep --strict`）、`Info.plist` 版本、双架构启动、DMG 校验和，以及全部资产（包括从 `latest.json` 里的地址下载的包）的 `sha256` 与 GitHub 摘要一致。
-6. **发布 Release**：草稿确认三平台资产齐全后正式发布并标记 Latest；说明使用 `--notes-file`，内容与版本记录一致。版本记录里的「验证」改成实际结果，并把状态改为「最新」。
-7. **更新镜像**：上传资产到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，覆盖 `latest.json`；旧版本目录保留。
-8. **同步入口**：根 README 的三条下载链接、`dev-docs/CONVENTIONS.md` 的当前版本、`dev-docs/DEVELOPMENT.md` 追加一条发布记录。
-9. **撤回时**：删除 Release 与标签、删除镜像目录，把版本记录状态改为「已撤回」并写明原因与替代版本，再更新 README 与索引。
+1. **开分支、定版本**：从 `main` 拉 `dev-v<版本>`（如 `dev-v0.6.0`），确认上一个版本可用。把 `package.json`、`package-lock.json`（两处）、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json` 改成同一个版本号；`tools/prepare-release.mjs` 会校验一致性，不一致直接报错。
+2. **写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，登记到 [索引](../docs/releases/README.md)，并把状态写成「最新」。「验证」一节先写计划，发布后补实际结果。自动发版会把这份文件当作 Release 正文，文件缺失或含 `YYYY-MM-DD` 占位符会中止发布。
+3. **同步入口**：根 README 的三条下载链接改为新版本资产名（`v<版本>` 与文件名都含版本号），`dev-docs/CONVENTIONS.md` 的当前版本同步更新。
+4. **本地验证**：`cargo test`、`npm test`、Clippy（`-D warnings`）、格式检查；再用发布配置构建一次，真机启动 10 秒以上。
+5. **合入 `dev` 测试**：把 `dev-v<版本>` 合入 `dev` 并推送，交给测试人员验证真实登录、关键流程与安装包。未测试通过不得合入 `main`。
+6. **合入 `main`**：测试通过后由 `dev` 创建 PR 合入 `main`。`main-guard` 会拒绝非 `dev` 来源的 PR；`main` 的规则禁止直接推送。
+7. **自动发版**：`main` 更新后 `release.yml` 自动执行：版本与记录检查 → 测试与静态检查 → 三平台串行构建 → macOS 启动冒烟 → 完整资产与 `latest.json` 校验 → 正式发布并标记 Latest。已有同版本正式 Release 时跳过，所以同版本的其他 `main` 提交不会重复发版。
+8. **发布后核对**：下载 Release 资产，检查 macOS 应用包签名（`codesign --verify --deep --strict`）、`Info.plist` 版本、双架构启动、DMG 校验和，以及全部资产的 `sha256` 与 GitHub 摘要一致。
+9. **更新镜像**：上传资产到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，覆盖 `latest.json`；旧版本目录保留。镜像没有自动化凭据，仍需手动执行。
+10. **收尾**：把版本记录的「验证」改为实际结果，`dev-docs/DEVELOPMENT.md` 追加一条发布记录。
+11. **撤回时**：删除 Release 与标签、删除镜像目录，把版本记录状态改为「已撤回」并写明原因与替代版本，再更新 README 与索引。
+
+## 自动发版（`main` 更新）
+
+`.github/workflows/release.yml` 在 `main` 推送、`v*` 标签推送和手动触发时运行：
+
+- `prepare`：读取 `src-tauri/tauri.conf.json` 的版本，要求 `docs/releases/v<版本>.md` 存在且没有模板占位符；已有同版本正式 Release 时输出 `publish=false`，后续任务全部跳过。
+- `verify`：在 Linux 上跑 `npm run format:check`、`npm test`、`npm run build`、`cargo test`、`cargo clippy -D warnings`。
+- `release`：三平台串行构建，`tauri-action` 只写草稿，避免发布未齐的资产；Release 正文取版本记录文件。
+- `publish`：等三平台全部成功后，校验 8 个安装包 / 更新包与 `.sig` 和 `latest.json`，再通过 GitHub API 把草稿改为正式 Release，并标记 Latest。
+
+失败时草稿会保留，修复后重新运行工作流即可续传；不会出现只有部分平台就对外发布的正式版本。`workflow_dispatch` 可用于重跑。标签由 `tauri-action` 按版本创建，不再手工打标签。
 
 ## 首次部署
 
@@ -31,9 +44,9 @@
 2. 更新地址目前写死在 `.github/workflows/release.yml`（P0 临时 HTTP），只需在仓库 Variables 中设置 `XJTU_UPDATE_PUBLIC_KEY`。可选设置 `XJTU_PLUGIN_SERVER`。
 3. 在 Secrets 中设置 `TAURI_SIGNING_PRIVATE_KEY` 和相应的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。不把私钥写入仓库。可选设置 `APPLE_SIGNING_IDENTITY`：留空时 macOS 用 `-` 做 ad-hoc 签名；拿到 Developer ID 证书后填证书名（配合 [SIGNING.md](SIGNING.md) 的导入步骤）。
 4. 保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本一致。
-5. 手动运行 `Signed desktop release` 工作流，构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与草稿 Release。检查安装包和更新清单后再正式发布；公钥配置必须已包含在用户当前安装的客户端中。
+5. 运行 `Signed desktop release` 工作流（或直接合并到 `main`），构建 macOS Apple Silicon、macOS Intel 和 Windows x64，生成带签名的更新包、更新 JSON 与 Release。公钥配置必须已包含在用户当前安装的客户端中。
 
-工作流把三个平台串行执行（`max-parallel: 1`）。`tauri-action` 无法按 tag 查询草稿，只能取发布列表里第一个同名草稿，并行 job 会各自新建草稿并把资产分散上传，导致每个草稿都缺平台、`latest.json` 只有部分 `platforms`。发布前确认**只有一个**同名草稿且三个平台的安装包、更新包和 `.sig` 齐全，否则先删除残缺草稿再重跑。每次构建都会先读出已有 `latest.json` 再合并平台，挂到同一个草稿上即可得到完整清单。
+工作流把三个平台串行执行（`max-parallel: 1`）。`tauri-action` 无法按 tag 查询草稿，只能取发布列表里第一个同名草稿，并行 job 会各自新建草稿并把资产分散上传，导致每个草稿都缺平台、`latest.json` 只有部分 `platforms`。最终的 `publish` 任务会确认资产齐全后才发布，所以失败重跑时先保留草稿、补齐资产，不要手动发布残缺草稿。每次构建都会先读出已有 `latest.json` 再合并平台，挂到同一个草稿上即可得到完整清单。
 
 工作流调用 `tools/prepare-release.mjs`，生成开启 `bundle.createUpdaterArtifacts` 的临时 Tauri 配置。普通 `npm run app:build` 保持可本地构建，无需发布密钥。更新相关环境变量也通过 Rust 编译进入客户端，不允许用户更改插件源时连带修改。
 
