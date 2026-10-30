@@ -1,13 +1,89 @@
 name: Signed desktop release
+
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags:
       - 'v*'
+
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # Decide whether this push actually needs a release. main is pushed on every
+  # merge, so a version that already has a published release must be a no-op.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check version, release notes and existing release
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          notes="docs/releases/v${version}.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Missing $notes. Every release needs a version record."
+            exit 1
+          fi
+          if grep -q 'YYYY-MM-DD' "$notes"; then
+            echo "::error::$notes still contains template placeholders."
+            exit 1
+          fi
+          published=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"v$version\" and .draft == false) | .tag_name")
+          if [ -n "$published" ]; then
+            echo "v$version is already published; nothing to do."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # Do not build or publish a release from code that fails the desktop checks.
+  verify:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
   release:
+    needs: [prepare, verify]
+    if: needs.prepare.outputs.publish == 'true'
     strategy:
       fail-fast: false
       # tauri-action 无法按 tag 查询草稿发布，只能取列表里第一个同名草稿；
@@ -48,12 +124,22 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - run: npm ci
       - run: node tools/prepare-release.mjs
+      - name: Load the version record as the release body
+        id: notes
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            cat "docs/releases/v${{ needs.prepare.outputs.version }}.md"
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: XJTU Launcher v__VERSION__
+          releaseBody: ${{ steps.notes.outputs.body }}
+          # Stay a draft until the publish job sees all three platforms.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
@@ -74,3 +160,58 @@ jobs:
           fi
           kill "$pid" || true
           echo "App stayed alive for 10s."
+
+  # Publishing only after every platform succeeded keeps the release and
+  # latest.json complete; a failed run leaves a resumable draft.
+  publish:
+    needs: [prepare, release]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Verify every asset and latest.json, then publish
+        run: |
+          set -euo pipefail
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"v$VERSION\" and .draft == true) | .id" | head -n1)
+          if [ -z "$release_id" ]; then
+            echo "::error::Draft release v$VERSION not found."
+            exit 1
+          fi
+          assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" --jq '.[].name')
+          missing=0
+          for asset in \
+            "XJTU.Launcher_${VERSION}_aarch64.dmg" \
+            "XJTU.Launcher_${VERSION}_aarch64.app.tar.gz" \
+            "XJTU.Launcher_${VERSION}_aarch64.app.tar.gz.sig" \
+            "XJTU.Launcher_${VERSION}_x64.dmg" \
+            "XJTU.Launcher_${VERSION}_x64.app.tar.gz" \
+            "XJTU.Launcher_${VERSION}_x64.app.tar.gz.sig" \
+            "XJTU.Launcher_${VERSION}_x64-setup.exe" \
+            "XJTU.Launcher_${VERSION}_x64-setup.exe.sig" \
+            "latest.json"; do
+            if ! grep -qxF "$asset" <<<"$assets"; then
+              echo "::error::Missing asset $asset"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          json_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+            --jq '.[] | select(.name == "latest.json") | .id')
+          gh api "repos/$GITHUB_REPOSITORY/releases/assets/$json_id" \
+            -H "Accept: application/octet-stream" > "$RUNNER_TEMP/latest.json"
+          jq -e --arg v "$VERSION" '
+            .version == $v and
+            ((.platforms | keys | sort) == [
+              "darwin-aarch64", "darwin-aarch64-app",
+              "darwin-x86_64", "darwin-x86_64-app",
+              "windows-x86_64", "windows-x86_64-nsis"
+            ])
+          ' "$RUNNER_TEMP/latest.json" > /dev/null
+
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false -F make_latest=true > /dev/null
+          echo "Published v$VERSION with all platform assets."

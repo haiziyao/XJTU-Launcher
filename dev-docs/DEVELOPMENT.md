@@ -1,12 +1,12 @@
 # 开发指南
 
-更新于 2026-10-25。最新发布版为 0.5.1（2026-10-25 发布，修复 0.5.0 无法启动；0.5.0 已撤回）。0.5.1 的后续开发继续在 `codex/v0.5.1` 分支进行。已完成的代码与尚待验收的能力分别记录。
+更新于 2026-10-30。最新发布版为 0.5.2（2026-10-30 发布，修复 macOS 包未签名；0.5.1 与 0.5.0 已撤回）。0.6.0 的开发在 `dev-v0.6.0` 分支进行。已完成的代码与尚待验收的能力分别记录。
 
 ## 代码与分支
 
 `main` 已整合校园登录、原生校园窗口、本地 auth.json、校园后台适配，以及插件市场 / Updater 实现。README 面向使用者；工程资料集中在 `dev-docs/`，产品与设计资料在 `docs/`（分工见 [开发文档索引](README.md)）。
 
-`dev` 已停止作为独立主线，发布时与 `main` 一起快进。日常开发在从发布提交拉出的 `codex/<主题>` 分支进行（当前 `codex/v0.5.1`）；功能代码和开发资料尽量分别提交，向 `main` 同步时保持面向使用者的目录结构。需求优先级与验收状态见 [需求时间线](need-do.md)。
+`dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（当前 `dev-v0.6.0`），先合入 `dev` 供测试人员验证；通过后只能由 `dev` 创建 PR 合入 `main`。`main` 更新后由 `release.yml` 自动发版。功能代码和开发资料尽量分别提交，保持面向使用者的目录结构。需求优先级与验收状态见 [需求时间线](need-do.md)。
 
 2026-10-23 发布 0.3.3 后整理了本地分支：删除所有已合并的 `codex/*`、`feat/*` 与 `v0.2.x` 分支，只保留 `main`、`dev` 和当前开发分支 `codex/v0.4.0`；历史仍可从提交和标签追溯。远端 `origin/codex/windows-support` 与 `origin/v0.2.2` 经用户确认后同样删除，远端只保留 `main` 与 `dev`。
 
@@ -203,6 +203,8 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 2026-10-29 修复 macOS 0.5.1“已损坏，无法打开”（用户反馈）：从更新镜像取回 0.5.1 的 `aarch64.app.tar.gz` 解包检查，`codesign -dv` 显示 `flags=0x20002(adhoc,linker-signed)`、`Info.plist=not bound`、`Sealed Resources=none`——二进制只有链接器签名，应用包本身从未签名，`codesign --verify --deep --strict` 报“code has no resources but signature indicates they must be present”，Gatekeeper 因此判定应用损坏。修法是让 Tauri 在打包后对 bundle 做 ad-hoc 签名：发布工作流新增 `APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}`，没有 Developer ID 密钥时用 `-`（ad-hoc），后续配好证书密钥会自动改用真实身份。本地执行 `APPLE_SIGNING_IDENTITY=- npm run tauri -- build --bundles app --target aarch64-apple-darwin` 后，Tauri 对二进制与 bundle 各签一次，`codesign --verify --deep --strict` 通过（“valid on disk”“satisfies its Designated Requirement”），封条为 `Sealed Resources version=2`；`spctl` 仍拒绝，符合预期——ad-hoc 不等于 Developer ID 或公证，首次打开只会从“已损坏”变为“无法验证开发者”，需要右键 →「打开」。Windows 包不受影响。0.5.1 的既有安装包无法自愈，README 给出 `codesign --force --deep --sign -` 加 `xattr -dr com.apple.quarantine` 的临时处理；尚未重新构建发布，需要新的 macOS 包才能让下载到的用户不再遇到此问题。
 
 2026-10-30 0.5.2 发布与 0.5.1 撤回（按用户要求“删除 0.5.1，发布新的”）：版本号同步到 0.5.2（`package.json`、`package-lock.json` 两处、`Cargo.toml`、`Cargo.lock`、`tauri.conf.json`），推送 `codex/v0.5.2` 与 `v0.5.2` 标签。发布前用真实发布配置（HTTP 更新端点、`dangerousInsecureTransportProtocol`、ad-hoc 签名）在本地构建 macOS arm64：dmg 校验通过，包内应用 `codesign --verify --deep --strict` 通过，启动 `XJTU Launcher.app/Contents/MacOS/xjtu-launcher` 存活 10 秒且无错误输出。工作流三个平台成功；新增的 macOS 启动冒烟检查在 arm64 与 x64 两个任务中均通过——构建后直接启动真实包并确认 10 秒内存活，防止再次发布 0.5.0（插件初始化退出）或 0.5.1（包未签名）这类无法启动的版本。下载发布资产复核：arm64 与 x64 更新包的签名均有效、`Info.plist` 版本为 0.5.2，arm64 原生启动与 x64 在 Rosetta 下启动都存活 10 秒；两个 dmg 的 `hdiutil verify` 与包内签名通过；全部资产 sha256 与 GitHub 摘要一致。`v0.5.2` 已发布并标记 Latest，`v0.5.1` 的 Release 与标签已删除。镜像上传全部资产到 `v0.5.2/`、删除 `v0.5.1/`，`latest.json` 改写为本镜像地址并带上发布说明；从镜像完整下载后 sha256 与本地一致，清单返回 200 / application/json，安装包支持 Range。限制：ad-hoc 签名不等于 Developer ID，首次打开仍提示“无法验证开发者”；Windows 构建成功但没有可用的真机启动验证；HTTP 镜像仍是 P0；未用真实 0.4.0 客户端走完整升级链路。
+
+2026-10-30 分支与发版流程调整（按用户要求）：`main` 只接受 `dev` 的 PR，GitHub 规则 `main-protection` 禁止直接推送与删除 / 强推，只允许 merge 提交，并要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过。功能与版本分支改用 `dev-<主题>` / `dev-v<版本>`；0.6.0 从 `dev-v0.6.0` 开始。`dev` 保持为测试集成分支，测试人员验证后在 PR 上添加 `tested` 标签。`release.yml` 改为 `main` 推送自动发版：先检查版本记录与是否已有正式 Release，同版本跳过；再跑 Linux 测试与 Clippy，三平台串行构建并做 macOS 启动冒烟，最后由 `publish` 校验 9 个资产与 `latest.json` 的 6 个平台后再发布并标记 Latest。失败时保留草稿可续跑；版本记录文件直接作为 Release 正文。镜像仍需手动上传，因为 GitHub 没有服务器凭据。当前版本号仍为 0.5.2，0.6.0 的功能开发尚未开始。
 
 ## 字体
 
