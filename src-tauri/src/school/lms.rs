@@ -85,6 +85,79 @@ fn text(value: Option<&Value>) -> String {
     }
 }
 
+/// 思源学堂 returns UTC ISO times ("…Z"). Convert zoned values to campus time
+/// (UTC+8, no daylight saving) so pages, the Agent and MCP read the same
+/// clock; values without a zone are already local and pass through.
+fn campus_time(value: Option<&Value>) -> String {
+    let raw = text(value);
+    local_time(&raw).unwrap_or(raw)
+}
+
+fn local_time(raw: &str) -> Option<String> {
+    let (date, clock) = raw.split_once('T')?;
+    let mut ymd = date.split('-').map(|part| part.parse::<i64>().ok());
+    let (year, month, day) = (ymd.next()??, ymd.next()??, ymd.next()??);
+    let (clock, offset) = if let Some(clock) = clock.strip_suffix(['Z', 'z']) {
+        (clock, 0)
+    } else {
+        let at = clock.rfind(['+', '-'])?;
+        let (clock, zone) = clock.split_at(at);
+        let digits: String = zone[1..].chars().filter(|c| *c != ':').collect();
+        if digits.len() != 4 {
+            return None;
+        }
+        let minutes = digits[..2].parse::<i64>().ok()? * 60 + digits[2..].parse::<i64>().ok()?;
+        (
+            clock,
+            if zone.starts_with('-') {
+                -minutes
+            } else {
+                minutes
+            },
+        )
+    };
+    let mut hms = clock.split(':');
+    let hour = hms.next()?.parse::<i64>().ok()?;
+    let minute = hms.next()?.parse::<i64>().ok()?;
+    let second = hms
+        .next()
+        .map(|part| part.get(..2).unwrap_or(part).parse::<i64>().ok())
+        .unwrap_or(Some(0))?;
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || !(0..24).contains(&hour)
+        || !(0..60).contains(&minute)
+        || !(0..=60).contains(&second)
+    {
+        return None;
+    }
+    // Howard Hinnant's days-from-civil and civil-from-days.
+    let (y, m) = if month <= 2 {
+        (year - 1, month + 9)
+    } else {
+        (year, month - 3)
+    };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + day - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    let total = days * 1440 + hour * 60 + minute - offset + 8 * 60;
+    let (z, minutes) = (total.div_euclid(1440) + 719_468, total.rem_euclid(1440));
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    Some(format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{second:02}",
+        minutes / 60,
+        minutes % 60
+    ))
+}
+
 fn number(value: Option<&Value>) -> Option<f64> {
     let value = value?;
     value
@@ -261,7 +334,7 @@ impl Client {
             "activity": activity,
             "title": text(detail.get("title")),
             "courseId": detail.get("course_id").and_then(Value::as_u64),
-            "end": text(detail.get("end_time")),
+            "end": campus_time(detail.get("end_time")),
             "closed": detail.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
             "submitByGroup": group,
             "submissions": list.iter().filter_map(submission).collect::<Vec<_>>(),
@@ -370,8 +443,8 @@ impl Client {
             "activity": request.activity,
             "title": text(value.get("title")),
             "courseId": value.get("course_id").and_then(Value::as_u64),
-            "start": text(value.get("start_time")),
-            "end": text(value.get("end_time")),
+            "start": campus_time(value.get("start_time")),
+            "end": campus_time(value.get("end_time")),
             "closed": value.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
             "resubmitOpen": value.get("is_resubmit_open").and_then(Value::as_bool).unwrap_or(false),
             "submitCount": value.get("user_submit_count").and_then(Value::as_u64),
@@ -490,7 +563,7 @@ impl Client {
             "title": title,
             "draft": request.draft,
             "submissionId": submission.and_then(|item| item.get("id")).and_then(Value::as_u64),
-            "submittedAt": submission.map(|item| text(item.get("submit_time"))).unwrap_or_default(),
+            "submittedAt": submission.map(|item| campus_time(item.get("submit_time"))).unwrap_or_default(),
             "files": files.iter().map(|file| json!({
                 "name": file.name,
                 "size": file.size,
@@ -773,8 +846,8 @@ fn activity(value: &Value) -> Option<Value> {
         "id": id,
         "type": text(value.get("type")),
         "title": text(value.get("title")),
-        "start": text(value.get("start_time")),
-        "end": text(value.get("end_time")),
+        "start": campus_time(value.get("start_time")),
+        "end": campus_time(value.get("end_time")),
         "published": value.get("published").and_then(Value::as_bool).unwrap_or(true),
         "group": value.get("submit_by_group").and_then(Value::as_bool).unwrap_or(false),
     }))
@@ -800,7 +873,7 @@ fn submission(value: &Value) -> Option<Value> {
                 "score": number(item.get("score")),
                 "instructorScore": number(item.get("instructor_score")),
                 "comment": plain_text(&text(item.get("comment"))),
-                "updatedAt": text(item.get("updated_at")),
+                "updatedAt": campus_time(item.get("updated_at")),
                 "files": item
                     .get("uploads")
                     .and_then(Value::as_array)
@@ -813,9 +886,9 @@ fn submission(value: &Value) -> Option<Value> {
         "status": text(value.get("status")),
         "score": number(value.get("score")),
         "rubricScore": number(value.get("rubric_score")),
-        "submittedAt": text(value.get("submitted_at")),
-        "updatedAt": text(value.get("updated_at")),
-        "createdAt": text(value.get("created_at")),
+        "submittedAt": campus_time(value.get("submitted_at")),
+        "updatedAt": campus_time(value.get("updated_at")),
+        "createdAt": campus_time(value.get("created_at")),
         "latest": value.get("is_latest_version").and_then(Value::as_bool).unwrap_or(false),
         "resubmitted": value.get("is_resubmitted").and_then(Value::as_bool).unwrap_or(false),
         "canRetract": value.get("can_retract").and_then(Value::as_bool).unwrap_or(false),
@@ -864,8 +937,8 @@ fn activity_detail(value: &Value) -> Value {
         "courseId": value.get("course_id").and_then(Value::as_u64),
         "type": kind,
         "title": text(value.get("title")),
-        "start": text(value.get("start_time")),
-        "end": text(value.get("end_time")),
+        "start": campus_time(value.get("start_time")),
+        "end": campus_time(value.get("end_time")),
         "published": value.get("published").and_then(Value::as_bool).unwrap_or(true),
         "closed": value.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
         "resubmitOpen": value.get("is_resubmit_open").and_then(Value::as_bool).unwrap_or(false),
@@ -880,13 +953,13 @@ fn activity_detail(value: &Value) -> Value {
         "highestScore": number(value.get("highest_score")),
         "lowestScore": number(value.get("lowest_score")),
         "scoredCount": value.get("has_score_count").and_then(Value::as_u64),
-        "lessonStart": text(data.get("lesson_start")),
-        "lessonEnd": text(data.get("lesson_end")),
+        "lessonStart": campus_time(data.get("lesson_start")),
+        "lessonEnd": campus_time(data.get("lesson_end")),
         "duration": data.get("duration").and_then(Value::as_u64),
         "replayCode": replay_code(value),
         "liveName": text(external.and_then(|live| live.get("name"))),
-        "liveStart": text(external.and_then(|live| live.get("start_time"))),
-        "liveEnd": text(external.and_then(|live| live.get("end_time"))),
+        "liveStart": campus_time(external.and_then(|live| live.get("start_time"))),
+        "liveEnd": campus_time(external.and_then(|live| live.get("end_time"))),
         "player": "",
     })
 }
@@ -919,6 +992,22 @@ fn plain_text(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utc_times_read_as_campus_time() {
+        let at = |raw: &str| campus_time(Some(&json!(raw)));
+        assert_eq!(at("2026-10-30T15:59:00Z"), "2026-10-30 23:59:00");
+        assert_eq!(at("2026-10-30T15:59:00.000Z"), "2026-10-30 23:59:00");
+        assert_eq!(at("2026-12-31T16:00:00Z"), "2027-01-01 00:00:00");
+        assert_eq!(at("2024-02-28T16:30:00Z"), "2024-02-29 00:30:00");
+        assert_eq!(at("2026-10-30T23:59:00+08:00"), "2026-10-30 23:59:00");
+        assert_eq!(at("2026-10-30T10:59:00-0500"), "2026-10-30 23:59:00");
+        // Zoneless or unparsable values are kept as the school sent them.
+        assert_eq!(at("2026-10-30 23:59:00"), "2026-10-30 23:59:00");
+        assert_eq!(at("2026-09-01"), "2026-09-01");
+        assert_eq!(at("2026-13-01T00:00:00Z"), "2026-13-01T00:00:00Z");
+        assert_eq!(campus_time(None), "");
+    }
 
     #[test]
     fn maps_courses_and_activities() {
