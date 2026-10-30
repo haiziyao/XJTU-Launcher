@@ -13,6 +13,18 @@
 
 系统代码签名（Gatekeeper / SmartScreen）尚未配置：macOS 构建自 2026-10-29 起由工作流做 ad-hoc 签名（`APPLE_SIGNING_IDENTITY` 未配置时取 `-`），避免 0.5.1 出现的“已损坏，无法打开”；Developer ID 与公证仍未配置，首次安装仍会提示“无法验证开发者”，需要右键打开。Windows 仍无 Authenticode。步骤见 [SIGNING.md](SIGNING.md)。系统签名不影响自动更新的 minisign 校验。
 
+## 每次发布的顺序
+
+1. **定版本**：确认上一个版本可用，没有待撤回的问题；把 `package.json`、`package-lock.json`（两处）、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json` 改成同一个版本号。`tools/prepare-release.mjs` 会校验这几处一致，不一致直接报错。
+2. **写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，登记到 [索引](../docs/releases/README.md)。此时「验证」一节写计划，发布后补实际结果。
+3. **本地验证**：`cargo test`、`npm test`、Clippy（`-D warnings`）、格式检查；再用发布配置构建一次，真机启动 10 秒以上。
+4. **打标签**：提交后在 `codex/<主题>` 打 `v<版本>` 标签并推送，触发 `release.yml`。确认 macOS 冒烟检查在两个架构上通过。
+5. **核对产物**：下载 Release 资产，检查 macOS 应用包签名（`codesign --verify --deep --strict`）、`Info.plist` 版本、双架构启动、DMG 校验和，以及全部资产（包括从 `latest.json` 里的地址下载的包）的 `sha256` 与 GitHub 摘要一致。
+6. **发布 Release**：草稿确认三平台资产齐全后正式发布并标记 Latest；说明使用 `--notes-file`，内容与版本记录一致。版本记录里的「验证」改成实际结果，并把状态改为「最新」。
+7. **更新镜像**：上传资产到 `v<版本>/`，复制原清单、只替换 `platforms[*].url` 与 `notes`，覆盖 `latest.json`；旧版本目录保留。
+8. **同步入口**：根 README 的三条下载链接、`dev-docs/CONVENTIONS.md` 的当前版本、`dev-docs/DEVELOPMENT.md` 追加一条发布记录。
+9. **撤回时**：删除 Release 与标签、删除镜像目录，把版本记录状态改为「已撤回」并写明原因与替代版本，再更新 README 与索引。
+
 ## 首次部署
 
 1. 使用 Tauri signer 生成发布密钥；私钥只存入发布系统的 Secret，公钥供客户端编译使用。
@@ -59,6 +71,7 @@ HTTP 端点必须在发布配置里带上 `dangerousInsecureTransportProtocol: t
 
 - 更新 README「下载安装」里的三条直达链接到新版本的资产名（`vX.Y.Z` 与文件名都含版本号）；否则首页按钮会指向旧版本。
 - 在 GitHub Releases 页面确认新版本已标记为 Latest。
+- 把 `docs/releases/v<版本>.md` 的「验证」改为实际结果，登记到索引并在 `docs/README.md` 指向最新版本。
 
 ## 运行行为
 

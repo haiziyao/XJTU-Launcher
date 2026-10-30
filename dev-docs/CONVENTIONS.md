@@ -63,6 +63,8 @@
 - 推送分支、打标签与发布 Release **按用户当次明确要求执行**；2026-10-25 的用户要求已包含推送、发布与撤回 Release，同一发布周期内可继续操作，不擅自扩大到其他仓库或服务，也不变更远端分支保护。
 - GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`，本仓库提交身份为 `haiziyao <1754203003@qq.com>`。使用仓库级 `git config --local`，不改全局身份和 SSH 密钥，不要覆盖原密钥。
 - 升版本时同时修改 `package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` / `Cargo.lock`；发布流程见 [RELEASING.md](RELEASING.md)。
+- **每次发版都必须写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，写入新增、修复、变更、验证程度、已知限制与下载方式，并登记到 [版本记录索引](../docs/releases/README.md)。发布前先写，发布后补实际验证结果；撤回的版本保留记录并写明原因与替代版本。
+- GitHub Release 说明、镜像 `latest.json` 的 `notes` 与根目录 README 的下载链接必须指向同一个版本，不能出现 README 已换版本而 Release 或镜像仍旧的情况。
 
 ## 7. 验收与记录
 
