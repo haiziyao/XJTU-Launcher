@@ -5,12 +5,32 @@ import {
   coursesForDay,
   defaultConfig,
   formatWeeks,
+  lmsTime,
   moveItem,
   orderedPlugins,
   parseWeeks,
   visiblePlugins,
 } from './domain';
 import type { Plugin, Timetable } from './types';
+
+describe('思源学堂 times', () => {
+  it('shows UTC timestamps in campus time', () => {
+    expect(lmsTime('2026-10-30T15:59:00Z')).toBe('2026-10-30 23:59');
+    expect(lmsTime('2026-10-30T15:59:00.000Z')).toBe('2026-10-30 23:59');
+  });
+
+  it('moves late UTC times to the next campus day', () => {
+    expect(lmsTime('2026-10-30T16:30:00Z')).toBe('2026-10-31 00:30');
+    expect(lmsTime('2026-12-31T16:00:00Z')).toBe('2027-01-01 00:00');
+  });
+
+  it('respects explicit offsets and keeps zoneless values as they are', () => {
+    expect(lmsTime('2026-10-30T23:59:00+08:00')).toBe('2026-10-30 23:59');
+    expect(lmsTime('2026-10-30 23:59:00')).toBe('2026-10-30 23:59');
+    expect(lmsTime('2026-10-30')).toBe('2026-10-30');
+    expect(lmsTime('')).toBe('');
+  });
+});
 
 describe('campus schedule dates', () => {
   it('handles week boundaries in local time', () => {

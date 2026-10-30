@@ -9,6 +9,7 @@ import EmptyState from '../ui/EmptyState.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
 import { applyCached, cacheName } from '../../cache';
+import { lmsTime } from '../../domain';
 import UiButton from '../ui/UiButton.vue';
 import type {
   LmsActivities,
@@ -98,8 +99,8 @@ const activeGroup = computed(
   () => categories.value.find((group) => group.id === active.value) || categories.value[0],
 );
 
-/** Trim ISO timestamps to minutes; the backend passes them through unchanged. */
-const short = (value: string) => (value ? value.replace('T', ' ').slice(0, 16) : '');
+/** The backend passes 思源学堂's UTC timestamps through unchanged; show campus time. */
+const short = lmsTime;
 const span = (start: string, end: string) =>
   [short(start), short(end)].filter(Boolean).join(' – ') || '时间未公布';
 const size = (bytes: number | null) => {

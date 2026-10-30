@@ -65,6 +65,24 @@ export function academicWeek(start: string, date = new Date()): number {
   return Math.floor((today - beginning) / 604800000) + 1;
 }
 
+const ZONED = /(Z|[+-]\d{2}:?\d{2})$/i;
+
+/**
+ * 思源学堂 returns UTC ISO times ("…Z"). Show them in campus time (UTC+8, no
+ * daylight saving) to the minute; values without a zone are already local.
+ */
+export function lmsTime(value: string): string {
+  const text = value.trim();
+  if (!text) return '';
+  const date = ZONED.test(text) ? new Date(text) : null;
+  if (!date || Number.isNaN(date.getTime())) return text.replace('T', ' ').slice(0, 16);
+  const local = new Date(date.getTime() + 8 * 3600000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())} ${pad(
+    local.getUTCHours(),
+  )}:${pad(local.getUTCMinutes())}`;
+}
+
 // Same course always gets the same soft color.
 export function courseHue(name: string): number {
   let sum = 0;
