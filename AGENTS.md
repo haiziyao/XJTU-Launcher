@@ -6,7 +6,7 @@
 
 ## 硬约束
 
-- **设计**：新前端必须先有参考图，且用户明确同意设计与开始实现。`docs/design/plugin-market-v2/` 已获准；`campus-agent-v1` 的 Agent / 评教页与最小化桌宠设计**未获准**，不得按旧稿或设想直接改视觉。
+- **设计**：新前端必须先有参考图，且用户明确同意设计与开始实现。`docs/design/plugin-market-v2/` 已获准；`campus-agent-v1` 的 Agent / 评教页与最小化桌宠设计**未获准**，不得按旧稿或设想直接改视觉。`docs/design/campus-v0.6/` 范围与信息架构已确认（方案 A 工作区），视觉未获准，参考图获批前不改校园前端。
 - **技术栈**：Rust + Tauri 2 + Vue 3 + TypeScript，目标 macOS / Windows。校园功能先研究本地 XJTUToolBox，再独立适配；复用 GPL-3.0 代码前核对分发要求。
 - **凭据**：保存在 `~/.xjtu-launcher/auth.json`，不使用系统钥匙串。密码、Cookie、API Key、令牌、私钥不得进入日志、截图或仓库。
 - **账号隔离**：切换 / 删除账号、重新认证时关闭旧校园窗口、丢弃旧请求，保留账号代次检查；缓存按账号隔离。
