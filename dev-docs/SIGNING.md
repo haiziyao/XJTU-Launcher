@@ -1,6 +1,6 @@
 # 安装包签名与公证（2026-10-26）
 
-2026-10-29 起，macOS 构建使用 **ad-hoc 签名**（`APPLE_SIGNING_IDENTITY` 缺省为 `-`），修复 0.5.1 及更早版本因应用包未签名导致的“已损坏，无法打开”提示。ad-hoc 签名只保证 bundle 封条有效，不等于 Developer ID 或公证：下载后首次打开仍可能提示“无法验证开发者”，需要右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。
+2026-10-29 起，macOS 构建使用 **ad-hoc 签名**（`APPLE_SIGNING_IDENTITY` 缺省为 `-`），修复 0.5.1 及更早版本因应用包未签名导致的“已损坏，无法打开”提示；0.5.2 是首个采用该签名的发布版本。ad-hoc 签名只保证 bundle 封条有效，不等于 Developer ID 或公证：下载后首次打开仍可能提示“无法验证开发者”，需要右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。
 
 当前 macOS 安装包**没有 Developer ID、未公证**，Windows 安装包**未做 Authenticode 签名**，Windows 会弹 SmartScreen“未知发布者”。Tauri 更新包自身还有一套 minisign 签名（`TAURI_SIGNING_PRIVATE_KEY`），与系统证书无关，已配置。
 

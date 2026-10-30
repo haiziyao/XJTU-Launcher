@@ -72,5 +72,5 @@ jobs:
             cat "$RUNNER_TEMP/app.log"
             exit 1
           fi
-          kill "$pid"
+          kill "$pid" || true
           echo "App stayed alive for 10s."
