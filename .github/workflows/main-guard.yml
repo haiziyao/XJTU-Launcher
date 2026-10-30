@@ -3,6 +3,8 @@ name: Main merge guard
 on:
   pull_request:
     branches: [main]
+    # Re-run when testers add or remove the tested label.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
