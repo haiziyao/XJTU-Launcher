@@ -22,13 +22,17 @@ const expired = (error: unknown) =>
   /失效|重新登录/.test(error instanceof Error ? error.message : String(error));
 
 /** Query a direct-only service, renewing its session once when it expired. */
-export async function directQuery<T>(query: SchoolQuery, cache?: string): Promise<T> {
+export async function directQuery<T>(
+  query: SchoolQuery,
+  cache?: string,
+  force = false,
+): Promise<T> {
   try {
-    return (await bridge.schoolQuery(query, cache)) as T;
+    return await read<T>(query, cache, force);
   } catch (error) {
     if (!expired(error)) throw error;
     await ensureDirectSession(true);
-    return (await bridge.schoolQuery(query, cache)) as T;
+    return await read<T>(query, cache, force);
   }
 }
 
@@ -37,16 +41,43 @@ export async function directQuery<T>(query: SchoolQuery, cache?: string): Promis
 // the saved password. Concurrent opens of one service share that login.
 const sitePending = new Map<string, Promise<void>>();
 const missingSession = (error: unknown) =>
-  /请先完成|失效/.test(error instanceof Error ? error.message : String(error));
+  /请先完成|请先打开|失效|重新登录|未登录|非预期数据/.test(
+    error instanceof Error ? error.message : String(error),
+  );
+
+// Read-only queries are safe to repeat. The campus services occasionally drop
+// a connection or answer 502; retrying twice turns a transient failure into a
+// normal load instead of an error page.
+const transient = (error: unknown) =>
+  /无法连接|暂不可用|超时|网络|连接失败|非预期数据/.test(
+    error instanceof Error ? error.message : String(error),
+  );
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function read<T>(query: SchoolQuery, cache?: string, force = false): Promise<T> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt) await wait(attempt === 1 ? 500 : 1200);
+    try {
+      return (await bridge.schoolQuery(query, cache, force)) as T;
+    } catch (error) {
+      last = error;
+      // A missing/expired session needs a login, not another identical request.
+      if (!transient(error) || missingSession(error)) throw error;
+    }
+  }
+  throw last;
+}
 
 export async function siteQuery<T>(
   query: SchoolQuery,
   site: string,
   refresh: () => Promise<boolean>,
   cache?: string,
+  force = false,
 ): Promise<T> {
   try {
-    return (await bridge.schoolQuery(query, cache)) as T;
+    return await read<T>(query, cache, force);
   } catch (error) {
     if (!missingSession(error)) throw error;
     let pending = sitePending.get(site);
@@ -57,6 +88,6 @@ export async function siteQuery<T>(
       sitePending.set(site, pending);
     }
     await pending;
-    return (await bridge.schoolQuery(query, cache)) as T;
+    return await read<T>(query, cache, force);
   }
 }

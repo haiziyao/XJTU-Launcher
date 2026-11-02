@@ -1,4 +1,4 @@
-//! Roles, skills and preset tasks live in ~/.xjtu-launcher/agent/presets.json.
+//! Roles, skills and preset tasks live in <数据文件夹>/agent/presets.json.
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

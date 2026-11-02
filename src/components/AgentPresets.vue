@@ -10,6 +10,7 @@ import EmptyState from './ui/EmptyState.vue';
 
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 const props = defineProps<{ kind: AgentPresetKind }>();
 
 interface DraftBase {
@@ -28,6 +29,13 @@ const busy = ref(false);
 const error = ref('');
 const status = ref('');
 const draft = ref<DraftBase | null>(null);
+const roleOptions = computed(() => [
+  { value: '', label: '通用角色' },
+  ...presets.value.roles.map((role) => ({ value: role.id, label: role.name })),
+]);
+function setRole(value: string) {
+  if (draft.value) draft.value.roleId = value;
+}
 
 const titles = {
   role: {
@@ -217,15 +225,16 @@ onMounted(() => void load());
             placeholder="例如：整理本周课表和作业安排"
           ></textarea>
         </label>
-        <label class="preset-field">
+        <div class="preset-field">
           <span>绑定角色</span>
-          <select v-model="draft.roleId">
-            <option value="">通用角色</option>
-            <option v-for="role in presets.roles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-        </label>
+          <MenuSelect
+            class="preset-select"
+            :model-value="draft.roleId"
+            :options="roleOptions"
+            label="绑定角色"
+            @update:model-value="setRole"
+          />
+        </div>
         <div v-if="presets.skills.length" class="preset-field">
           <span>绑定 Skills</span>
           <div class="preset-skills">
@@ -271,8 +280,7 @@ onMounted(() => void load());
   color: var(--text-tertiary);
 }
 .preset-field input,
-.preset-field textarea,
-.preset-field select {
+.preset-field textarea {
   border: 1px solid var(--control-border);
   border-radius: var(--radius);
   background: var(--control-bg);
@@ -282,12 +290,14 @@ onMounted(() => void load());
   padding: 8px 10px;
   resize: vertical;
 }
-.preset-field select {
-  appearance: none;
-  padding-right: 30px;
-  background-image: var(--chevron-down);
-  background-repeat: no-repeat;
-  background-position: right 10px center;
+/* Match the textareas beside it; MenuSelect draws its own shell. */
+.preset-field .preset-select :deep(.field-shell) {
+  height: 36px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--radius);
+}
+.preset-field .preset-select :deep(.menu-field-value) {
+  font-size: 13px;
 }
 .preset-field input:focus,
 .preset-field textarea:focus,

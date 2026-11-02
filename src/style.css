@@ -36,8 +36,6 @@
   --control-bg-subtle: #f7f8fa;
   --control-border: #d4d7dc;
   --control-sunken: #f1f2f4;
-  /* Native select arrow, matching the lucide chevron used elsewhere. */
-  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c929b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   --accent: #1f6fe5;
   --accent-hover: #1a63cf;
@@ -52,6 +50,10 @@
   --danger-soft: #fdefed;
   --success: #2c8653;
   --success-soft: #ebf6ef;
+  /* 浅绿底上的小字用 --success-text：--success 在 --success-soft 上的对比度不足 4.5。 */
+  --success-text: #246e44;
+  --warning: #a15c00;
+  --warning-soft: #fdf3e6;
 
   --sidebar-bg: #f1f2f4;
   --sidebar-border: #e1e3e7;

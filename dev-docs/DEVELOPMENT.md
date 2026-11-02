@@ -57,9 +57,16 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 
 `~/.xjtu-launcher/auth.json` 保存校园账号、可选密码、会话与模型 API Key。按用户要求直接保存为本地 JSON，平时不用系统钥匙串。旧加密文件仅用于首次迁移；原文件与迁移失败的数据保留。不要把 auth.json 的真实内容放入调试输出。
 
-普通配置、个人图片与安装插件在 Tauri 的应用目录。新配置字段必须提供默认值，以保留旧文件中的侧栏、插件和个人偏好。远端插件使用 `installed.json` 原子保存清单与来源；本地导入继续使用 `plugin.json`。
+应用数据分两处，布局照 Codex 的 `~/.codex`：
 
-校园查询结果另存一份展示缓存，用于“先显示上次结果，再后台刷新”（0.4.0）。`src-tauri/src/cache.rs` 把结果写到应用数据目录的 `cache/<账号哈希>/<键哈希>.json`，读取始终按当前活动账号定位目录，因此切换账号后不会读到上一账号的数据；写入发生在产生结果的那次查询里：前端把缓存名随 `school_query` 传入，后端用该查询固定的账号快照选择目录，所以切换账号后才返回的慢请求只会写回旧账号，不会污染新账号。主动删除账号时整个账号目录一并删除。写入先落临时文件再重命名，单个条目上限 8 MB，读取失败或内容损坏一律视为未命中。前端 `src/cache.ts` 只负责读取与应用：页面先应用旧值，再发请求并用新结果替换；课表在启动后（已登录且已启用）立即读缓存并刷新。缓存只用于展示，不参与会话、登录、提交或任何判断，也不写入日志。实时性强的数据刻意不缓存：图书馆座位、场馆时段、评教列表与预览、思源学堂活动详情（含提交状态），这些页面只在请求返回后显示。缓存文件含学籍、成绩等个人信息，截图或排障时不要直接贴出 `cache/` 内容。
+- `~/.xjtu-launcher`（隐藏，位置固定）：`config.json`、`auth.json`、`storage.json` 三个文件直接放在顶层；`cache/`、`plugins/`、`agent/` 与放零散小文件的 `state/`（`campus-accounts.enc`、`model-profiles.enc`、`device-id`、`pet-seen.json`、`timetable-custom.json`、`mcp.json`）在子文件夹。这一处不迁移。
+- `xjtu-launcher-file`（可见，默认 `~/Documents/xjtu-launcher-file`）：`workspace/` 放资料库（按账号分目录），`download/` 放下载。只有这一处可以在「应用设置 → 存储」改位置。
+
+新配置字段必须提供默认值，以保留旧文件中的侧栏、插件和个人偏好。远端插件使用 `installed.json` 原子保存清单与来源；本地导入继续使用 `plugin.json`。
+
+写入统一经过 `src-tauri/src/storage.rs`：`storage::path(app, name)` 指向 `~/.xjtu-launcher`，`storage::file_path(app, "workspace" | "download")` 指向可见文件文件夹。文件位置记录在 `~/.xjtu-launcher/storage.json`，前端保存配置不会覆盖它。迁移（`storage_migrate`）只搬 `FILE_ITEMS`（`workspace`、`download`），按「复制 → 核对文件数与字节 → 写入新根 → 删除旧文件」执行：切换新根失败会删除副本并保留旧数据；目标文件夹已有同名数据、与当前根互相包含、是主目录、磁盘根或 `~/.xjtu-launcher` 内部时一律拒绝。下载对话框的默认路径由 `storage_download_path` 给出，落在 `<文件文件夹>/download`，文件名只保留最后一段。界面里的路径统一由 `storage::display_for` 换成 `~/...`，错误信息也只带最后一段文件名，避免出现用户账号名。启动时 `adopt_legacy` 把旧布局一次性搬过来：Tauri 应用目录下的 `config.json`、`storage.json` 进 `~/.xjtu-launcher`，`cache/`、`plugins/`、`agent/` 与各 `state/` 文件进对应子文件夹，`library/`、`downloads/` 进文件文件夹的 `workspace/`、`download/`。
+
+校园查询结果另存一份展示缓存，用于“先显示上次结果，再后台刷新”（0.4.0）。`src-tauri/src/cache.rs` 把结果写到 `~/.xjtu-launcher/cache/<账号哈希>/<键哈希>.json`，读取始终按当前活动账号定位目录，因此切换账号后不会读到上一账号的数据；写入发生在产生结果的那次查询里：前端把缓存名随 `school_query` 传入，后端用该查询固定的账号快照选择目录，所以切换账号后才返回的慢请求只会写回旧账号，不会污染新账号。主动删除账号时整个账号目录一并删除。写入先落临时文件再重命名，单个条目上限 8 MB，读取失败或内容损坏一律视为未命中。前端 `src/cache.ts` 只负责读取与应用：页面先应用旧值，再发请求并用新结果替换；课表在启动后（已登录且已启用）立即读缓存并刷新。缓存只用于展示，不参与会话、登录、提交或任何判断，也不写入日志。实时性强的数据刻意不缓存：图书馆座位、场馆时段、评教列表与预览、思源学堂活动详情（含提交状态），这些页面只在请求返回后显示。缓存文件含学籍、成绩等个人信息，截图或排障时不要直接贴出 `cache/` 内容。
 
 个人页的 MCP 模式由 `expose.rs` 提供，只监听 `127.0.0.1` 的 `POST /mcp`（默认 `39217`，端口来自配置 `mcpServerPort`，用户可改），不做请求认证。它复用 `agent::tools::builtin()` 的校园工具，按配置 `mcpServerEnabled` 与 `mcpServerDisabledTools` 启停和筛选；开关与端口在下次启动时恢复监听，端口被占用时保留原监听并给出原因。工具面覆盖全部现有校园查询与公开校园通知，以及三个写工具（作业提交、评教提交、本机课表修改）。`campus_lms_submit` 默认 `confirm=false` 只做预览，文件不上传、作业不提交；只有 `confirm=true` 才上传附件并提交。`campus_evaluations_submit` 不接受直接作答，必须先由 `campus_evaluation` 的 `action=preview` 生成预览并返回 `previewId`，再带 `confirm=true` 提交；预览 15 分钟过期，并与账号、会话代次绑定。作业写工具会再次校验活动必须是作业、文件必须是绝对路径的普通文件、扩展名在允许列表内、不位于 `.ssh` / `.xjtu-launcher` 等凭据目录、非符号链接，单文件 100 MB、单次 200 MB；任一写工具的提交结果不明时都直接返回“结果未知”，不自动重试。由于接口无请求认证，只应在本机使用，不得监听局域网；无论读写，都不转发外部 MCP 服务或读取凭据，工具本身也不返回密码、Cookie 或 API Key。
 

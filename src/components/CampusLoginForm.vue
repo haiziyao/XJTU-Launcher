@@ -12,9 +12,21 @@ import EmptyState from './ui/EmptyState.vue';
 
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 const props = defineProps<{ account?: CampusAccount | null }>();
 const emit = defineEmits<{ cancel: []; success: [] }>();
 const degree = ref<CampusDegree>(props.account?.degree || 'undergraduate');
+// Switching the identity restarts the login flow, so it reads as one control.
+const DEGREE_OPTIONS = [
+  { value: 'undergraduate', label: '本科生' },
+  { value: 'postgraduate', label: '研究生' },
+];
+function setDegree(value: string) {
+  if (value !== 'undergraduate' && value !== 'postgraduate') return;
+  if (value === degree.value) return;
+  degree.value = value;
+  void restart();
+}
 const username = ref(props.account?.username || '');
 const password = ref('');
 const remember = ref(true);
@@ -202,18 +214,16 @@ onBeforeUnmount(() => {
       >
     </PageHeader>
     <SettingGroup title="校园身份">
-      <SettingRow title="身份类型"
-        ><select
-          v-model="degree"
-          class="text-field"
-          aria-label="身份类型"
+      <SettingRow title="身份类型">
+        <MenuSelect
+          class="identity-select"
+          :model-value="degree"
+          :options="DEGREE_OPTIONS"
+          label="身份类型"
           :disabled="busy || !!account"
-          @change="restart"
-        >
-          <option value="undergraduate">本科生</option>
-          <option value="postgraduate">研究生</option>
-        </select></SettingRow
-      >
+          @update:model-value="setDegree"
+        />
+      </SettingRow>
       <SettingRow
         v-if="flow"
         title="连接方式"
@@ -522,6 +532,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* The identity picker used to be a native select; give the in-page menu the
+   same footprint so the row keeps its alignment. */
+.identity-select {
+  min-width: 160px;
+}
+.identity-select :deep(.field-shell) {
+  width: 100%;
+}
 .login-methods {
   grid-column: 1 / -1;
   display: flex;

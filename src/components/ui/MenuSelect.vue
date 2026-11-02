@@ -12,6 +12,9 @@ const props = defineProps<{
   options: MenuOption[];
   label: string;
   placeholder?: string;
+  /** Inside a grouped control (e.g. the week stepper): no field shell of its own. */
+  bare?: boolean;
+  disabled?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 
@@ -27,6 +30,9 @@ function choose(value: string) {
   emit('update:modelValue', value);
   open.value = false;
 }
+function toggle() {
+  if (!props.disabled) open.value = !open.value;
+}
 function onOutside(event: PointerEvent) {
   if (root.value && !root.value.contains(event.target as Node)) open.value = false;
 }
@@ -38,7 +44,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutside, tru
 </script>
 
 <template>
-  <div ref="root" class="menu-field" @keydown.esc="open = false">
+  <div ref="root" class="menu-field" :class="{ bare }" @keydown.esc="open = false">
     <div class="field-shell">
       <button
         type="button"
@@ -46,7 +52,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutside, tru
         :aria-label="label"
         :aria-expanded="open"
         aria-haspopup="listbox"
-        @click="open = !open"
+        :disabled="disabled"
+        @click="toggle"
       >
         <span>{{ current }}</span>
         <ChevronDown :size="14" />

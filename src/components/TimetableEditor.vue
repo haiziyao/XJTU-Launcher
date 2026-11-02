@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatWeeks, parseWeeks, courseHue } from '../domain';
 import type { Course, TimetableEdit } from '../types';
 import UiButton from './ui/UiButton.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 /**
  * One course form, used both for adding a course and for editing a school one.
  * It only assembles the request; the page calls the backend and reports errors
@@ -47,6 +48,26 @@ const problem = computed(() => {
 const message = computed(() => (touched.value ? problem.value : '') || props.error);
 const periods = Array.from({ length: 20 }, (_, index) => index + 1);
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+// MenuSelect speaks strings; the course model keeps numbers.
+const dayOptions = weekdays.map((label, index) => ({ value: String(index + 1), label }));
+const periodOptions = periods.map((period) => ({
+  value: String(period),
+  label: `第 ${period} 节`,
+}));
+// The menu is a button list, so it fires no form `change` event of its own;
+// mark the form touched here to keep the validation timing unchanged.
+function setDay(value: string) {
+  day.value = Number(value);
+  touched.value = true;
+}
+function setStart(value: string) {
+  start.value = Number(value);
+  touched.value = true;
+}
+function setEnd(value: string) {
+  end.value = Number(value);
+  touched.value = true;
+}
 
 // Shrinking the start below the end keeps a valid range without a second step.
 watch(start, (value) => {
@@ -140,22 +161,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <div class="editor-field span-2">
             <span>时间</span>
             <div class="editor-inline">
-              <select v-model.number="day" class="text-field" aria-label="星期">
-                <option v-for="(label, index) in weekdays" :key="label" :value="index + 1">
-                  {{ label }}
-                </option>
-              </select>
-              <select v-model.number="start" class="text-field" aria-label="开始节次">
-                <option v-for="period in periods" :key="period" :value="period">
-                  第 {{ period }} 节
-                </option>
-              </select>
+              <MenuSelect
+                class="editor-select"
+                :model-value="String(day)"
+                :options="dayOptions"
+                label="星期"
+                @update:model-value="setDay"
+              />
+              <MenuSelect
+                class="editor-select"
+                :model-value="String(start)"
+                :options="periodOptions"
+                label="开始节次"
+                @update:model-value="setStart"
+              />
               <span class="editor-to">到</span>
-              <select v-model.number="end" class="text-field" aria-label="结束节次">
-                <option v-for="period in periods" :key="period" :value="period">
-                  第 {{ period }} 节
-                </option>
-              </select>
+              <MenuSelect
+                class="editor-select"
+                :model-value="String(end)"
+                :options="periodOptions"
+                label="结束节次"
+                @update:model-value="setEnd"
+              />
             </div>
           </div>
           <div class="editor-field span-2">
@@ -286,6 +313,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .editor-inline .text-field {
   flex: 1;
   min-width: 0;
+}
+.editor-inline .editor-select {
+  flex: 1;
+  min-width: 0;
+}
+.editor-inline .editor-select :deep(.field-shell) {
+  width: 100%;
 }
 .editor-to {
   color: var(--text-tertiary);

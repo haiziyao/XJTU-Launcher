@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   AlertCircle,
   ArrowLeft,
@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   Compass,
+  Contrast,
   Download,
   Home,
   LayoutGrid,
@@ -24,6 +25,8 @@ import { initializeMarket } from './market';
 import { initializeUpdates, updateStatus } from './updates';
 import { bridge, native } from './bridge';
 import { ensureDirectSession } from './campusSession';
+import { prefetchCampus } from './campusPrefetch';
+import { resetLmsOverview } from './campusOverview';
 import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
 import type {
   AccountStatus,
@@ -56,7 +59,14 @@ import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
 import UiIconButton from './components/ui/UiIconButton.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
-import { applyAccent, normalizeAccent } from './theme';
+import {
+  WALLPAPER_MODES,
+  applyAccent,
+  normalizeAccent,
+  wallpaperMode,
+  wallpaperPanelOpacity,
+  wallpaperTokens,
+} from './theme';
 import './ui.css';
 import './pages.css';
 import './desktop-shell.css';
@@ -72,6 +82,11 @@ const primaryNav = [
   { id: 'agent', title: 'Agent', icon: Bot },
   { id: 'community', title: '社区', icon: MessagesSquare },
 ];
+// 组件画廊只在开发构建里存在；生产包不会导入它，也不显示入口。
+const KitGallery = import.meta.env.DEV
+  ? defineAsyncComponent(() => import('./components/dev/KitGallery.vue'))
+  : null;
+if (KitGallery) primaryNav.push({ id: 'kit', title: '组件', icon: LayoutGrid });
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -126,7 +141,33 @@ const enabledPlugins = computed(() =>
 );
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
+// The campus workspace holds per-account data (including the local 资料库).
+// Remount it when the active account changes so a switch never leaves the
+// previous account's files or school rows on screen.
+const campusScope = computed(() =>
+  [
+    activePlugin.value?.id,
+    account.value.studentId ?? account.value.name ?? '',
+    account.value.degree ?? '',
+  ].join(':'),
+);
 const showWallpaper = computed(() => !!config.value.wallpaper);
+// A wallpaper preset moves the veil, panels and controls together; its text
+// tokens are derived from the panel's worst-case backdrop, not plain white.
+const wallpaperPreset = computed(() => wallpaperMode(config.value.wallpaperDisplay));
+const wallpaperPanel = computed(() =>
+  wallpaperPanelOpacity(config.value.wallpaperPanel, wallpaperPreset.value),
+);
+const wallpaperStyle = computed<Record<string, string>>(() =>
+  showWallpaper.value
+    ? wallpaperTokens(wallpaperPreset.value, wallpaperPanel.value, config.value.accent)
+    : {},
+);
+function cycleWallpaper() {
+  const index = WALLPAPER_MODES.findIndex((mode) => mode.id === wallpaperPreset.value.id);
+  const next = WALLPAPER_MODES[(index + 1) % WALLPAPER_MODES.length];
+  void persist({ ...config.value, wallpaperDisplay: next.id });
+}
 const updateReady = computed(() =>
   ['available', 'downloading', 'installing', 'installed'].includes(updateStatus.value?.phase ?? ''),
 );
@@ -143,7 +184,7 @@ watch(
 );
 watch(enabledPlugins, () => {
   if (
-    !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
+    !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent', 'kit'].includes(
       route.value,
     ) &&
     !activePlugin.value
@@ -174,6 +215,7 @@ async function reloadAccount() {
   const generation = ++accountGeneration;
   timetable.value = null;
   scheduleError.value = '';
+  resetLmsOverview();
   try {
     const next = await bridge.account();
     if (!disposed && generation === accountGeneration) account.value = next;
@@ -343,8 +385,8 @@ async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
 }
-async function setPinnedTools(ids: string[]) {
-  void persist({ ...config.value, campusPinned: ids });
+async function setRailCollapsed(collapsed: boolean) {
+  await persist({ ...config.value, campusRailCollapsed: collapsed });
 }
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
@@ -406,6 +448,7 @@ onMounted(async () => {
   if (results[2].status === 'fulfilled') {
     account.value = results[2].value;
     void warmDirectSession(results[2].value);
+    void prefetchCampus(results[2].value);
   } else error.value = errorText(results[2].reason);
   try {
     const stop = await bridge.onAuth(async (event) => {
@@ -414,6 +457,7 @@ onMounted(async () => {
         const generation = ++accountGeneration;
         timetable.value = null;
         scheduleError.value = '';
+        resetLmsOverview();
         let next: AccountStatus | undefined;
         try {
           next = await bridge.account();
@@ -422,7 +466,10 @@ onMounted(async () => {
           error.value = errorText(e);
         }
         if (!disposed && generation === accountGeneration) void primeTimetable();
-        if (next && !disposed && generation === accountGeneration) void warmDirectSession(next);
+        if (next && !disposed && generation === accountGeneration) {
+          void warmDirectSession(next);
+          void prefetchCampus(next, true);
+        }
       } else if (event.state === 'error') error.value = event.message;
     });
     if (disposed) stop();
@@ -483,6 +530,7 @@ onBeforeUnmount(() => {
     :style="{
       '--sidebar-width': sidebarWidth + 'px',
       '--sidebar-collapsed-width': collapsedWidth + 'px',
+      ...wallpaperStyle,
     }"
   >
     <!-- Spans the whole window so sidebar width changes never rescale the image.
@@ -655,8 +703,26 @@ onBeforeUnmount(() => {
       </Transition>
       <!-- The macOS title bar is embedded, so this strip keeps the window draggable. -->
       <div v-if="macNative" class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
+      <!-- Cycles the wallpaper presets. Icon only: the label lives in the tooltip
+           and in 设置 → 外观与交互, so this never competes with page actions. -->
+      <button
+        v-if="showWallpaper"
+        type="button"
+        class="wallpaper-switch"
+        :title="`显示样式：${wallpaperPreset.label} · 点击切换`"
+        :aria-label="`显示样式：${wallpaperPreset.label}，点击切换`"
+        @click="cycleWallpaper"
+      >
+        <Contrast :size="15" aria-hidden="true" />
+      </button>
       <div ref="content" class="desktop-content">
-        <div class="desktop-content-inner" :class="{ 'is-home': route === 'home' }">
+        <div
+          class="desktop-content-inner"
+          :class="{
+            'is-home': route === 'home',
+            'is-wide': activePlugin?.page.type === 'campus',
+          }"
+        >
           <Transition name="drop">
             <div v-if="error" class="notice desktop-error" role="alert">
               <AlertCircle :size="15" /><span>{{ error }}</span
@@ -761,12 +827,12 @@ onBeforeUnmount(() => {
               />
               <CampusView
                 v-else-if="activePlugin?.page.type === 'campus'"
-                :key="activePlugin.id"
+                :key="campusScope"
                 :name="activePlugin.name"
-                :pinned="config.campusPinned"
                 :access-mode="account.accessMode ?? null"
                 :direct-session="account.directSession ?? false"
-                @update-pinned="setPinnedTools"
+                :rail-collapsed="config.campusRailCollapsed"
+                @update-rail-collapsed="setRailCollapsed"
                 @direct-session="refreshAccountStatus"
               />
               <LinksView
@@ -775,7 +841,8 @@ onBeforeUnmount(() => {
                 :name="activePlugin.name"
                 :links="activePlugin.page.links"
                 @open="openLink"
-              /></div
+              />
+              <component v-else-if="KitGallery && route === 'kit'" :is="KitGallery" /></div
           ></Transition>
         </div>
       </div>

@@ -278,16 +278,12 @@ onBeforeUnmount(() => {
 
     <SettingGroup title="主页壁纸">
       <div class="wallpaper-row">
+        <!-- No <Transition> here: a wallpaper is a multi-megabyte data URL, and
+             its fade-out can stall in WKWebView, leaving the removed picture on
+             screen next to "默认背景". The two states are mutually exclusive. -->
         <div class="wallpaper-preview" :class="{ empty: !config.wallpaper }">
-          <Transition name="fade" mode="out-in">
-            <img
-              v-if="config.wallpaper"
-              :key="config.wallpaper"
-              :src="config.wallpaper"
-              alt="当前主页壁纸"
-            />
-            <span v-else>默认背景</span>
-          </Transition>
+          <img v-if="config.wallpaper" :src="config.wallpaper" alt="当前主页壁纸" />
+          <span v-else>默认背景</span>
         </div>
         <div class="wallpaper-copy">
           <strong>{{ config.wallpaper ? '自定义壁纸' : '默认背景' }}</strong>

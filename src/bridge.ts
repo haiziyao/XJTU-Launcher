@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
   ImageCrop,
   AgentConversation,
@@ -44,6 +44,12 @@ import type {
   PluginList,
   Timetable,
   TimetableEdit,
+  LocalLibraryEdit,
+  LocalLibraryEntry,
+  LocalLibraryImport,
+  StorageStatus,
+  StoragePreview,
+  StorageReport,
 } from './types';
 
 export const native = isTauri();
@@ -55,11 +61,79 @@ export const bridge = {
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
   // The backend stores the answer under the account that ran the query when a
   // cache name is given, so an answer that arrives after a switch stays put.
-  schoolQuery: (query: SchoolQuery, cacheName?: string) =>
-    invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null }),
+  // A stored answer younger than the query's TTL is returned without a request;
+  // `force` is what a user-initiated refresh passes.
+  schoolQuery: (query: SchoolQuery, cacheName?: string, force = false) =>
+    invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null, force }),
   lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
   lmsSaveFile: (uploadId: number, path: string) =>
     invoke<number>('lms_save_file', { uploadId, path }),
+  // Save dialogs start inside the data folder's downloads directory. The
+  // backend builds the path so the page never invents one; if the folder
+  // cannot be created the dialog falls back to the bare file name.
+  async saveTarget(name: string): Promise<string> {
+    requireNative();
+    try {
+      return await invoke<string>('storage_download_path', { name });
+    } catch {
+      return name;
+    }
+  },
+  // Paths the interface shows use `~/...` so an account name never appears.
+  async displayPath(path: string): Promise<string> {
+    requireNative();
+    try {
+      return await invoke<string>('storage_display_path', { path });
+    } catch {
+      return path;
+    }
+  },
+  storageStatus: () => invoke<StorageStatus>('storage_status'),
+  storagePreview: (target: string) => invoke<StoragePreview>('storage_preview', { target }),
+  storageMigrate: (target: string) => invoke<StorageReport>('storage_migrate', { target }),
+  storageReveal: () => invoke<void>('storage_reveal'),
+  // 资料库 is local-only for now. The dialog returns native paths, so the
+  // backend copies the bytes and the webview never needs file-system access.
+  async libraryList(): Promise<LocalLibraryEntry[]> {
+    requireNative();
+    return invoke('library_list');
+  },
+  async libraryAdd(): Promise<LocalLibraryImport[]> {
+    requireNative();
+    const paths = await open({
+      multiple: true,
+      directory: false,
+      title: '添加到资料库',
+    });
+    if (!paths) return [];
+    return invoke('library_import', { paths });
+  },
+  async libraryUpdate(id: string, input: LocalLibraryEdit): Promise<LocalLibraryEntry> {
+    requireNative();
+    return invoke('library_update', { id, input });
+  },
+  async libraryDelete(id: string): Promise<void> {
+    requireNative();
+    return invoke('library_delete', { id });
+  },
+  async libraryOpen(id: string): Promise<void> {
+    requireNative();
+    return invoke('library_open', { id });
+  },
+  async libraryReveal(id: string): Promise<void> {
+    requireNative();
+    return invoke('library_reveal', { id });
+  },
+  async libraryExport(
+    id: string,
+    name: string,
+  ): Promise<{ path: string; display: string; bytes: number } | null> {
+    requireNative();
+    const target = await save({ defaultPath: await bridge.saveTarget(name) });
+    if (!target) return null;
+    const bytes = await invoke<number>('library_export', { id, path: target });
+    return { path: target, display: await bridge.displayPath(target), bytes };
+  },
   schoolPrepareEvaluations: (input: EvaluationPrepare) =>
     invoke<EvaluationPreview>('school_prepare_evaluations', { input }),
   schoolSubmitEvaluations: (previewId: string) =>

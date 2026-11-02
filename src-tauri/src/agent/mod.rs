@@ -29,12 +29,7 @@ pub struct Manager {
 }
 
 fn directory(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .home_dir()
-        .map_err(|_| "无法定位对话目录")?
-        .join(".xjtu-launcher")
-        .join("agent"))
+    crate::storage::path(app, "agent")
 }
 
 pub fn path(app: &AppHandle) -> Result<PathBuf, String> {

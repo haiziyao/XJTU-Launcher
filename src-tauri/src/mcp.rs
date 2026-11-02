@@ -1,5 +1,5 @@
 //! MCP server profiles and a minimal JSON-RPC client for stdio and Streamable HTTP.
-//! Profiles live in ~/.xjtu-launcher/mcp.json; campus credentials never reach this module.
+//! Profiles live in <数据文件夹>/mcp.json; campus credentials never reach this module.
 use crate::{config, plugins};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

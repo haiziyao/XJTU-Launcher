@@ -620,7 +620,7 @@ impl ToolDef {
                     }
                     "list" => {
                         let query = query_for(name, &args)?;
-                        let data = crate::run_school_query(app, query, None).await?;
+                        let data = crate::run_school_query(app, query, None, true).await?;
                         Ok(truncate(
                             serde_json::to_string(&data).map_err(|_| "无法序列化查询结果")?,
                         ))
@@ -666,7 +666,7 @@ impl ToolDef {
                 }
                 other => {
                     let query = query_for(other, &args)?;
-                    let data = crate::run_school_query(app, query, None).await?;
+                    let data = crate::run_school_query(app, query, None, true).await?;
                     Ok(truncate(
                         serde_json::to_string(&data).map_err(|_| "无法序列化查询结果")?,
                     ))

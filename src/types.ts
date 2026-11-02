@@ -18,6 +18,8 @@ export interface AppConfig {
   checkPluginUpdates: boolean;
   checkAppUpdates: boolean;
   campusPinned: string[];
+  /** 畅行校园 section rail collapsed to icons. */
+  campusRailCollapsed: boolean;
   /** Clock style on the home page (plain | bold | mono | card). */
   homeClock: string;
   /** Home sections kept visible. */
@@ -43,6 +45,10 @@ export interface AppConfig {
   petPosition: [number, number] | null;
   /** Give each page-level tab its own rounded backing. */
   pageTabSurfaces: boolean;
+  /** Wallpaper display preset (clear | balanced | vivid); only used with a wallpaper. */
+  wallpaperDisplay: string;
+  /** Panel opacity percent the user picked for each wallpaper preset. */
+  wallpaperPanel: Record<string, number>;
   /** Optional mirror for the update manifest; empty uses the built-in. */
   updateEndpoint: string;
 }
@@ -301,9 +307,10 @@ export interface MarketCatalog {
 export type SchoolQuery =
   | { type: 'card' }
   | { type: 'cardTransactions'; start: string; end: string; page: number }
-  | { type: 'grades' }
-  | { type: 'exams' }
-  | { type: 'attendanceStreams'; page: number }
+  | { type: 'grades'; term?: string | null }
+  | { type: 'exams'; term?: string | null }
+  | { type: 'attendanceStreams'; start?: string; end?: string; page: number }
+  | { type: 'attendanceRecords'; start: string; end: string; page: number }
   | { type: 'calendar' }
   | { type: 'roomOptions' }
   | { type: 'rooms'; campus: string; building: string; date: string; start: number; end: number }
@@ -316,6 +323,10 @@ export type SchoolQuery =
   | { type: 'lmsCourses' }
   | { type: 'lmsActivities'; course: number }
   | { type: 'lmsActivity'; activity: number }
+  | { type: 'lmsSubmissions'; activity: number }
+  | { type: 'lmsOverview' }
+  | { type: 'noticeChannels' }
+  | { type: 'notices'; channel: string; limit: number }
   | { type: 'libraryFloors' }
   | { type: 'libraryAreas'; floor: string }
   | { type: 'librarySeats'; area: string }
@@ -358,6 +369,42 @@ export interface AttendanceStreams {
   page: number;
   total: number;
   rows: AttendanceStream[];
+}
+/** One course meeting as the attendance service reports it. */
+export interface AttendanceRecord {
+  id: string;
+  date: string;
+  start: string;
+  end: string;
+  week: string;
+  place: string;
+  teacher: string;
+  status: 'pending' | 'normal' | 'late' | 'absent' | 'leave' | 'notRequired' | 'unknown';
+}
+export interface AttendanceRecords {
+  page: number;
+  total: number;
+  rows: AttendanceRecord[];
+}
+export interface NoticeChannel {
+  id: string;
+  name: string;
+  level: string;
+}
+export interface NoticeChannels {
+  channels: NoticeChannel[];
+}
+export interface NoticeItem {
+  title: string;
+  category: string;
+  date: string;
+  url: string;
+}
+export interface NoticeList {
+  channel: string;
+  name: string;
+  url: string;
+  items: NoticeItem[];
 }
 export interface CalendarEntry {
   year: string | null;
@@ -556,6 +603,10 @@ export interface LmsActivityDetail {
   start: string;
   end: string;
   published: boolean;
+  closed: boolean;
+  resubmitOpen: boolean;
+  allowRetract: boolean;
+  mode: string;
   description: string;
   uploads: LmsUpload[];
   submitByGroup: boolean;
@@ -573,6 +624,96 @@ export interface LmsActivityDetail {
   liveStart: string;
   liveEnd: string;
   player: string;
+}
+export interface LmsCorrection {
+  score: number | null;
+  instructorScore: number | null;
+  comment: string;
+  updatedAt: string;
+  files: LmsUpload[];
+}
+export interface LmsSubmission {
+  id: number;
+  status: string;
+  score: number | null;
+  rubricScore: number | null;
+  submittedAt: string;
+  updatedAt: string;
+  createdAt: string;
+  latest: boolean;
+  resubmitted: boolean;
+  canRetract: boolean;
+  mode: string;
+  comment: string;
+  instructorComment: string;
+  files: LmsUpload[];
+  correction: LmsCorrection | null;
+}
+export interface LmsSubmissions {
+  activity: number;
+  title: string;
+  courseId: number | null;
+  end: string;
+  closed: boolean;
+  submitByGroup: boolean;
+  submissions: LmsSubmission[];
+}
+/** Outstanding homework aggregated from the current semester's courses. */
+export interface LmsTodo {
+  id: number;
+  courseId: number;
+  course: string;
+  semester: string;
+  title: string;
+  start: string;
+  end: string;
+  submitByGroup: boolean;
+  submitTimes: number | null;
+  submitCount: number | null;
+}
+/** One downloadable file from a material activity in the current semester. */
+export interface LmsLibraryFile {
+  courseId: number;
+  course: string;
+  semester: string;
+  activity: number;
+  title: string;
+  end: string;
+  file: LmsUpload;
+}
+export interface LmsOverview {
+  semester: string;
+  rows: LmsTodo[];
+  files: LmsLibraryFile[];
+  /** Request count that failed, so the page can say the list is partial. */
+  failed: number;
+}
+/** One file in the local 资料库; the copy lives in the app data folder. */
+export interface LocalLibraryEntry {
+  id: string;
+  name: string;
+  storedName: string;
+  size: number;
+  sha256: string;
+  addedAt: number;
+  updatedAt: number;
+  course: string;
+  assignment: string;
+  tags: string[];
+  note: string;
+}
+export interface LocalLibraryEdit {
+  name: string;
+  course: string;
+  assignment: string;
+  tags: string[];
+  note: string;
+}
+export interface LocalLibraryImport {
+  path: string;
+  entry: LocalLibraryEntry | null;
+  duplicate: boolean;
+  error: string | null;
 }
 export interface LibraryFloor {
   campus: string;
@@ -791,6 +932,41 @@ export interface AgentToolInfo {
   description: string;
   source: 'campus' | 'mcp';
 }
+/** 文件预览（SPEC §4.4）：图片和文本由后端内联，PDF 只带预览 id，交给 pdf.js。 */
+export type FilePreview =
+  | { kind: 'image'; name: string; mime: string; size: number; dataUrl: string }
+  | { kind: 'text'; name: string; mime: string; size: number; text: string; truncated: boolean }
+  | { kind: 'pdf'; name: string; size: number; previewId: string }
+  | { kind: 'unsupported'; name: string; size: number | null };
+
+/** 写操作预览（SPEC §4.5）：prepare 之后、commit 之前展示给用户的内容。 */
+export interface WritePreview {
+  id: string;
+  kind: SchoolWrite['kind'];
+  accountId: string;
+  expiresInSeconds: number;
+  title: string;
+  summary: { label: string; value: string }[];
+  files?: { name: string; size: number }[];
+  warnings: string[];
+  irreversible: boolean;
+  captcha?: { image: string; kind: 'slider' | 'text' };
+}
+
+export type SchoolWrite =
+  | { kind: 'lmsHomework'; activity: number; comment: string; files: string[]; draft: boolean }
+  | { kind: 'lmsRetract'; submission: number }
+  | { kind: 'libraryBook'; area: string; seat: string }
+  | { kind: 'libraryAction'; booking: string; action: 'cancel' | 'checkIn' | 'leave' | 'return' }
+  | { kind: 'venueBook'; venue: number; date: string; stocks: number[] }
+  | { kind: 'venueCancel'; order: string };
+
+export interface WriteOutcome {
+  status: 'done' | 'rejected' | 'unknown';
+  message: string;
+  detail?: Record<string, unknown>;
+}
+
 export type AgentEvent =
   | { type: 'delta'; requestId: string; text: string }
   | {
@@ -805,3 +981,34 @@ export type AgentEvent =
   | { type: 'done'; requestId: string; conversationId: string }
   | { type: 'error'; requestId: string; message: string }
   | { type: 'cancelled'; requestId: string };
+
+export interface StorageEntry {
+  name: string;
+  label: string;
+  directory: boolean;
+  bytes: number;
+  files: number;
+}
+export interface StorageStatus {
+  path: string;
+  defaultPath: string;
+  isDefault: boolean;
+  totalBytes: number;
+  totalFiles: number;
+  entries: StorageEntry[];
+}
+export interface StoragePreview {
+  from: string;
+  to: string;
+  totalBytes: number;
+  totalFiles: number;
+  entries: StorageEntry[];
+}
+export interface StorageReport {
+  from: string;
+  to: string;
+  totalBytes: number;
+  totalFiles: number;
+  moved: string[];
+  warnings: string[];
+}

@@ -7,6 +7,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use std::{
+    collections::{HashMap, HashSet},
     path::{Component, Path, PathBuf},
     time::Duration,
 };
@@ -73,8 +74,10 @@ impl Homework {
     }
 }
 
+#[derive(Clone)]
 pub struct Client {
     transport: Transport,
+    mode: AccessMode,
 }
 
 fn text(value: Option<&Value>) -> String {
@@ -158,6 +161,114 @@ fn local_time(raw: &str) -> Option<String> {
     ))
 }
 
+/// Today in campus time (UTC+8), used to pick the courses that are running now.
+fn campus_today() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs() as i64)
+        .unwrap_or(0);
+    let days = (seconds + 8 * 3600).div_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+fn course_day(value: Option<&Value>) -> String {
+    let raw = text(value);
+    let day = raw.get(..10).unwrap_or(&raw);
+    let bytes = day.as_bytes();
+    if bytes.len() == 10 && bytes[4] == b'-' && bytes[7] == b'-' {
+        day.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// Days since 1970-01-01 for a `YYYY-MM-DD` string; lets the current-term rule
+/// group courses whose start dates are a few days apart.
+fn day_number(day: &str) -> Option<i64> {
+    let mut parts = day.split('-').map(|part| part.parse::<i64>().ok());
+    let (year, month, date) = (parts.next()??, parts.next()??, parts.next()??);
+    if !(1..=12).contains(&month) || !(1..=31).contains(&date) {
+        return None;
+    }
+    let (y, m) = if month <= 2 {
+        (year - 1, month + 9)
+    } else {
+        (year, month - 3)
+    };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + date - 1;
+    Some(era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468)
+}
+
+/// Courses scheduled for today. Most LMS courses have an empty end date, so
+/// when no course is explicitly running the newest start-date cohort (within a
+/// month) is used. That keeps the aggregate on one term instead of scanning
+/// every semester ever taken.
+fn current_course_group(courses: &[Value], today: &str) -> Vec<Value> {
+    let today = day_number(today).unwrap_or(i64::MAX);
+    // Courses that explicitly cover today define the term. Other courses in
+    // the same term often have an empty end date, so include the whole start
+    // window around the running ones instead of only the dated courses.
+    let active_starts: Vec<i64> = courses
+        .iter()
+        .filter_map(|course| {
+            let start = day_number(&course_day(course.get("start")))?;
+            let end = day_number(&course_day(course.get("end")))?;
+            (start <= today && today <= end).then_some(start)
+        })
+        .collect();
+    if let (Some(low), Some(high)) = (active_starts.iter().min(), active_starts.iter().max()) {
+        return courses
+            .iter()
+            .filter(|course| {
+                day_number(&course_day(course.get("start")))
+                    .is_some_and(|start| ((*low - 30)..=(*high + 30)).contains(&start))
+            })
+            .cloned()
+            .collect();
+    }
+    let anchor = courses
+        .iter()
+        .filter_map(|course| {
+            let start = day_number(&course_day(course.get("start")))?;
+            (start <= today).then_some(start)
+        })
+        .max()
+        .or_else(|| {
+            courses
+                .iter()
+                .filter_map(|course| day_number(&course_day(course.get("start"))))
+                .filter(|start| *start > today)
+                .min()
+        });
+    let Some(anchor) = anchor else {
+        return courses.to_vec();
+    };
+    let group: Vec<Value> = courses
+        .iter()
+        .filter(|course| {
+            day_number(&course_day(course.get("start")))
+                .is_some_and(|start| (start - anchor).abs() <= 30)
+        })
+        .cloned()
+        .collect();
+    if group.is_empty() {
+        courses.to_vec()
+    } else {
+        group
+    }
+}
+
 fn number(value: Option<&Value>) -> Option<f64> {
     let value = value?;
     value
@@ -206,21 +317,19 @@ fn player_url(value: &str) -> Option<String> {
 
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        let site = account
-            .sites
-            .get("lms")
-            .ok_or("请先打开思源学堂页面完成登录")?;
+        let site = account.sites.get("lms").ok_or("请先完成思源学堂登录")?;
         let cookies = site
             .cookies
             .as_deref()
             .filter(|cookies| !cookies.is_empty())
-            .ok_or("请先打开思源学堂页面完成登录")?;
-        Self::with_cookies(cookies)
+            .ok_or("请先完成思源学堂登录")?;
+        Self::with_cookies(cookies, account.mode)
     }
 
-    fn with_cookies(cookies: &str) -> Result<Self, String> {
+    fn with_cookies(cookies: &str, mode: AccessMode) -> Result<Self, String> {
         Ok(Self {
             transport: Transport::new(Some(cookies))?,
+            mode,
         })
     }
 
@@ -246,17 +355,17 @@ impl Client {
     }
 
     async fn get(&self, path: &str) -> Result<Value, String> {
-        let address = Transport::address(&url(path)?, AccessMode::Direct)?;
+        let address = Transport::address(&url(path)?, self.mode)?;
         self.send(self.transport.client.get(address)).await
     }
 
     async fn post(&self, path: &str) -> Result<Value, String> {
-        let address = Transport::address(&url(path)?, AccessMode::Direct)?;
+        let address = Transport::address(&url(path)?, self.mode)?;
         self.send(self.transport.client.post(address)).await
     }
 
     async fn post_json(&self, path: &str, body: &Value) -> Result<Value, String> {
-        let address = Transport::address(&url(path)?, AccessMode::Direct)?;
+        let address = Transport::address(&url(path)?, self.mode)?;
         self.send(self.transport.client.post(address).json(body))
             .await
     }
@@ -341,6 +450,194 @@ impl Client {
         }))
     }
 
+    /// One scan of the current semester's activity lists and details, feeding
+    /// both 待办 and 资料库. Doing it in one request means opening the two pages
+    /// shares one cache entry instead of asking the LMS twice.
+    pub async fn overview(&self) -> Result<Value, String> {
+        let courses = self.current_courses().await?;
+        // Courses in one cohort can carry different academic-year labels; show
+        // the label most of them agree on.
+        let mut labels: HashMap<String, usize> = HashMap::new();
+        for course in &courses {
+            let label = [text(course.get("year")), text(course.get("term"))]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ");
+            if !label.is_empty() {
+                *labels.entry(label).or_insert(0) += 1;
+            }
+        }
+        let semester = labels
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(label, _)| label)
+            .unwrap_or_default();
+        let (lists, mut failed) = self.activity_lists(&courses).await;
+        let mut owners = HashMap::new();
+        let mut ids = Vec::new();
+        for (course, items) in lists {
+            let course_id = course["id"].as_u64().unwrap_or(0);
+            let course_name = text(course.get("name"));
+            let course_semester = [text(course.get("year")), text(course.get("term"))]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ");
+            for item in items {
+                let kind = text(item.get("type"));
+                if !matches!(kind.as_str(), "homework" | "material")
+                    || item.get("published").and_then(Value::as_bool) == Some(false)
+                {
+                    continue;
+                }
+                let Some(id) = item.get("id").and_then(Value::as_u64) else {
+                    continue;
+                };
+                ids.push(id);
+                owners.insert(
+                    id,
+                    (course_id, course_name.clone(), course_semester.clone()),
+                );
+            }
+        }
+        let (details, detail_failures) = self.details_of(&ids).await;
+        failed += detail_failures;
+        let mut seen = HashSet::new();
+        let mut rows = Vec::new();
+        let mut files = Vec::new();
+        for detail in details {
+            let activity = detail["id"].as_u64().unwrap_or(0);
+            let (course_id, course_name, course_semester) = owners
+                .get(&activity)
+                .cloned()
+                .unwrap_or((0, String::new(), String::new()));
+            match text(detail.get("type")).as_str() {
+                "homework" => {
+                    let submitted = detail["submitCount"].as_u64().unwrap_or(0) > 0;
+                    if submitted || detail["closed"].as_bool().unwrap_or(false) {
+                        continue;
+                    }
+                    rows.push(json!({
+                        "id": activity,
+                        "courseId": course_id,
+                        "course": course_name,
+                        "semester": course_semester,
+                        "title": detail["title"],
+                        "start": detail["start"],
+                        "end": detail["end"],
+                        "submitByGroup": detail["submitByGroup"],
+                        "submitTimes": detail["submitTimes"],
+                        "submitCount": detail["submitCount"],
+                    }));
+                }
+                "material" => {
+                    for upload in detail["uploads"].as_array().into_iter().flatten() {
+                        let Some(id) = upload.get("id").and_then(Value::as_u64) else {
+                            continue;
+                        };
+                        if !seen.insert(id) {
+                            continue;
+                        }
+                        files.push(json!({
+                            "courseId": course_id,
+                            "course": course_name,
+                            "semester": course_semester,
+                            "activity": activity,
+                            "title": detail["title"],
+                            "end": detail["end"],
+                            "file": upload,
+                        }));
+                    }
+                }
+                _ => {}
+            }
+        }
+        rows.sort_by(|left, right| {
+            let left_end = left["end"].as_str().unwrap_or("");
+            let right_end = right["end"].as_str().unwrap_or("");
+            match (left_end.is_empty(), right_end.is_empty()) {
+                (true, true) => std::cmp::Ordering::Equal,
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                _ => left_end.cmp(right_end),
+            }
+        });
+        files.sort_by(|left, right| {
+            let course = text(left.get("course")).cmp(&text(right.get("course")));
+            course
+                .then_with(|| text(left.get("title")).cmp(&text(right.get("title"))))
+                .then_with(|| {
+                    text(left.pointer("/file/name")).cmp(&text(right.pointer("/file/name")))
+                })
+        });
+        Ok(json!({
+            "semester": semester,
+            "rows": rows,
+            "files": files,
+            "failed": failed,
+        }))
+    }
+
+    async fn current_courses(&self) -> Result<Vec<Value>, String> {
+        let value = self.courses().await?;
+        let courses = value["courses"].as_array().cloned().unwrap_or_default();
+        Ok(current_course_group(&courses, &campus_today()))
+    }
+
+    /// Fetch activity lists for a few courses at a time. The LMS is happiest
+    /// with a small number of parallel requests, and one bad course must not
+    /// sink the whole aggregation.
+    async fn activity_lists(&self, courses: &[Value]) -> (Vec<(Value, Vec<Value>)>, usize) {
+        let mut result = Vec::new();
+        let mut failed = 0;
+        for chunk in courses.chunks(6) {
+            let mut tasks = Vec::new();
+            for course in chunk {
+                let Some(id) = course.get("id").and_then(Value::as_u64) else {
+                    continue;
+                };
+                let client = self.clone();
+                tasks.push((
+                    course.clone(),
+                    tokio::spawn(async move {
+                        client.activities(id).await.map(|value| {
+                            value["activities"].as_array().cloned().unwrap_or_default()
+                        })
+                    }),
+                ));
+            }
+            for (course, task) in tasks {
+                match task.await {
+                    Ok(Ok(items)) => result.push((course, items)),
+                    _ => failed += 1,
+                }
+            }
+        }
+        (result, failed)
+    }
+
+    /// Read activity details for homework/material rows, a few at a time.
+    async fn details_of(&self, ids: &[u64]) -> (Vec<Value>, usize) {
+        let mut result = Vec::new();
+        let mut failed = 0;
+        for chunk in ids.chunks(6) {
+            let mut tasks = Vec::new();
+            for id in chunk {
+                let client = self.clone();
+                let id = *id;
+                tasks.push(tokio::spawn(async move { client.activity(id).await }));
+            }
+            for task in tasks {
+                match task.await {
+                    Ok(Ok(detail)) => result.push(detail),
+                    _ => failed += 1,
+                }
+            }
+        }
+        (result, failed)
+    }
+
     async fn player(&self, id: u64) -> Result<String, String> {
         let value = self
             .get(&format!("/api/lessons/{id}/player-url?from_page=course"))
@@ -358,10 +655,8 @@ impl Client {
         if !(1..=9_999_999_999).contains(&upload_id) {
             return Err("附件编号无效".into());
         }
-        let address = Transport::address(
-            &url(&format!("/api/uploads/{upload_id}/blob"))?,
-            AccessMode::Direct,
-        )?;
+        let address =
+            Transport::address(&url(&format!("/api/uploads/{upload_id}/blob"))?, self.mode)?;
         let response = self
             .transport
             .client
@@ -498,7 +793,7 @@ impl Client {
                 "/api/course/activities/{}/submissions",
                 request.activity
             ))?,
-            AccessMode::Direct,
+            self.mode,
         )?;
         let response = self
             .transport
@@ -661,7 +956,7 @@ impl Client {
         let Ok(path) = url(&format!("/api/uploads/{id}")) else {
             return;
         };
-        let Ok(address) = Transport::address(&path, AccessMode::Direct) else {
+        let Ok(address) = Transport::address(&path, self.mode) else {
             return;
         };
         let _ = self
@@ -1263,7 +1558,7 @@ mod tests {
                 return;
             }
         };
-        let client = Client::with_cookies(&cookies).expect("client");
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
         let courses = client.courses().await.expect("courses");
         let courses = courses["courses"].as_array().cloned().unwrap_or_default();
         for course in &courses {
@@ -1329,7 +1624,7 @@ mod tests {
                 return;
             }
         };
-        let client = Client::with_cookies(&cookies).expect("client");
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
         let path = std::env::temp_dir().join("xjtu-launcher-upload-probe.txt");
         std::fs::write(&path, b"probe").expect("probe file");
         let files = resolve_files(&[path.to_string_lossy().to_string()])
@@ -1375,7 +1670,7 @@ mod tests {
             .await
         {
             Ok(cookies) => {
-                let client = Client::with_cookies(&cookies).expect("client");
+                let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
                 match client.courses().await {
                     Ok(value) => {
                         let courses = value
@@ -1434,7 +1729,7 @@ mod tests {
                 return;
             }
         };
-        let client = Client::with_cookies(&cookies).expect("client");
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
         let courses = client.courses().await.expect("courses");
         let courses = courses["courses"].as_array().cloned().unwrap_or_default();
         // Scan a few courses so a graded submission is likely to appear; print
@@ -1505,7 +1800,7 @@ mod tests {
                 return;
             }
         };
-        let client = Client::with_cookies(&cookies).expect("client");
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
         let courses = client.courses().await.expect("courses");
         let courses = courses["courses"].as_array().cloned().unwrap_or_default();
         let mut seen = std::collections::BTreeSet::new();
@@ -1549,6 +1844,163 @@ mod tests {
                 Err(error) => println!("save error: {error}"),
             }
             let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn course_group_prefers_running_dates_then_the_newest_cohort() {
+        let course = |id: u64, start: &str, end: &str| json!({"id": id, "start": start, "end": end, "year": "2026-2027"});
+        let ids = |group: Vec<Value>| {
+            let mut ids = group
+                .iter()
+                .filter_map(|course| course["id"].as_u64())
+                .collect::<Vec<_>>();
+            ids.sort_unstable();
+            ids
+        };
+        let running = vec![
+            course(1, "2026-09-01", "2027-01-15"),
+            course(2, "2025-09-08", ""),
+            course(3, "2026-12-01", "2027-03-01"),
+        ];
+        assert_eq!(ids(current_course_group(&running, "2026-10-31")), [1]);
+        // An open-ended course from the same term is part of the running group.
+        let mixed = vec![
+            course(1, "2026-09-01", "2027-01-15"),
+            course(2, "2026-09-14", ""),
+            course(3, "2025-02-17", ""),
+        ];
+        assert_eq!(ids(current_course_group(&mixed, "2026-10-31")), [1, 2]);
+
+        // An empty end date is common; the newest start cohort wins.
+        let open_ended = vec![
+            course(1, "2025-02-17", ""),
+            course(2, "2026-09-14", ""),
+            course(3, "2026-09-16", ""),
+            course(4, "2026-03-02", ""),
+        ];
+        assert_eq!(ids(current_course_group(&open_ended, "2026-10-31")), [2, 3]);
+
+        // Before the term starts, show the nearest upcoming cohort rather than
+        // everything (or a cohort a whole year further out).
+        let upcoming = vec![
+            course(1, "2027-03-01", ""),
+            course(2, "2027-03-03", ""),
+            course(3, "2027-09-06", ""),
+        ];
+        assert_eq!(ids(current_course_group(&upcoming, "2026-10-31")), [1, 2]);
+
+        // Without any dates the aggregate has no better signal than all courses.
+        let undated = vec![course(1, "", ""), course(2, "", "")];
+        assert_eq!(ids(current_course_group(&undated, "2026-10-31")), [1, 2]);
+        assert_eq!(day_number("1970-01-01"), Some(0));
+        assert_eq!(day_number("2026-09-14"), Some(20_710));
+        assert_eq!(day_number("not-a-date"), None);
+    }
+
+    /// Manual probe: prints how courses are labelled and dated, so the
+    /// current-semester rule can be checked without exposing course names.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_lms_course_dates_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        let Ok(cookies) =
+            crate::auth::direct_login(LOGIN_URL, &account.username, &saved.0, "live-lms-probe")
+                .await
+        else {
+            println!("login error");
+            return;
+        };
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
+        let all = client.courses().await.expect("courses");
+        let all = all["courses"].as_array().cloned().unwrap_or_default();
+        let mut cohorts: HashMap<(String, String, String, String), usize> = HashMap::new();
+        for course in &all {
+            let key = (
+                text(course.get("year")),
+                text(course.get("term")),
+                text(course.get("start")),
+                text(course.get("end")),
+            );
+            *cohorts.entry(key).or_insert(0) += 1;
+        }
+        let mut cohorts = cohorts.into_iter().collect::<Vec<_>>();
+        cohorts.sort();
+        println!("today={} courses={}", campus_today(), all.len());
+        for ((year, term, start, end), count) in cohorts {
+            println!("year={year:?} term={term:?} start={start:?} end={end:?} count={count}");
+        }
+    }
+
+    /// Manual probe: checks that the current-semester aggregation returns
+    /// without scanning every course, and prints counts only.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_lms_aggregate_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-lms-probe",
+        )
+        .await
+        {
+            Ok(cookies) => cookies,
+            Err(error) => {
+                println!("login error: {error}");
+                return;
+            }
+        };
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
+        let all = client.courses().await.expect("courses");
+        let all = all["courses"].as_array().cloned().unwrap_or_default();
+        let today = campus_today();
+        let current = current_course_group(&all, &today);
+        println!(
+            "today={today} courses={} current={}",
+            all.len(),
+            current.len()
+        );
+        for course in &current {
+            println!(
+                "current course id={} start={} end={}",
+                course["id"], course["start"], course["end"]
+            );
+        }
+        match client.overview().await {
+            Ok(value) => {
+                let files = value["files"].as_array().cloned().unwrap_or_default();
+                let courses = files
+                    .iter()
+                    .filter_map(|file| file["courseId"].as_u64())
+                    .collect::<HashSet<_>>()
+                    .len();
+                println!(
+                    "semester={} todos={} library files={} courses={courses} failed={}",
+                    value["semester"],
+                    value["rows"].as_array().map(Vec::len).unwrap_or(0),
+                    files.len(),
+                    value["failed"]
+                );
+            }
+            Err(error) => println!("overview error: {error}"),
         }
     }
 

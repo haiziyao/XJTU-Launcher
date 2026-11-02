@@ -14,6 +14,7 @@ import { academicWeek, courseHue } from '../domain';
 import type { Course, Timetable, TimetableEdit } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import EmptyState from './ui/EmptyState.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 import TimetableEditor from './TimetableEditor.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -33,6 +34,16 @@ const maxWeek = computed(() => {
   const calendarWeeks = Number.isNaN(end.getTime()) ? 1 : academicWeek(t.startDate, end);
   return Math.min(60, Math.max(1, calendarWeeks, ...t.courses.flatMap((c) => c.weeks)));
 });
+const weekOptions = computed(() =>
+  Array.from({ length: maxWeek.value }, (_, index) => ({
+    value: String(index + 1),
+    label: `第 ${index + 1} 周`,
+  })),
+);
+function setWeek(value: string) {
+  const next = Number(value);
+  if (Number.isFinite(next)) week.value = Math.max(1, Math.min(maxWeek.value, next));
+}
 watch(
   () => props.timetable,
   (table) => {
@@ -110,9 +121,14 @@ function restore(course: Course) {
           <UiIconButton label="上一周" size="sm" :disabled="week <= 1" @click="week--">
             <ChevronLeft :size="15" />
           </UiIconButton>
-          <select v-model.number="week" class="week-select" aria-label="选择周次">
-            <option v-for="n in maxWeek" :key="n" :value="n">第 {{ n }} 周</option>
-          </select>
+          <MenuSelect
+            class="week-picker"
+            bare
+            :model-value="String(week)"
+            :options="weekOptions"
+            label="选择周次"
+            @update:model-value="setWeek"
+          />
           <UiIconButton label="下一周" size="sm" :disabled="week >= maxWeek" @click="week++">
             <ChevronRight :size="15" />
           </UiIconButton>

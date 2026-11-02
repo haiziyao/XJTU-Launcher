@@ -55,8 +55,9 @@ pub fn trusted(url: &Url) -> bool {
 }
 
 /// The library seat system and the sports venue system only answer over plain
-/// HTTP on fixed ports. Keep this exception to their exact origins; it is
-/// allowed for direct requests only, never for WebVPN encoding.
+/// HTTP on fixed ports. Keep this exception to their exact origins. WebVPN maps
+/// them as `http-<port>` paths, which is how the library seat page is reachable
+/// off campus; the venue system has no such route.
 pub fn service_http(url: &Url) -> bool {
     url.scheme() == "http"
         && url.username().is_empty()
@@ -79,22 +80,25 @@ pub fn hello_http(url: &Url) -> bool {
 }
 
 pub fn vpn_url(url: &Url) -> Result<Url, String> {
-    if !trusted(url) {
+    if !trusted(url) && !service_http(url) {
         return Err("校园请求地址不受支持".into());
     }
     encode_vpn_url(url)
 }
 
 /// Whether a page belongs to the WebVPN portal itself rather than a mapped
-/// campus site (whose path starts with `/https/`). The portal shows this page
-/// again whenever a ticket was not accepted, so callers use it to tell an
-/// authenticated VPN from a rejected one.
+/// campus site (whose path starts with `/https/` or `/http-<port>/`). The
+/// portal shows this page again whenever a ticket was not accepted, so callers
+/// use it to tell an authenticated VPN from a rejected one.
 pub fn webvpn_host(url: &Url) -> bool {
+    let mapped = url.path().starts_with("/https/")
+        || url.path().starts_with("/http/")
+        || url.path().starts_with("/http-");
     url.scheme() == "https"
         && url.host_str() == Some(VPN_HOST)
         && url.username().is_empty()
         && url.password().is_none()
-        && !url.path().starts_with("/https/")
+        && !mapped
 }
 
 /// Browsing accepts university sites; authentication transport keeps its narrower allowlist.
@@ -160,6 +164,13 @@ fn encode_vpn_url(url: &Url) -> Result<Url, String> {
     if url.host_str() == Some(VPN_HOST) {
         return Ok(url.clone());
     }
+    // Plain-HTTP services keep their port in the WebVPN scheme segment, as
+    // `http-8086`; HTTPS services use plain `https`.
+    let segment = match url.scheme() {
+        "https" => "https".to_string(),
+        "http" if service_http(url) => format!("http-{}", url.port().ok_or("校园地址缺少端口")?),
+        _ => return Err("校园请求地址不受支持".into()),
+    };
     let mut host = url
         .host_str()
         .ok_or("校园地址缺少主机名")?
@@ -167,7 +178,7 @@ fn encode_vpn_url(url: &Url) -> Result<Url, String> {
         .to_vec();
     cfb_mode::Encryptor::<aes::Aes128>::new(VPN_KEY.into(), VPN_KEY.into()).encrypt(&mut host);
     let mut mapped = Url::parse(&format!(
-        "https://{VPN_HOST}/https/{}{}{}",
+        "https://{VPN_HOST}/{segment}/{}{}{}",
         hex::encode(VPN_KEY),
         hex::encode(host),
         url.path()
@@ -185,30 +196,50 @@ pub fn original_url(url: &Url) -> Result<Url, String> {
             url.host_str().unwrap_or("未知主机")
         ));
     }
-    if url.host_str() != Some(VPN_HOST) || !url.path().starts_with("/https/") {
+    if url.host_str() != Some(VPN_HOST) {
         return Ok(url.clone());
     }
+    let path = url.path();
+    if !path.starts_with("/https/") && !path.starts_with("/http/") && !path.starts_with("/http-") {
+        // The WebVPN portal's own pages are not mapped campus addresses.
+        return Ok(url.clone());
+    }
+    // `/https/<key+host>/<path>` or `/http-<port>/<key+host>/<path>`.
     let mut parts = url.path().splitn(4, '/');
-    let encoded = parts.nth(2).ok_or("VPN 地址格式不受支持")?;
+    let _leading = parts.next();
+    let segment = parts.next().ok_or("VPN 地址格式不受支持")?;
+    let encoded = parts.next().ok_or("VPN 地址格式不受支持")?;
+    if !matches!(segment, "https" | "http") && !segment.starts_with("http-") {
+        return Err("VPN 地址格式不受支持".into());
+    }
     if !encoded.starts_with(&hex::encode(VPN_KEY)) {
         return Err("VPN 地址格式不受支持".into());
     }
     let mut host = hex::decode(&encoded[32..]).map_err(|_| "VPN 地址格式不受支持")?;
     cfb_mode::Decryptor::<aes::Aes128>::new(VPN_KEY.into(), VPN_KEY.into()).decrypt(&mut host);
     let host = String::from_utf8(host).map_err(|_| "VPN 地址格式不受支持")?;
+    let (scheme, port) = if let Some(port) = segment.strip_prefix("http-") {
+        if port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err("VPN 地址格式不受支持".into());
+        }
+        ("http", format!(":{port}"))
+    } else {
+        (segment, String::new())
+    };
     let mut ordinary = Url::parse(&format!(
-        "https://{host}/{}",
+        "{scheme}://{host}{port}/{}",
         parts.next().unwrap_or_default()
     ))
     .map_err(|_| "VPN 地址格式不受支持")?;
     ordinary.set_query(url.query());
     ordinary.set_fragment(url.fragment());
-    if !trusted(&ordinary) {
+    if !trusted(&ordinary) && !service_http(&ordinary) {
         return Err("VPN 目标地址不受支持".into());
     }
     Ok(ordinary)
 }
 
+#[derive(Clone)]
 pub struct Transport {
     pub client: Client,
     pub cookies: Arc<CookieStoreMutex>,
@@ -243,9 +274,9 @@ impl Transport {
         String::from_utf8(data).map_err(|_| "无法保存校园会话".into())
     }
     pub fn address(url: &Url, mode: AccessMode) -> Result<Url, String> {
-        // Plain-HTTP services have no WebVPN mapping; they must be reached directly.
-        if !trusted(url) && !(mode == AccessMode::Direct && (service_http(url) || hello_http(url)))
-        {
+        // The profile landing page is plain HTTP and direct-only; the library
+        // seat page has a port-aware WebVPN mapping.
+        if !trusted(url) && !service_http(url) && !hello_http(url) {
             return Err("校园请求地址不受支持".into());
         }
         if mode == AccessMode::Webvpn {
@@ -430,6 +461,12 @@ mod tests {
         assert!(!webvpn_host(
             &Url::parse("https://webvpn.xjtu.edu.cn/https/77726476/login").unwrap()
         ));
+        assert!(!webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/http-8086/77726476/seat/").unwrap()
+        ));
+        // The portal's own pages pass through unchanged.
+        let portal = Url::parse("https://webvpn.xjtu.edu.cn/login?cas_login=true").unwrap();
+        assert_eq!(original_url(&portal).unwrap(), portal);
         for bad in [
             "http://webvpn.xjtu.edu.cn/login",
             "https://webvpn.xjtu.edu.cn.evil.test/login",
@@ -447,7 +484,11 @@ mod tests {
         assert!(service_http(&lib));
         assert!(service_http(&venue));
         assert!(Transport::address(&lib, AccessMode::Direct).is_ok());
-        assert!(Transport::address(&lib, AccessMode::Webvpn).is_err());
+        // WebVPN maps plain-HTTP services with their port and round-trips back.
+        let mapped = Transport::address(&lib, AccessMode::Webvpn).unwrap();
+        assert_eq!(mapped.host_str(), Some(VPN_HOST));
+        assert!(mapped.path().starts_with("/http-8086/"), "{mapped}");
+        assert_eq!(original_url(&mapped).unwrap(), lib);
         for bad in [
             "https://rg.lib.xjtu.edu.cn:8086/qseat",
             "http://rg.lib.xjtu.edu.cn/qseat",

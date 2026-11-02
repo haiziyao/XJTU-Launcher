@@ -15,7 +15,7 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const MAX_TEXT: usize = 80;
 const MAX_SEMESTER: usize = 128;
@@ -227,11 +227,7 @@ fn check_id(id: &str) -> Result<(), String> {
 }
 
 fn store_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位课表数据目录")?
-        .join("timetable-custom.json"))
+    crate::storage::path(app, "state/timetable-custom.json")
 }
 
 fn load_at(path: &Path) -> Result<Store, String> {

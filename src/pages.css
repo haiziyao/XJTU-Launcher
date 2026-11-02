@@ -534,44 +534,37 @@
 }
 
 /* Timetable */
+/* Week stepper: the same sunken group SegmentedTabs uses. It used to be a
+   bordered pill holding a bordered select, which read as a box inside a box next
+   to the borderless header buttons. */
 .week-control {
   display: flex;
   align-items: center;
   gap: 2px;
   height: 30px;
-  padding: 0 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-subtle);
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--control-sunken);
 }
-/* Week picker: the native select chrome is opaque and taller than the icon
-   buttons beside it, so draw it with the shared control tokens instead. */
-.week-select {
-  appearance: none;
-  height: 26px;
-  padding: 0 24px 0 9px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--control-bg);
-  background-image: var(--chevron-down);
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 500;
+/* Week picker: an in-page menu rather than a native select. The native popup
+   opens a separate system window and takes a noticeable moment to show and
+   dismiss, which read as lag; this list paints with the page. `min-width` keeps
+   the group from shifting when 9 becomes 10. */
+.week-control .week-picker {
+  display: flex;
+  height: 24px;
+}
+.week-control .menu-field-value {
+  min-width: 76px;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
   font-variant-numeric: tabular-nums;
-  outline: none;
-  box-shadow: var(--shadow-xs);
-  transition:
-    background-color var(--duration-fast) ease,
-    border-color var(--duration-fast) ease;
 }
-.week-select:hover {
-  background-color: var(--accent-wash);
-}
-.week-select:focus-visible {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+.week-control .menu-field-menu {
+  left: auto;
+  right: 0;
+  min-width: 104px;
 }
 .schedule-scroll {
   overflow-x: auto;

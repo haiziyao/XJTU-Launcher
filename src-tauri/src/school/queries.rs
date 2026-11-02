@@ -67,6 +67,7 @@ pub enum Query {
     LmsSubmissions {
         activity: u64,
     },
+    LmsOverview,
     NoticeChannels,
     Notices {
         channel: String,
@@ -102,13 +103,46 @@ impl Query {
             Self::LmsCourses
             | Self::LmsActivities { .. }
             | Self::LmsActivity { .. }
-            | Self::LmsSubmissions { .. } => "lms",
+            | Self::LmsSubmissions { .. }
+            | Self::LmsOverview => "lms",
             Self::NoticeChannels | Self::Notices { .. } => "notices",
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
             }
             Self::VenueList | Self::VenueSlots { .. } | Self::VenueOrders => "venues",
         }
+    }
+    /// How long a stored answer may be served without asking the school again.
+    /// Live-state pages (seats, slots, card) stay short; catalog-like pages can
+    /// stay for a day. Evaluations are omitted because their write flow needs
+    /// the current state on every open.
+    pub fn cache_ttl(&self) -> Option<u64> {
+        Some(match self {
+            Self::Grades { .. } | Self::Exams { .. } => 600,
+            Self::Terms => 86_400,
+            Self::Evaluations { .. } => return None,
+            Self::RoomOptions => 86_400,
+            Self::Rooms { .. } => 300,
+            Self::Courses { .. } => 1_800,
+            Self::Calendar => 86_400,
+            Self::AttendanceStreams { .. } => 86_400,
+            Self::AttendanceRecords { .. } => 600,
+            Self::Card | Self::CardTransactions { .. } => 180,
+            Self::Fitness | Self::FitnessScore { .. } => 86_400,
+            Self::Profile => 3_600,
+            Self::LmsCourses => 600,
+            Self::LmsActivities { .. } | Self::LmsActivity { .. } => 300,
+            Self::LmsSubmissions { .. } => 120,
+            Self::LmsOverview => 300,
+            Self::NoticeChannels => 86_400,
+            Self::Notices { .. } => 300,
+            Self::LibraryFloors => 86_400,
+            Self::LibraryAreas { .. } => 21_600,
+            Self::LibrarySeats { .. } => 30,
+            Self::VenueList => 43_200,
+            Self::VenueSlots { .. } => 60,
+            Self::VenueOrders => 120,
+        })
     }
     pub fn validate(&self) -> Result<(), String> {
         match self {
@@ -320,6 +354,7 @@ pub async fn query(
             | Query::LmsActivities { .. }
             | Query::LmsActivity { .. }
             | Query::LmsSubmissions { .. }
+            | Query::LmsOverview
     ) {
         let account = account.ok_or("请先登录校园账号")?;
         let client = super::lms::Client::connect(&account)?;
@@ -328,6 +363,7 @@ pub async fn query(
             Query::LmsActivities { course } => client.activities(course).await?,
             Query::LmsActivity { activity } => client.activity(activity).await?,
             Query::LmsSubmissions { activity } => client.submissions(activity).await?,
+            Query::LmsOverview => client.overview().await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -464,6 +500,7 @@ pub async fn query(
         | Query::LmsActivities { .. }
         | Query::LmsActivity { .. }
         | Query::LmsSubmissions { .. }
+        | Query::LmsOverview
         | Query::NoticeChannels
         | Query::Notices { .. }
         | Query::LibraryFloors
@@ -538,6 +575,25 @@ fn calendar_images(html: &str) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cache_ttl_keeps_live_pages_short_and_evaluations_uncached() {
+        assert_eq!(Query::Terms.cache_ttl(), Some(86_400));
+        assert_eq!(
+            Query::LibrarySeats {
+                area: "A101".into()
+            }
+            .cache_ttl(),
+            Some(30)
+        );
+        assert_eq!(
+            Query::Evaluations {
+                term: None,
+                finished: false
+            }
+            .cache_ttl(),
+            None
+        );
+    }
     #[test]
     fn validates_query_before_any_network() {
         assert!(validate_term("2026-2027-1").is_ok());

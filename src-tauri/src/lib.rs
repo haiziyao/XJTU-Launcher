@@ -4,6 +4,7 @@ mod campus;
 mod campus_browser;
 mod config;
 mod expose;
+mod library;
 mod market;
 mod mcp;
 mod personal_image;
@@ -19,6 +20,7 @@ mod accounts;
 mod auth;
 mod network;
 mod pet_desktop;
+mod storage;
 
 use serde::Serialize;
 use std::{
@@ -47,14 +49,15 @@ struct AppState {
     agent: agent::Manager,
     /// Serializes timetable customization reads and writes.
     timetable_lock: Mutex<()>,
+    /// Serializes writes to the local file library's index. Importing hashes
+    /// and copies outside this lock; only the commit needs it.
+    library_lock: std::sync::Arc<std::sync::Mutex<()>>,
+    /// One migration at a time; a second run would copy half-moved data.
+    storage_lock: tokio::sync::Mutex<()>,
 }
 
 pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位账号目录")?
-        .join("campus-accounts.enc"))
+    storage::path(app, "state/campus-accounts.enc")
 }
 
 /// Stable identifier for the campus login's device fingerprint. The school ties
@@ -62,11 +65,7 @@ pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// a failed write only means the device is never remembered, never a login
 /// failure. It holds no personal data.
 fn device_visitor(app: &tauri::AppHandle) -> Result<String, String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位应用数据目录")?
-        .join("device-id");
+    let path = storage::path(app, "state/device-id")?;
     if let Ok(text) = std::fs::read_to_string(&path) {
         let id = text.trim();
         if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -90,19 +89,11 @@ pub(crate) fn main_only(window: &WebviewWindow) -> Result<(), String> {
 }
 
 pub(crate) fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_config_dir()
-        .map_err(|_| "无法定位配置目录")?
-        .join("config.json"))
+    storage::config_path(app)
 }
 
 fn plugin_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位应用数据目录")?
-        .join("plugins"))
+    storage::path(app, "plugins")
 }
 
 #[tauri::command]
@@ -961,7 +952,7 @@ async fn refresh_lms_session(
 ) -> Result<bool, String> {
     main_only(&window)?;
     let path = accounts_path(&app)?;
-    let (account_id, username, password) = {
+    let (account_id, username, password, mode, portal) = {
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
@@ -973,11 +964,22 @@ async fn refresh_lms_session(
             record.id.clone(),
             record.username.clone(),
             zeroize::Zeroizing::new(saved.0.clone()),
+            record.mode,
+            record.cookies.clone(),
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
     let visitor = device_visitor(&app)?;
-    let cookies = auth::direct_login(school::LMS_LOGIN, &username, &password, &visitor).await?;
+    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
+    let cookies = auth::service_login(
+        school::LMS_LOGIN,
+        mode,
+        seed,
+        &username,
+        &password,
+        &visitor,
+    )
+    .await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -1000,8 +1002,8 @@ async fn refresh_lms_session(
     Ok(true)
 }
 
-/// The library seat system is plain HTTP on the campus network and cannot be
-/// reached through WebVPN, so this login only runs in direct mode.
+/// The library seat system is plain HTTP on the campus network; WebVPN reaches
+/// it through the port-aware `http-8086` mapping, so both modes can log in.
 #[tauri::command]
 async fn refresh_library_session(
     app: tauri::AppHandle,
@@ -1010,13 +1012,10 @@ async fn refresh_library_session(
 ) -> Result<bool, String> {
     main_only(&window)?;
     let path = accounts_path(&app)?;
-    let (account_id, username, password) = {
+    let (account_id, username, password, mode, portal) = {
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
-        if record.mode != network::AccessMode::Direct {
-            return Err("图书馆座位仅支持校园网直连，请连接校园网后重试".into());
-        }
         let saved = record
             .password
             .as_ref()
@@ -1025,11 +1024,22 @@ async fn refresh_library_session(
             record.id.clone(),
             record.username.clone(),
             zeroize::Zeroizing::new(saved.0.clone()),
+            record.mode,
+            record.cookies.clone(),
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
     let visitor = device_visitor(&app)?;
-    let cookies = auth::direct_login(school::LIBRARY_LOGIN, &username, &password, &visitor).await?;
+    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
+    let cookies = auth::service_login(
+        school::LIBRARY_LOGIN,
+        mode,
+        seed,
+        &username,
+        &password,
+        &visitor,
+    )
+    .await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -1052,8 +1062,8 @@ async fn refresh_library_session(
     Ok(true)
 }
 
-/// The venue system is plain HTTP on the campus network with its own OAuth
-/// login; it cannot run through WebVPN.
+/// The venue system is public plain HTTP with its own OAuth login. It has no
+/// WebVPN mapping, so the login and queries always use a direct connection.
 #[tauri::command]
 async fn refresh_venue_session(
     app: tauri::AppHandle,
@@ -1066,9 +1076,6 @@ async fn refresh_venue_session(
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
-        if record.mode != network::AccessMode::Direct {
-            return Err("场馆预约仅支持校园网直连，请连接校园网后重试".into());
-        }
         let saved = record
             .password
             .as_ref()
@@ -1305,6 +1312,134 @@ async fn lms_save_file(
         .await
 }
 
+/// Local 资料库 roots are per campus account and live in the app data folder.
+/// Requiring the active account keeps files from two people on one machine
+/// apart, the same way school caches are isolated.
+async fn library_root(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<PathBuf, String> {
+    let (account, _) = school_account(app, state).await?;
+    let workspace = storage::file_path(app, "workspace")?;
+    Ok(library::root(&workspace, &account.id))
+}
+
+/// File work (hashing, copying, index writes) must not hold an async worker.
+async fn run_library<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|_| "资料库任务失败".to_string())?
+}
+
+#[tauri::command]
+async fn library_list(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<library::Entry>, String> {
+    main_only(&window)?;
+    let root = library_root(&app, &state).await?;
+    run_library(move || library::list(&root)).await
+}
+
+#[tauri::command]
+async fn library_import(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<library::ImportResult>, String> {
+    main_only(&window)?;
+    if paths.len() > 32 {
+        return Err("一次最多添加 32 个文件".into());
+    }
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root = library_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_library(move || Ok(library::import_all(&root, &paths, &lock))).await
+}
+
+#[tauri::command]
+async fn library_update(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+    input: library::EditInput,
+) -> Result<library::Entry, String> {
+    main_only(&window)?;
+    let root = library_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_library(move || library::update(&root, &id, input, &lock)).await
+}
+
+#[tauri::command]
+async fn library_delete(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let root = library_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_library(move || library::delete(&root, &id, &lock)).await
+}
+
+#[tauri::command]
+async fn library_open(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    let root = library_root(&app, &state).await?;
+    let path = run_library(move || library::entry_path(&root, &id)).await?;
+    let path = path.to_str().ok_or("文件路径不是有效的 UTF-8")?;
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|_| "无法打开本地文件".into())
+}
+
+#[tauri::command]
+async fn library_reveal(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    let root = library_root(&app, &state).await?;
+    let path = run_library(move || library::entry_path(&root, &id)).await?;
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|_| "无法在文件管理器中显示".into())
+}
+
+#[tauri::command]
+async fn library_export(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    id: String,
+    path: String,
+) -> Result<u64, String> {
+    main_only(&window)?;
+    let target = PathBuf::from(path);
+    if !target.is_absolute() {
+        return Err("请选择有效的保存位置".into());
+    }
+    let root = library_root(&app, &state).await?;
+    run_library(move || library::export(&root, &id, &target)).await
+}
+
 #[tauri::command]
 fn school_catalog(window: WebviewWindow) -> Result<Vec<school::Feature>, String> {
     main_only(&window)?;
@@ -1363,6 +1498,7 @@ pub(crate) async fn run_school_query(
     app: &tauri::AppHandle,
     query: school::Query,
     cache_key: Option<&str>,
+    force: bool,
 ) -> Result<serde_json::Value, String> {
     require_school_feature(app, query.feature())?;
     query.validate()?;
@@ -1375,15 +1511,34 @@ pub(crate) async fn run_school_query(
             | school::Query::NoticeChannels
             | school::Query::Notices { .. }
     ) {
+        let scope = cache::active_scope(app);
+        if !force {
+            if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
+                if let Some(data) =
+                    cache::read_fresh(app, &scope, key, std::time::Duration::from_secs(ttl))
+                {
+                    return Ok(data);
+                }
+            }
+        }
         let data = school::query(None, query).await.map(|(data, _)| data)?;
         if let Some(key) = cache_key {
             // Public data still goes under the current account so reads line up.
-            cache::write_for(app, &cache::active_scope(app), key, &data);
+            cache::write_for(app, &scope, key, &data);
         }
         return Ok(data);
     }
     let (account, generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
+    if !force {
+        if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
+            if let Some(data) =
+                cache::read_fresh(app, &account_id, key, std::time::Duration::from_secs(ttl))
+            {
+                return Ok(data);
+            }
+        }
+    }
     let (data, cookies) = school::query(Some(account), query).await?;
     if let Some(cookies) = cookies {
         save_school_session(app, &state, &account_id, generation, cookies).await?;
@@ -1470,9 +1625,10 @@ async fn school_query(
     window: WebviewWindow,
     query: school::Query,
     cache_key: Option<String>,
+    force: bool,
 ) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    run_school_query(&app, query, cache_key.as_deref()).await
+    run_school_query(&app, query, cache_key.as_deref(), force).await
 }
 
 #[tauri::command]
@@ -1547,11 +1703,7 @@ fn school_cancel_evaluations(
 }
 
 pub(crate) fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位模型配置目录")?
-        .join("model-profiles.enc"))
+    storage::path(app, "state/model-profiles.enc")
 }
 #[tauri::command]
 fn list_model_providers(
@@ -1770,12 +1922,7 @@ async fn provider_balance(
     providers::balance(&base_url, &key).await
 }
 fn mcp_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .home_dir()
-        .map_err(|_| "无法定位 MCP 配置目录")?
-        .join(".xjtu-launcher")
-        .join("mcp.json"))
+    storage::path(app, "state/mcp.json")
 }
 #[tauri::command]
 fn list_mcp_servers(
@@ -2262,8 +2409,81 @@ fn expose_set_port(
 #[tauri::command]
 async fn expose_probe(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
     main_only(&window)?;
-    run_school_query(&app, school::Query::Terms, None).await?;
+    run_school_query(&app, school::Query::Terms, None, false).await?;
     Ok(())
+}
+
+/// Measuring, copying and removing files can take seconds on a large library,
+/// so every storage command runs off the UI thread.
+async fn run_storage<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|_| "存储任务失败".to_string())?
+}
+
+#[tauri::command]
+async fn storage_status(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<storage::Status, String> {
+    main_only(&window)?;
+    run_storage(move || storage::status(&app)).await
+}
+
+/// Validates a candidate folder and reports exactly what a migration would
+/// move, so the confirmation step can show sizes before anything is touched.
+#[tauri::command]
+async fn storage_preview(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    target: String,
+) -> Result<storage::Preview, String> {
+    main_only(&window)?;
+    run_storage(move || storage::preview(&app, &target)).await
+}
+
+#[tauri::command]
+async fn storage_migrate(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    target: String,
+) -> Result<storage::Report, String> {
+    main_only(&window)?;
+    let _guard = state.storage_lock.lock().await;
+    run_storage(move || storage::migrate(&app, &target)).await
+}
+
+#[tauri::command]
+fn storage_reveal(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    app.opener()
+        .open_path(storage::file_root(&app)?.to_string_lossy(), None::<&str>)
+        .map_err(|_| "无法打开文件文件夹".into())
+}
+
+/// Turns a chosen path into the `~/...` form the interface shows, so a user
+/// name never appears on screen.
+#[tauri::command]
+fn storage_display_path(app: tauri::AppHandle, path: String) -> String {
+    storage::display_for(&app, &path)
+}
+
+/// Default location for a save dialog. The backend owns the folder so a page
+/// cannot invent a path outside the data folder.
+#[tauri::command]
+fn storage_download_path(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    name: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    Ok(storage::download_target(&app, &name)?
+        .to_string_lossy()
+        .into_owned())
 }
 
 pub fn run() {
@@ -2274,6 +2494,10 @@ pub fn run() {
         .manage(expose::State::default())
         .setup(|app| {
             vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
+            // Moves the agent data and MCP config older builds wrote to
+            // ~/.xjtu-launcher into the single data folder; the credentials
+            // file next to them stays where the convention says it lives.
+            let _ = storage::adopt_legacy(app.handle());
             campus_browser::install_menu(app.handle())?;
             pet_desktop::initialize(app.handle())?;
             // Resume the endpoint only if the user left it on; a bind failure is
@@ -2326,6 +2550,13 @@ pub fn run() {
             pet_desktop::pet_preview,
             lms_open_file,
             lms_save_file,
+            library_list,
+            library_import,
+            library_update,
+            library_delete,
+            library_open,
+            library_reveal,
+            library_export,
             school_prepare_evaluations,
             school_submit_evaluations,
             school_cancel_evaluations,
@@ -2400,7 +2631,13 @@ pub fn run() {
             refresh_library_session,
             refresh_venue_session,
             check_network,
-            open_external
+            open_external,
+            storage_status,
+            storage_preview,
+            storage_migrate,
+            storage_reveal,
+            storage_display_path,
+            storage_download_path
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 XJTU Launcher");

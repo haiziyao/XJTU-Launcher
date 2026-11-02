@@ -9,9 +9,12 @@
 //! corrupt entry is treated as a miss.
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::fs;
-use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
+use tauri::AppHandle;
 
 /// A campus payload is small; anything larger is not worth reading back.
 const MAX_ENTRY: usize = 8 * 1024 * 1024;
@@ -35,11 +38,7 @@ pub fn active_scope(app: &AppHandle) -> String {
 }
 
 fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位缓存目录")?
-        .join("cache"))
+    crate::storage::path(app, "cache")
 }
 
 /// The account id is hashed so a directory name cannot be read as an identity.
@@ -63,6 +62,23 @@ fn read_at(base: &Path, scope: &str, key: &str) -> Option<Value> {
 
 pub fn read(app: &AppHandle, key: &str) -> Option<Value> {
     read_at(&cache_dir(app).ok()?, &active_scope(app), key)
+}
+
+fn read_fresh_at(base: &Path, scope: &str, key: &str, max_age: Duration) -> Option<Value> {
+    check_key(key).ok()?;
+    let path = entry_path_in(base, scope, key);
+    let modified = fs::metadata(&path).ok()?.modified().ok()?;
+    let age = std::time::SystemTime::now().duration_since(modified).ok()?;
+    if age > max_age {
+        return None;
+    }
+    read_at(base, scope, key)
+}
+
+/// A stored answer no older than `max_age`. The write time comes from the file
+/// itself, so the page cannot claim an entry is fresher than it is.
+pub fn read_fresh(app: &AppHandle, scope: &str, key: &str, max_age: Duration) -> Option<Value> {
+    read_fresh_at(&cache_dir(app).ok()?, scope, key, max_age)
 }
 
 fn write_at(base: &Path, scope: &str, key: &str, value: &Value) {
@@ -160,6 +176,29 @@ mod tests {
         purge_at(&base, "account-a");
         assert_eq!(read_at(&base, "account-a", "grades"), None);
         assert_eq!(read_at(&base, "account-b", "grades"), Some(value));
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn fresh_entries_respect_their_age_limit() {
+        let base = std::env::temp_dir().join(format!(
+            "xjtu-cache-fresh-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let value = serde_json::json!({ "name": "one" });
+        write_at(&base, "account-a", "grades", &value);
+        assert_eq!(
+            read_fresh_at(&base, "account-a", "grades", Duration::from_secs(3600)),
+            Some(value.clone())
+        );
+        assert_eq!(
+            read_fresh_at(&base, "account-a", "exams", Duration::from_secs(3600)),
+            None
+        );
         let _ = fs::remove_dir_all(&base);
     }
 
