@@ -18,6 +18,7 @@ export interface RailItem {
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useSlidingIndicator } from '../../useSlidingIndicator';
+import EntryIcon from '../ui/EntryIcon.vue';
 
 /**
  * Section navigation for the 畅行校园 workspace (LAYOUT §3.1, §4.2). Disabled
@@ -85,7 +86,13 @@ function hint(item: RailItem) {
         :aria-current="modelValue === item.id ? 'page' : undefined"
         @click="pick(item)"
       >
-        <component :is="item.icon" v-if="item.icon" :size="17" aria-hidden="true" />
+        <EntryIcon
+          v-if="item.icon"
+          :name="`campus.${item.id}`"
+          :icon="item.icon"
+          :size="17"
+          aria-hidden="true"
+        />
         <span v-if="!collapsed" class="rail-title">{{ item.title }}</span>
         <span v-if="item.badge && !collapsed" class="rail-badge">{{ item.badge }}</span>
       </button>

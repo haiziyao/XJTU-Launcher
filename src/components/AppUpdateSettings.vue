@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { Download } from 'lucide-vue-next';
+import { IconDownload } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
 import { initializeUpdates, updateStatus } from '../updates';
 import { renderMarkdown } from '../markdown';
@@ -96,7 +96,7 @@ async function restart() {
         :description="updateStatus ? `当前版本 ${updateStatus.currentVersion}` : '正在读取版本…'"
       >
         <template #leading
-          ><IconTile :size="42"><Download :size="24" /></IconTile
+          ><IconTile :size="42"><IconDownload :size="24" /></IconTile
         ></template>
         <UiButton
           size="sm"

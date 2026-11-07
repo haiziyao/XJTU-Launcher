@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
-import { ArrowRight, FolderOpen, HardDriveUpload } from 'lucide-vue-next';
+import { IconArrowRight, IconFolderOpen, IconUpload } from '@tabler/icons-vue';
 import { fileSize } from '../domain';
 import type { StoragePreview, StorageReport, StorageStatus } from '../types';
 import { bridge } from '../bridge';
@@ -98,7 +98,7 @@ async function reveal() {
     footnote="设置、缓存、插件与账号密码都在 ~/.xjtu-launcher；这里只放你自己的文件。"
   >
     <div class="storage-folder">
-      <HardDriveUpload :size="16" aria-hidden="true" />
+      <IconUpload :size="16" aria-hidden="true" />
       <div class="storage-folder-copy">
         <code class="storage-path" :title="folder">{{ folder || '读取中…' }}</code>
         <small>
@@ -107,7 +107,7 @@ async function reveal() {
       </div>
       <div class="row-actions">
         <UiButton size="sm" variant="ghost" :disabled="!status" @click="reveal">
-          <FolderOpen :size="14" />打开
+          <IconFolderOpen :size="14" />打开
         </UiButton>
         <UiButton size="sm" :disabled="busy || !status" @click="chooseFolder">更改位置…</UiButton>
       </div>
@@ -157,7 +157,7 @@ async function reveal() {
           <template v-else-if="step === 'confirm'">
             <div class="storage-move">
               <code class="storage-path">{{ preview?.from || '读取中…' }}</code>
-              <ArrowRight :size="14" aria-hidden="true" />
+              <IconArrowRight :size="14" aria-hidden="true" />
               <!-- Shown as `~/...` by the backend, never as a user's own name.
                    The raw dialog path stays hidden until the preview returns. -->
               <code class="storage-path">{{ preview?.to || '读取中…' }}</code>

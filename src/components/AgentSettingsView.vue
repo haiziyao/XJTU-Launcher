@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Bot, PanelLeft } from 'lucide-vue-next';
+import { IconRobot, IconLayoutSidebar } from '@tabler/icons-vue';
 import type { AppConfig } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import PageTabs from './ui/PageTabs.vue';
@@ -35,7 +35,7 @@ function toggleAgentSidebar() {
   <section class="desktop-page">
     <PageHeader title="Agent 设置">
       <template #actions>
-        <UiButton size="sm" @click="emit('agent')"><Bot :size="14" />打开 Agent</UiButton>
+        <UiButton size="sm" @click="emit('agent')"><IconRobot :size="14" />打开 Agent</UiButton>
       </template>
     </PageHeader>
     <PageTabs v-model="tab" :tabs="tabs" label="Agent 设置分类" />
@@ -44,7 +44,7 @@ function toggleAgentSidebar() {
       <SettingGroup title="侧边栏">
         <SettingRow title="在侧边栏显示 Agent">
           <template #leading>
-            <IconTile tone="blue" :size="30"><PanelLeft :size="16" /></IconTile>
+            <IconTile tone="blue" :size="30"><IconLayoutSidebar :size="16" /></IconTile>
           </template>
           <UiSwitch
             :checked="config.agentSidebarVisible"

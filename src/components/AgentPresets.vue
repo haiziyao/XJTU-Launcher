@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { LoaderCircle, Plus, Trash2 } from 'lucide-vue-next';
+import { IconLoader2, IconPlus, IconTrash } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
 import type {
   AgentPresetInput,
@@ -226,7 +226,7 @@ onMounted(() => void load());
     <EmptyState
       v-if="loading && !list.length"
       compact
-      :icon="LoaderCircle"
+      :icon="IconLoader2"
       busy
       title="正在读取…"
     />
@@ -241,7 +241,7 @@ onMounted(() => void load());
     </SettingRow>
     <SettingRow clickable :title="copy.add" :disabled="busy" @select="openNew">
       <template #leading
-        ><IconTile :size="30"><Plus :size="16" /></IconTile
+        ><IconTile :size="30"><IconPlus :size="16" /></IconTile
       ></template>
     </SettingRow>
   </SettingGroup>
@@ -319,7 +319,7 @@ onMounted(() => void load());
     <template #footer>
       <template v-if="viewed">
         <UiButton variant="ghost" size="sm" danger :disabled="busy" @click="remove(viewed)">
-          <Trash2 :size="13" />删除
+          <IconTrash :size="13" />删除
         </UiButton>
         <UiButton variant="primary" size="sm" :disabled="busy" @click="openEdit(viewed)"
           >编辑</UiButton

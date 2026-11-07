@@ -137,7 +137,10 @@ fn import(root: &Path, source: &Path, lock: &Mutex<()>) -> Result<(Entry, bool),
         return Err("资料库只能添加文件，不能添加文件夹".into());
     }
     if metadata.len() > MAX_FILE {
-        return Err(format!("单个文件不能超过 {} GB", MAX_FILE / 1024 / 1024 / 1024));
+        return Err(format!(
+            "单个文件不能超过 {} GB",
+            MAX_FILE / 1024 / 1024 / 1024
+        ));
     }
     let name = display_name(source)?;
     let extension = extension(source);
@@ -350,9 +353,7 @@ fn validate_index(index: &Index) -> Result<(), String> {
             || entry.note.chars().count() > MAX_NOTE
             || entry.tags.len() > MAX_TAGS
             || entry.tags.iter().any(|tag| {
-                tag.is_empty()
-                    || tag.chars().count() > MAX_TAG
-                    || tag.chars().any(char::is_control)
+                tag.is_empty() || tag.chars().count() > MAX_TAG || tag.chars().any(char::is_control)
             })
         {
             return Err("资料库索引损坏".into());
@@ -401,10 +402,7 @@ fn valid_stored_name(name: &str) -> bool {
         && !extension.contains('\\')
         && extension.len() <= 12
         && extension.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        && Path::new(name)
-            .file_name()
-            .and_then(|value| value.to_str())
-            == Some(name)
+        && Path::new(name).file_name().and_then(|value| value.to_str()) == Some(name)
 }
 
 fn display_name(path: &Path) -> Result<String, String> {

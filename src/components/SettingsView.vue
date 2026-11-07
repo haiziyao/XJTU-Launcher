@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import {
-  Cat,
-  Check,
-  Download,
-  HardDrive,
-  Home,
-  Package,
-  Pipette,
-  SlidersHorizontal,
-} from 'lucide-vue-next';
+  IconCat,
+  IconCheck,
+  IconDownload,
+  IconServer,
+  IconHome,
+  IconPackage,
+  IconColorPicker,
+  IconAdjustmentsHorizontal,
+} from '@tabler/icons-vue';
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
 import {
@@ -80,12 +80,12 @@ function setAccent(value: string) {
   if (next !== accent.value) emit('update', { ...props.config, accent: next });
 }
 const sections = [
-  { id: 'appearance', title: '外观与交互', icon: SlidersHorizontal },
-  { id: 'home', title: '主页', icon: Home },
-  { id: 'pet', title: '桌面宠物', icon: Cat },
-  { id: 'plugins', title: '插件服务', icon: Package },
-  { id: 'updates', title: '软件更新', icon: Download },
-  { id: 'storage', title: '存储', icon: HardDrive },
+  { id: 'appearance', title: '外观与交互', icon: IconAdjustmentsHorizontal },
+  { id: 'home', title: '主页', icon: IconHome },
+  { id: 'pet', title: '桌面宠物', icon: IconCat },
+  { id: 'plugins', title: '插件服务', icon: IconPackage },
+  { id: 'updates', title: '软件更新', icon: IconDownload },
+  { id: 'storage', title: '存储', icon: IconServer },
 ] as const;
 
 const DESKTOP_PETS = [
@@ -158,7 +158,7 @@ function previewPet() {
                     :disabled="saving"
                     @click="setAccent(preset.value)"
                   >
-                    <Check v-if="accent === preset.value" :size="12" aria-hidden="true" />
+                    <IconCheck v-if="accent === preset.value" :size="12" aria-hidden="true" />
                   </button>
                   <label
                     class="accent-swatch custom"
@@ -173,8 +173,8 @@ function previewPet() {
                       aria-label="自定义主题色"
                       @change="setAccent(($event.target as HTMLInputElement).value)"
                     />
-                    <Check v-if="customAccent" :size="12" aria-hidden="true" />
-                    <Pipette v-else :size="12" aria-hidden="true" />
+                    <IconCheck v-if="customAccent" :size="12" aria-hidden="true" />
+                    <IconColorPicker v-else :size="12" aria-hidden="true" />
                   </label>
                 </div>
               </SettingRow>

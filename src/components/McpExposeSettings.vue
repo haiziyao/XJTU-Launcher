@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Copy, Plug, RefreshCw } from 'lucide-vue-next';
+import { IconCopy, IconPlugConnected, IconRefresh } from '@tabler/icons-vue';
 import type { AppConfig, ExposeAccess, ExposeStatus, ExposeTool } from '../types';
 import { bridge } from '../bridge';
 import SettingGroup from './ui/SettingGroup.vue';
@@ -187,7 +187,7 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer));
   <SettingGroup :title="mode === 'details' ? title : undefined">
     <SettingRow title="MCP 模式">
       <template #leading>
-        <IconTile tone="blue" :size="30"><Plug :size="16" /></IconTile>
+        <IconTile tone="blue" :size="30"><IconPlugConnected :size="16" /></IconTile>
       </template>
       <UiSwitch
         :checked="config.mcpServerEnabled"
@@ -201,7 +201,7 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer));
       <div v-if="ready && !status.running" class="connect-error">
         <span>{{ status.error || serverError || 'MCP 服务未启动' }}</span>
         <UiButton variant="ghost" size="sm" :disabled="busy" @click="retryStart">
-          <RefreshCw :size="13" />重试
+          <IconRefresh :size="13" />重试
         </UiButton>
       </div>
       <div v-else-if="ready" class="connect-detail">
@@ -222,14 +222,14 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer));
           <span class="connect-label">地址</span>
           <code>{{ status.address }}</code>
           <UiButton variant="ghost" size="sm" @click="copy(status.address, 'address')">
-            <Copy :size="13" />{{ copied === 'address' ? '已复制' : '复制' }}
+            <IconCopy :size="13" />{{ copied === 'address' ? '已复制' : '复制' }}
           </UiButton>
         </div>
         <div class="connect-line">
           <span class="connect-label">命令</span>
           <code>{{ command }}</code>
           <UiButton variant="ghost" size="sm" @click="copy(command, 'command')">
-            <Copy :size="13" />{{ copied === 'command' ? '已复制' : '复制' }}
+            <IconCopy :size="13" />{{ copied === 'command' ? '已复制' : '复制' }}
           </UiButton>
         </div>
         <p class="connect-tools">共 {{ tools.length }} 个工具</p>

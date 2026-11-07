@@ -4,6 +4,7 @@ mod campus;
 mod campus_browser;
 mod config;
 mod expose;
+mod icons;
 mod library;
 mod market;
 mod mcp;
@@ -1446,6 +1447,17 @@ fn school_catalog(window: WebviewWindow) -> Result<Vec<school::Feature>, String>
     Ok(school::catalog())
 }
 
+/// Entry icons the user dropped into `~/.xjtu-launcher/resources/icons`.
+/// Read-only and best effort: a broken file returns an empty set, never an
+/// error that would keep the sidebar from drawing its built-in glyphs.
+#[tauri::command]
+fn entry_icons(window: WebviewWindow, app: tauri::AppHandle) -> icons::IconSet {
+    if main_only(&window).is_err() {
+        return icons::IconSet::default();
+    }
+    icons::load(&app).unwrap_or_default()
+}
+
 fn require_school_feature(app: &tauri::AppHandle, feature: &str) -> Result<(), String> {
     if config::load(&config_path(app)?)?
         .disabled_plugins
@@ -2562,6 +2574,7 @@ pub fn run() {
             updates::install_app_update,
             updates::restart_after_update,
             school_catalog,
+            entry_icons,
             school_query,
             campus_notices,
             cache::cache_read,

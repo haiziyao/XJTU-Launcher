@@ -28,6 +28,7 @@
 | [开发指南](DEVELOPMENT.md)                     | 目录、启动、验证、当前可用与未完成项     |
 | [按钮与通用控件](UI_COMPONENTS.md)             | `UiButton` / `UiIconButton` 的变体与用法 |
 | [插件格式](PLUGINS.md)                         | 声明式插件、安装和管理                   |
+| [自定义入口图标](ICONS.md)                     | 用户自备图标目录、`icons.json` 映射规则  |
 | [插件市场与更新](PLUGIN_MARKET_AND_UPDATES.md) | 已获准方案、实现及部署边界               |
 | [插件服务](../tools/plugin-server/README.md)   | 本地服务、目录契约和真实 HTTP 联调       |
 

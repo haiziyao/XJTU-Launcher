@@ -34,6 +34,7 @@ import type {
   CampusNoticeBoard,
   NetworkCheck,
   PetState,
+  Plugin,
   PluginList,
   Timetable,
 } from './types';
@@ -53,8 +54,10 @@ import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
 import { applyCached } from './cache';
+import { loadEntryIcons } from './icons';
 import CampusView from './components/CampusView.vue';
 import EmptyState from './components/ui/EmptyState.vue';
+import EntryIcon from './components/ui/EntryIcon.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
 import UiIconButton from './components/ui/UiIconButton.vue';
@@ -102,6 +105,8 @@ function openSettings(
 ) {
   settingsSection.value = section;
   route.value = 'settings';
+  // The icon file is hand-edited; picking it up here means no restart.
+  if (native) void loadEntryIcons();
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
@@ -153,6 +158,21 @@ const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
 );
 const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
+/** Built-in glyph per page type; a plugin cannot ship its own icon file. */
+function pluginGlyph(plugin: Plugin) {
+  switch (plugin.page.type) {
+    case 'timetable':
+      return CalendarDays;
+    case 'campus':
+      return Route;
+    case 'homeTheme':
+      return Palette;
+    case 'agentSettings':
+      return Settings2;
+    default:
+      return Compass;
+  }
+}
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 // The campus workspace holds per-account data (including the local 资料库).
 // Remount it when the active account changes so a switch never leaves the
@@ -442,6 +462,7 @@ async function primeTimetable() {
 }
 onMounted(async () => {
   if (!native) return;
+  void loadEntryIcons();
   window.addEventListener('keydown', onKey);
   timer = setInterval(() => {
     now.value = new Date();
@@ -581,7 +602,9 @@ onBeforeUnmount(() => {
             :aria-current="route === item.id ? 'page' : undefined"
             @click="route = item.id"
           >
-            <component :is="item.icon" :size="20" /><span>{{ item.title }}</span>
+            <EntryIcon :name="`nav.${item.id}`" :icon="item.icon" :size="20" /><span>{{
+              item.title
+            }}</span>
           </button>
         </div>
         <div v-if="sidebarPlugins.length" class="nav-section">
@@ -597,13 +620,11 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
-              v-else-if="plugin.page.type === 'campus'"
+            <EntryIcon
+              :name="`plugin.${plugin.id}`"
+              :icon="pluginGlyph(plugin)"
               :size="20"
-            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Settings2
-              v-else-if="plugin.page.type === 'agentSettings'"
-              :size="20"
-            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
+            /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -627,7 +648,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'market' ? 'page' : undefined"
             @click="route = 'market'"
           >
-            <LayoutGrid :size="20" /><span>插件市场</span>
+            <EntryIcon name="nav.market" :icon="LayoutGrid" :size="20" /><span>插件市场</span>
           </button>
           <button
             class="desktop-nav-item"
@@ -638,7 +659,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'settings' ? 'page' : undefined"
             @click="openSettings()"
           >
-            <Settings :size="20" /><span>应用设置</span>
+            <EntryIcon name="nav.settings" :icon="Settings" :size="20" /><span>应用设置</span>
           </button>
         </div>
       </nav>

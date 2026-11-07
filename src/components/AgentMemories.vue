@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { Brain, LoaderCircle, Plus, Trash2 } from 'lucide-vue-next';
+import { IconBrain, IconLoader2, IconPlus, IconTrash } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
 import type { AgentMemory } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
@@ -100,11 +100,11 @@ onMounted(() => void load());
     <EmptyState
       v-if="loading && !entries.length"
       compact
-      :icon="LoaderCircle"
+      :icon="IconLoader2"
       busy
       title="正在读取记忆…"
     />
-    <EmptyState v-else-if="!entries.length" compact :icon="Brain" title="还没有长期记忆" />
+    <EmptyState v-else-if="!entries.length" compact :icon="IconBrain" title="还没有长期记忆" />
     <SettingRow
       v-for="entry in entries"
       :key="entry.id"
@@ -115,7 +115,7 @@ onMounted(() => void load());
     />
     <SettingRow clickable title="新增记忆" :disabled="busy" @select="openNew">
       <template #leading
-        ><IconTile :size="30"><Plus :size="16" /></IconTile
+        ><IconTile :size="30"><IconPlus :size="16" /></IconTile
       ></template>
     </SettingRow>
   </SettingGroup>
@@ -141,7 +141,7 @@ onMounted(() => void load());
         :disabled="busy"
         @click="removeCurrent"
       >
-        <Trash2 :size="13" />删除
+        <IconTrash :size="13" />删除
       </UiButton>
       <UiButton variant="primary" size="sm" :disabled="!saveable" @click="save">
         {{ busy ? '保存中…' : '保存' }}

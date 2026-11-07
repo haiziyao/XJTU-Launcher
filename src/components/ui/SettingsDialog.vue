@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue';
-import { X } from 'lucide-vue-next';
+import { IconX } from '@tabler/icons-vue';
 import UiIconButton from './UiIconButton.vue';
 
 /**
@@ -36,7 +36,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       >
         <header class="dialog-head">
           <h2>{{ title }}</h2>
-          <UiIconButton label="关闭" @click="emit('close')"><X :size="16" /></UiIconButton>
+          <UiIconButton label="关闭" @click="emit('close')"><IconX :size="16" /></UiIconButton>
         </header>
         <div class="dialog-body"><slot /></div>
         <footer v-if="$slots.footer" class="dialog-foot"><slot name="footer" /></footer>

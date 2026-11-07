@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import {
-  Plus,
-  Pencil,
-  Trash2,
-  Check,
-  Play,
-  PlugZap,
-  Server,
-  Eye,
-  EyeOff,
-  LoaderCircle,
-  RefreshCw,
-} from 'lucide-vue-next';
+  IconPlus,
+  IconPencil,
+  IconTrash,
+  IconCheck,
+  IconPlayerPlay,
+  IconPlugConnected,
+  IconServer,
+  IconEye,
+  IconEyeOff,
+  IconLoader2,
+  IconRefresh,
+} from '@tabler/icons-vue';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { bridge } from '../bridge';
 import type { ModelProtocol, ModelProvider, ModelProviders, ProviderInput } from '../types';
@@ -225,26 +225,26 @@ onBeforeUnmount(() => {
       <SettingGroup v-if="!editing" key="list" title="模型厂商">
         <template #actions>
           <UiButton size="sm" :disabled="busy || loading" @click="edit()">
-            <Plus :size="14" />添加厂商
+            <IconPlus :size="14" />添加厂商
           </UiButton>
         </template>
-        <EmptyState v-if="loading" compact :icon="LoaderCircle" busy title="正在读取配置…" />
+        <EmptyState v-if="loading" compact :icon="IconLoader2" busy title="正在读取配置…" />
         <EmptyState
           v-else-if="!book.providers.length"
           compact
-          :icon="Server"
+          :icon="IconServer"
           title="尚未配置模型服务"
           description="添加 OpenAI 兼容、Anthropic 或 Gemini 接口"
         >
           <UiButton variant="primary" size="sm" :disabled="busy" @click="edit()">
-            <Plus :size="14" />添加厂商
+            <IconPlus :size="14" />添加厂商
           </UiButton>
         </EmptyState>
         <TransitionGroup v-else name="list">
           <SettingRow v-for="provider in book.providers" :key="provider.id">
             <template #leading>
               <IconTile :tone="provider.id === book.defaultId ? 'blue' : 'gray'" :size="32">
-                <Server :size="16" />
+                <IconServer :size="16" />
               </IconTile>
             </template>
             <template #title>
@@ -265,8 +265,8 @@ onBeforeUnmount(() => {
               :aria-pressed="provider.id === book.defaultId"
               @click="select(provider)"
             >
-              <Check v-if="provider.id === book.defaultId" :size="14" />
-              <Play v-else :size="14" />
+              <IconCheck v-if="provider.id === book.defaultId" :size="14" />
+              <IconPlayerPlay v-else :size="14" />
             </UiIconButton>
             <UiIconButton
               :label="`测试${provider.name}连通性`"
@@ -275,8 +275,8 @@ onBeforeUnmount(() => {
               :disabled="busy || testing === provider.id"
               @click="test(provider)"
             >
-              <LoaderCircle v-if="testing === provider.id" :size="14" class="spinning" />
-              <PlugZap v-else :size="14" />
+              <IconLoader2 v-if="testing === provider.id" :size="14" class="spinning" />
+              <IconPlugConnected v-else :size="14" />
             </UiIconButton>
             <UiIconButton
               :label="'编辑' + provider.name"
@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
               :disabled="busy"
               @click="edit(provider)"
             >
-              <Pencil :size="14" />
+              <IconPencil :size="14" />
             </UiIconButton>
             <UiIconButton
               :label="'移除' + provider.name"
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
               :disabled="busy"
               @click="remove(provider)"
             >
-              <Trash2 :size="14" />
+              <IconTrash :size="14" />
             </UiIconButton>
           </SettingRow>
         </TransitionGroup>
@@ -344,8 +344,8 @@ onBeforeUnmount(() => {
                 }}
               </template>
               <UiButton size="sm" type="button" :disabled="fetching || busy" @click="fetchModels">
-                <LoaderCircle v-if="fetching" :size="14" class="spinning" />
-                <RefreshCw v-else :size="14" />
+                <IconLoader2 v-if="fetching" :size="14" class="spinning" />
+                <IconRefresh v-else :size="14" />
                 获取模型列表
               </UiButton>
             </SettingRow>
@@ -377,7 +377,7 @@ onBeforeUnmount(() => {
                   type="button"
                   @click="toggleKey"
                 >
-                  <EyeOff v-if="showKey" :size="14" /><Eye v-else :size="14" />
+                  <IconEyeOff v-if="showKey" :size="14" /><IconEye v-else :size="14" />
                 </UiIconButton>
               </div>
             </SettingRow>

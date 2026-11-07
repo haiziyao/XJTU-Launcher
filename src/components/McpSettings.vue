@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { LoaderCircle, Plus, Plug } from 'lucide-vue-next';
+import { IconLoader2, IconPlus, IconPlugConnected } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
 import type { McpServer, McpTool, McpTransport } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
@@ -193,7 +193,7 @@ onMounted(() => void load());
     <EmptyState
       v-if="loading && !servers.length"
       compact
-      :icon="LoaderCircle"
+      :icon="IconLoader2"
       busy
       title="正在读取 MCP 配置…"
     />
@@ -206,13 +206,13 @@ onMounted(() => void load());
       @select="openView(server)"
     >
       <template #leading
-        ><IconTile :size="30"><Plug :size="16" /></IconTile
+        ><IconTile :size="30"><IconPlugConnected :size="16" /></IconTile
       ></template>
       <span v-if="!server.enabled" class="badge">已停用</span>
     </SettingRow>
     <SettingRow clickable title="新增 MCP 服务" :disabled="!!busy" @select="openAdd">
       <template #leading
-        ><IconTile :size="30"><Plus :size="16" /></IconTile
+        ><IconTile :size="30"><IconPlus :size="16" /></IconTile
       ></template>
     </SettingRow>
   </SettingGroup>
@@ -289,7 +289,7 @@ onMounted(() => void load());
             type="button"
             @click="draft.vars.push({ key: '', value: '' })"
           >
-            <Plus :size="13" />添加
+            <IconPlus :size="13" />添加
           </UiButton>
         </div>
         <div v-for="(entry, index) in draft.vars" :key="index" class="mcp-var">

@@ -25,6 +25,8 @@
     "vue": "^3.5.44"
   },
   "devDependencies": {
+    "@phosphor-icons/vue": "^2.2.1",
+    "@tabler/icons-vue": "^3.50.0",
     "@tauri-apps/cli": "^2.10.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "jsdom": "^30.1.3",
