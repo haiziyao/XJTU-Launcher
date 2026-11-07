@@ -46,7 +46,7 @@
 
 `CampusRail`、`SectionHeader`、`SplitView`、`ListItem`、`StatTile`/`StatRow`、`StatusBadge`、`DueLabel`、`FilterBar`、`DataTable`、`FileRow`、`DropZone`、`FilePreviewDialog`、`WritePreviewPanel`、`ReaderView`、`SlotMatrix`、`SeatMap`、`Skeleton`、`InlineAlert`、`MoreMenu`、`MiniBars`/`Sparkline`。
 
-配套完成：`src/style.css` 三个 token；`src/domain.ts` 校园时间 / 截止 / 更新 / 金额 / 文件大小 / 成绩 / 待办分组 / 考场与节次 / 考勤统计 / 校园卡统计 / 日期键等纯函数及 56 条单测；`src/components/dev/KitGallery.vue` 画廊（示例数据，`import.meta.env.DEV` 时出现在侧栏「组件」，生产构建不导入）；[UI_COMPONENTS.md](UI_COMPONENTS.md) 已登记全部组件、token 与接线注意。
+配套完成：`src/style.css` 三个 token；`src/domain.ts` 校园时间 / 截止 / 更新 / 金额 / 文件大小 / 成绩 / 待办分组 / 考场与节次 / 考勤统计 / 校园卡统计 / 日期键等纯函数及 56 条单测；[UI_COMPONENTS.md](UI_COMPONENTS.md) 已登记全部组件、token 与接线注意。组件画廊（`KitGallery.vue`，侧栏「组件」入口）已在 2026-11-08 验收后移除，之后构建的就是真实发布的界面。
 
 ## 已确认的技术细节（避免重查）
 

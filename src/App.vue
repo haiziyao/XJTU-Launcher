@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   AlertCircle,
   ArrowLeft,
@@ -104,10 +104,6 @@ function openCapture(target: CaptureTarget) {
 const navigation = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
 const navIndicator = useSlidingIndicator(navigation, () => route.value);
-// 组件画廊只在开发构建里存在；生产包不会导入它，也不显示入口。
-const KitGallery = import.meta.env.DEV
-  ? defineAsyncComponent(() => import('./components/dev/KitGallery.vue'))
-  : null;
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -188,7 +184,6 @@ const primaryNav = computed(() => [
     ? [{ id: campusPlugin.value.id, title: '畅行校园', icon: MapPinned }]
     : []),
   { id: 'workbench', title: '工作台', icon: Briefcase },
-  ...(KitGallery ? [{ id: 'kit', title: '组件', icon: LayoutGrid }] : []),
 ]);
 // Agent is hidden by default; the switch lives in Agent settings.
 const visiblePrimaryNav = computed(() =>
@@ -264,7 +259,6 @@ watch(enabledPlugins, () => {
       'community',
       'agent',
       'workbench',
-      'kit',
     ].includes(route.value) &&
     !activePlugin.value
   )
@@ -931,7 +925,6 @@ onBeforeUnmount(() => {
                 :links="activePlugin.page.links"
                 @open="openLink"
               />
-              <component v-else-if="KitGallery && route === 'kit'" :is="KitGallery" />
             </div>
           </Transition>
         </div>
