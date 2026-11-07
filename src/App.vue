@@ -87,6 +87,11 @@ const KitGallery = import.meta.env.DEV
   ? defineAsyncComponent(() => import('./components/dev/KitGallery.vue'))
   : null;
 if (KitGallery) primaryNav.push({ id: 'kit', title: '组件', icon: LayoutGrid });
+// Agent is hidden by default; the switch lives in Agent settings. The getter is
+// lazy, so referencing `config` declared below is safe.
+const visiblePrimaryNav = computed(() =>
+  primaryNav.filter((item) => item.id !== 'agent' || config.value.agentSidebarVisible),
+);
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -103,6 +108,14 @@ const configLoaded = ref(false);
 const petVariant = computed(() => normalizePet(config.value.pet));
 // Accent tokens live on the document root so teleported dialogs inherit them too.
 watch(() => config.value.accent, applyAccent, { immediate: true });
+// Hiding the entry must not leave the app on a page with no way back.
+watch(
+  () => config.value.agentSidebarVisible,
+  (visible) => {
+    if (!visible && route.value === 'agent') route.value = 'home';
+  },
+  { immediate: true },
+);
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
@@ -558,7 +571,7 @@ onBeforeUnmount(() => {
         ></span>
         <div class="nav-section">
           <button
-            v-for="item in primaryNav"
+            v-for="item in visiblePrimaryNav"
             :key="item.id"
             class="desktop-nav-item"
             :class="{ selected: route === item.id }"
@@ -787,7 +800,10 @@ onBeforeUnmount(() => {
               <AgentSettingsView
                 v-else-if="activePlugin?.page.type === 'agentSettings'"
                 :key="activePlugin.id"
+                :config="config"
+                :saving="saving || !configLoaded"
                 @agent="route = 'agent'"
+                @update="persist"
               />
               <HomeThemeView
                 v-else-if="activePlugin?.page.type === 'homeTheme'"

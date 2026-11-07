@@ -158,8 +158,9 @@ async function reveal() {
             <div class="storage-move">
               <code class="storage-path">{{ preview?.from || '读取中…' }}</code>
               <ArrowRight :size="14" aria-hidden="true" />
-              <!-- Shown as `~/...` by the backend, never as a user's own name. -->
-              <code class="storage-path">{{ preview?.to || target }}</code>
+              <!-- Shown as `~/...` by the backend, never as a user's own name.
+                   The raw dialog path stays hidden until the preview returns. -->
+              <code class="storage-path">{{ preview?.to || '读取中…' }}</code>
             </div>
             <div v-if="busy" class="storage-note">正在检查目标文件夹…</div>
             <template v-else-if="preview">

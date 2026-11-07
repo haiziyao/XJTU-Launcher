@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { LoaderCircle, Plus, Plug, RefreshCw, Server, Wrench } from 'lucide-vue-next';
+import { LoaderCircle, Plus, Plug } from 'lucide-vue-next';
 import { bridge } from '../bridge';
-import type { McpCatalog, McpEntry, McpServer, McpTool, McpTransport } from '../types';
+import type { McpServer, McpTool, McpTransport } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
 import IconTile from './ui/IconTile.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import SettingsDialog from './ui/SettingsDialog.vue';
 
 import UiButton from './ui/UiButton.vue';
-import UiIconButton from './ui/UiIconButton.vue';
-const props = defineProps<{ search: string; section?: 'servers' | 'market' }>();
-const emit = defineEmits<{ settings: [] }>();
 
 interface Draft {
   id: string | null;
@@ -31,45 +29,19 @@ const loading = ref(true);
 const busy = ref('');
 const error = ref('');
 const status = ref('');
-const open = ref('');
-const tools = ref<Record<string, McpTool[]>>({});
+const selected = ref<McpServer | null>(null);
+const probed = ref<McpTool[] | null>(null);
 const draft = ref<Draft | null>(null);
-const catalog = ref<McpCatalog>({ source: null, defaultSource: null, servers: [] });
-const catalogLoading = ref(false);
-const catalogLoaded = ref(false);
-const installing = ref<{ entry: McpEntry; values: Record<string, string> } | null>(null);
-let disposed = false;
 
-const needle = computed(() => props.search.trim().toLowerCase());
-const showServers = computed(() => !props.section || props.section === 'servers');
-const showMarket = computed(() => !props.section || props.section === 'market');
-const filteredServers = computed(() =>
-  servers.value.filter((server) =>
-    (server.name + server.target).toLowerCase().includes(needle.value),
-  ),
-);
-const filteredMarket = computed(() =>
-  catalog.value.servers.filter((entry) =>
-    (entry.name + entry.description).toLowerCase().includes(needle.value),
-  ),
-);
+const dialogOpen = computed(() => selected.value !== null || draft.value !== null);
+const dialogTitle = computed(() => {
+  if (draft.value) return draft.value.id ? '编辑 MCP 服务' : '新增 MCP 服务';
+  return selected.value?.name ?? '';
+});
 
-function describe(transport: McpTransport) {
-  return transport.type === 'stdio'
-    ? [transport.command, ...(transport.args || [])].join(' ')
-    : transport.url;
-}
 function draftFrom(server?: McpServer): Draft {
   if (!server) {
-    return {
-      id: null,
-      name: '',
-      type: 'stdio',
-      command: '',
-      args: '',
-      url: '',
-      vars: [],
-    };
+    return { id: null, name: '', type: 'stdio', command: '', args: '', url: '', vars: [] };
   }
   const transport = server.transport;
   return {
@@ -116,29 +88,35 @@ const valid = computed(() => {
 async function load() {
   loading.value = true;
   try {
-    const next = await bridge.mcpServers();
-    if (!disposed) servers.value = next;
+    servers.value = await bridge.mcpServers();
+    if (selected.value) {
+      selected.value = servers.value.find((item) => item.id === selected.value?.id) ?? null;
+    }
   } catch (e) {
-    if (!disposed) error.value = String(e);
+    error.value = String(e);
   } finally {
     loading.value = false;
   }
 }
-async function refreshCatalog() {
-  if (catalogLoading.value) return;
-  catalogLoading.value = true;
+function openView(server: McpServer) {
   error.value = '';
-  try {
-    const next = await bridge.mcpCatalog();
-    if (!disposed) {
-      catalog.value = next;
-      catalogLoaded.value = true;
-    }
-  } catch (e) {
-    if (!disposed) error.value = String(e);
-  } finally {
-    catalogLoading.value = false;
-  }
+  status.value = '';
+  probed.value = null;
+  selected.value = server;
+  draft.value = null;
+}
+function openAdd() {
+  error.value = '';
+  status.value = '';
+  probed.value = null;
+  selected.value = null;
+  draft.value = draftFrom();
+}
+function close() {
+  selected.value = null;
+  draft.value = null;
+  error.value = '';
+  status.value = '';
 }
 async function toggle(server: McpServer) {
   busy.value = server.id;
@@ -157,11 +135,10 @@ async function probe(server: McpServer) {
   error.value = '';
   status.value = '';
   try {
-    const result = await bridge.probeMcpServer(server.id);
-    tools.value = { ...tools.value, [server.id]: result };
-    status.value = `${server.name} 已连接，${result.length} 个工具`;
+    probed.value = await bridge.probeMcpServer(server.id);
+    status.value = `${probed.value.length} 个工具`;
   } catch (e) {
-    error.value = `${server.name}：${String(e)}`;
+    error.value = String(e);
   } finally {
     busy.value = '';
   }
@@ -180,10 +157,7 @@ async function remove(server: McpServer) {
   error.value = '';
   try {
     await bridge.removeMcpServer(server.id);
-    if (open.value === server.id) open.value = '';
-    const rest = { ...tools.value };
-    delete rest[server.id];
-    tools.value = rest;
+    close();
     await load();
   } catch (e) {
     error.value = String(e);
@@ -195,14 +169,12 @@ async function save() {
   if (!valid.value || !draft.value || busy.value) return;
   busy.value = 'save';
   error.value = '';
-  status.value = '';
   try {
     await bridge.saveMcpServer({
       id: draft.value.id,
       name: draft.value.name.trim(),
       transport: transportOf(draft.value),
     });
-    status.value = draft.value.id ? 'MCP 服务已更新' : 'MCP 服务已添加';
     draft.value = null;
     await load();
   } catch (e) {
@@ -211,115 +183,67 @@ async function save() {
     busy.value = '';
   }
 }
-function startInstall(entry: McpEntry) {
-  const values: Record<string, string> = {};
-  for (const field of entry.fields) values[field.key] = '';
-  if (!entry.fields.length) {
-    void install(entry, values);
-    return;
-  }
-  installing.value = { entry, values };
-}
-async function install(entry: McpEntry, values: Record<string, string>) {
-  busy.value = entry.id;
-  error.value = '';
-  status.value = '';
-  try {
-    await bridge.installMcpEntry(entry.id, values);
-    installing.value = null;
-    status.value = `${entry.name} 已添加到 MCP 服务`;
-    await load();
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    busy.value = '';
-  }
-}
-onMounted(() => {
-  void load();
-  void refreshCatalog();
-});
-onBeforeUnmount(() => {
-  disposed = true;
-});
+onMounted(() => void load());
 </script>
 <template>
-  <div class="mcp-panel">
+  <SettingGroup title="MCP 服务">
     <Transition name="drop">
-      <p v-if="error" class="notice" role="alert">{{ error }}</p>
+      <p v-if="error && !dialogOpen" class="notice" role="alert">{{ error }}</p>
     </Transition>
-    <Transition name="drop">
-      <p v-if="status" class="notice success" role="status">{{ status }}</p>
-    </Transition>
-
-    <SettingGroup
-      v-if="!draft && showServers"
-      title="MCP 服务"
-      footnote="启用的 MCP 服务会作为工具提供给 Agent。凭据保存在本机 mcp.json，不会回显。"
+    <EmptyState
+      v-if="loading && !servers.length"
+      compact
+      :icon="LoaderCircle"
+      busy
+      title="正在读取 MCP 配置…"
+    />
+    <SettingRow
+      v-for="server in servers"
+      :key="server.id"
+      clickable
+      :title="server.name"
+      :disabled="!!busy"
+      @select="openView(server)"
     >
-      <template #actions>
-        <UiButton size="sm" :disabled="!!busy" @click="draft = draftFrom()">
-          <Plus :size="14" />添加 MCP
-        </UiButton>
-      </template>
-      <EmptyState
-        v-if="loading && !servers.length"
-        compact
-        :icon="LoaderCircle"
-        busy
-        title="正在读取 MCP 配置…"
-      />
-      <EmptyState
-        v-else-if="!filteredServers.length"
-        compact
-        :icon="Plug"
-        :title="needle ? '没有匹配的 MCP 服务' : '尚未添加 MCP 服务'"
-        :description="needle ? '' : '可手动添加命令或 HTTP 地址，也可以从下方市场安装。'"
-      />
-      <div v-for="server in filteredServers" :key="server.id" class="mcp-item">
-        <SettingRow
-          :title="server.name"
-          :description="server.kind === 'stdio' ? '本地进程' : '远程 HTTP'"
-        >
-          <template #leading
-            ><IconTile :size="34"><Plug :size="18" /></IconTile
-          ></template>
-          <code class="mcp-target" :title="server.target">{{ server.target }}</code>
-          <span v-if="tools[server.id]" class="badge">{{ tools[server.id].length }} 个工具</span>
-          <UiSwitch
-            :checked="server.enabled"
-            :label="server.name + '启用'"
-            :disabled="!!busy"
-            @toggle="toggle(server)"
-          />
-          <UiIconButton
-            :label="server.name + '操作'"
-            :aria-expanded="open === server.id"
-            @click="open = open === server.id ? '' : server.id"
-          >
-            <Wrench :size="16" />
-          </UiIconButton>
-        </SettingRow>
-        <div v-if="open === server.id" class="mcp-actions">
-          <UiButton size="sm" :disabled="!!busy" @click="probe(server)">测试连接</UiButton>
-          <UiButton size="sm" :disabled="!!busy" @click="draft = draftFrom(server)">
-            编辑
-          </UiButton>
-          <UiButton variant="ghost" size="sm" danger :disabled="!!busy" @click="remove(server)">
-            移除
-          </UiButton>
-        </div>
-        <ul v-if="tools[server.id]?.length" class="mcp-tools">
-          <li v-for="tool in tools[server.id]" :key="tool.name">
-            <strong>{{ tool.name }}</strong>
-            <span>{{ tool.description }}</span>
-          </li>
-        </ul>
-      </div>
-    </SettingGroup>
+      <template #leading
+        ><IconTile :size="30"><Plug :size="16" /></IconTile
+      ></template>
+      <span v-if="!server.enabled" class="badge">已停用</span>
+    </SettingRow>
+    <SettingRow clickable title="新增 MCP 服务" :disabled="!!busy" @select="openAdd">
+      <template #leading
+        ><IconTile :size="30"><Plus :size="16" /></IconTile
+      ></template>
+    </SettingRow>
+  </SettingGroup>
 
-    <form v-else-if="draft && showServers" class="mcp-form" @submit.prevent="save">
-      <h3>{{ draft.id ? '编辑 MCP 服务' : '添加 MCP 服务' }}</h3>
+  <SettingsDialog :open="dialogOpen" :title="dialogTitle" wide @close="close">
+    <template v-if="selected">
+      <div class="mcp-detail">
+        <span>{{ selected.kind === 'stdio' ? '本地进程' : '远程 HTTP' }}</span>
+        <code>{{ selected.target }}</code>
+      </div>
+      <SettingRow title="启用">
+        <UiSwitch
+          :checked="selected.enabled"
+          :label="selected.name + '启用'"
+          :disabled="!!busy"
+          @toggle="toggle(selected)"
+        />
+      </SettingRow>
+      <Transition name="drop">
+        <p v-if="error" class="notice" role="alert">{{ error }}</p>
+      </Transition>
+      <p v-if="status" class="notice success" role="status">{{ status }}</p>
+      <ul v-if="probed?.length" class="mcp-tools">
+        <li v-for="tool in probed" :key="tool.name">
+          <strong>{{ tool.name }}</strong>
+          <span>{{ tool.description }}</span>
+        </li>
+      </ul>
+    </template>
+
+    <form v-else-if="draft" class="mcp-form" @submit.prevent="save">
       <label class="mcp-field"
         ><span>名称</span
         ><input v-model="draft.name" maxlength="40" placeholder="例如：GitHub" required
@@ -383,115 +307,58 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="draft.vars.length" class="mcp-hint">编辑时留空表示保留已保存的值。</p>
       </div>
-      <div class="mcp-form-actions">
-        <UiButton variant="ghost" type="button" :disabled="!!busy" @click="draft = null">
-          取消
-        </UiButton>
-        <UiButton variant="primary" type="submit" :disabled="!valid || !!busy">
-          {{ busy === 'save' ? '保存中…' : '保存' }}
-        </UiButton>
-      </div>
+      <Transition name="drop">
+        <p v-if="error" class="notice" role="alert">{{ error }}</p>
+      </Transition>
     </form>
 
-    <SettingGroup
-      v-if="showMarket"
-      title="MCP 市场"
-      footnote="目录由插件服务端提供；未配置插件服务时只能手动添加。安装前请确认命令与来源可信，本地 MCP 会启动对应进程。"
-    >
-      <template #actions>
-        <UiIconButton
-          label="刷新 MCP 目录"
-          title="刷新 MCP 目录"
-          :disabled="catalogLoading"
-          @click="refreshCatalog"
+    <template #footer>
+      <template v-if="selected">
+        <UiButton variant="ghost" size="sm" danger :disabled="!!busy" @click="remove(selected)"
+          >移除</UiButton
         >
-          <RefreshCw :size="15" :class="{ spin: catalogLoading }" />
-        </UiIconButton>
+        <UiButton size="sm" :disabled="!!busy" @click="probe(selected)">测试连接</UiButton>
+        <UiButton
+          variant="primary"
+          size="sm"
+          :disabled="!!busy"
+          @click="draft = draftFrom(selected)"
+          >编辑</UiButton
+        >
       </template>
-      <EmptyState
-        v-if="catalogLoading && !catalogLoaded"
-        compact
-        :icon="RefreshCw"
-        busy
-        title="正在获取 MCP 目录…"
-      />
-      <EmptyState
-        v-else-if="!catalog.source"
-        compact
-        :icon="Server"
-        title="尚未配置插件服务"
-        description="配置插件服务地址后即可浏览 MCP 市场。"
-      >
-        <UiButton size="sm" @click="emit('settings')">插件服务设置</UiButton>
-      </EmptyState>
-      <EmptyState
-        v-else-if="!filteredMarket.length"
-        compact
-        :icon="Server"
-        :title="needle ? '没有匹配的 MCP' : '目录中暂无 MCP'"
-      />
-      <div v-for="entry in filteredMarket" :key="entry.id" class="mcp-market-item">
-        <SettingRow :title="entry.name" :description="entry.description">
-          <template #leading
-            ><IconTile :size="34"><Server :size="17" /></IconTile
-          ></template>
-          <UiButton size="sm" :disabled="!!busy" @click="startInstall(entry)">
-            {{ busy === entry.id ? '添加中…' : '添加' }}
-          </UiButton>
-        </SettingRow>
-        <form
-          v-if="installing?.entry.id === entry.id"
-          class="mcp-install"
-          @submit.prevent="install(entry, installing.values)"
-        >
-          <code class="mcp-target">{{ describe(entry.transport) }}</code>
-          <label v-for="field in entry.fields" :key="field.key" class="mcp-field">
-            <span>{{ field.label }}</span>
-            <input
-              v-model="installing.values[field.key]"
-              :type="field.secret ? 'password' : 'text'"
-              :placeholder="field.placeholder"
-            />
-          </label>
-          <div class="mcp-form-actions">
-            <UiButton variant="ghost" size="sm" type="button" @click="installing = null"
-              >取消</UiButton
-            >
-            <UiButton variant="primary" size="sm" type="submit" :disabled="!!busy"
-              >确认添加</UiButton
-            >
-          </div>
-        </form>
-      </div>
-    </SettingGroup>
-  </div>
+      <template v-else>
+        <UiButton variant="ghost" size="sm" :disabled="!!busy" @click="close">取消</UiButton>
+        <UiButton variant="primary" size="sm" :disabled="!valid || !!busy" @click="save">
+          {{ busy === 'save' ? '保存中…' : '保存' }}
+        </UiButton>
+      </template>
+    </template>
+  </SettingsDialog>
 </template>
 <style scoped>
-.mcp-target {
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-tertiary);
+.mcp-detail {
+  display: grid;
+  gap: 6px;
   font-size: 12px;
+  color: var(--text-tertiary);
 }
-.mcp-actions {
-  display: flex;
-  gap: 8px;
-  padding: 0 12px 14px 62px;
+.mcp-detail code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12.5px;
 }
 .mcp-tools {
   margin: 0;
-  padding: 0 12px 14px 62px;
+  padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
-}
-.mcp-tools li {
-  display: flex;
-  gap: 10px;
+  gap: 8px;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+.mcp-tools li {
+  display: grid;
+  gap: 2px;
 }
 .mcp-tools strong {
   color: var(--text);
@@ -500,14 +367,6 @@ onBeforeUnmount(() => {
 .mcp-form {
   display: grid;
   gap: 14px;
-  padding: 18px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  margin-bottom: 30px;
-}
-.mcp-form h3 {
-  margin: 0;
-  font-size: 15px;
 }
 .mcp-field {
   display: grid;
@@ -574,15 +433,5 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 12px;
   color: var(--text-tertiary);
-}
-.mcp-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.mcp-install {
-  display: grid;
-  gap: 12px;
-  padding: 0 12px 16px 62px;
 }
 </style>

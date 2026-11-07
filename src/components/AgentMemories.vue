@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { Brain, LoaderCircle, Plus, Trash2 } from 'lucide-vue-next';
 import { bridge } from '../bridge';
 import type { AgentMemory } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
+import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
+import IconTile from './ui/IconTile.vue';
+import SettingsDialog from './ui/SettingsDialog.vue';
 
 import UiButton from './ui/UiButton.vue';
-import UiIconButton from './ui/UiIconButton.vue';
 const entries = ref<AgentMemory[]>([]);
 const loading = ref(true);
 const busy = ref(false);
 const error = ref('');
-const status = ref('');
-const draft = ref('');
-const editing = ref<string | null>(null);
+const now = ref<AgentMemory | 'new' | null>(null);
+const content = ref('');
+
+const open = computed(() => now.value !== null);
+const title = computed(() => (now.value === 'new' ? '新增记忆' : '记忆'));
+const saveable = computed(() => !!content.value.trim() && !busy.value);
 
 async function load() {
   loading.value = true;
@@ -27,26 +32,41 @@ async function load() {
     loading.value = false;
   }
 }
-function edit(entry: AgentMemory) {
-  editing.value = entry.id;
-  draft.value = entry.content;
+function openEntry(entry: AgentMemory) {
+  error.value = '';
+  now.value = entry;
+  content.value = entry.content;
+}
+function openNew() {
+  error.value = '';
+  now.value = 'new';
+  content.value = '';
+}
+function close() {
+  now.value = null;
+  content.value = '';
+  error.value = '';
 }
 async function save() {
-  const content = draft.value.trim();
-  if (!content || busy.value) return;
+  if (!saveable.value || now.value === null) return;
   busy.value = true;
   error.value = '';
   try {
-    await bridge.agentSaveMemory(editing.value, content);
-    status.value = editing.value ? '记忆已更新' : '记忆已保存';
-    draft.value = '';
-    editing.value = null;
+    await bridge.agentSaveMemory(now.value === 'new' ? null : now.value.id, content.value.trim());
+    close();
     await load();
   } catch (e) {
     error.value = String(e);
   } finally {
     busy.value = false;
   }
+}
+function summary(text: string) {
+  return text.length > 44 ? `${text.slice(0, 44)}…` : text;
+}
+function removeCurrent() {
+  const entry = now.value;
+  if (entry && entry !== 'new') void remove(entry);
 }
 async function remove(entry: AgentMemory) {
   if (
@@ -59,12 +79,10 @@ async function remove(entry: AgentMemory) {
   )
     return;
   busy.value = true;
+  error.value = '';
   try {
     await bridge.agentRemoveMemory(entry.id);
-    if (editing.value === entry.id) {
-      editing.value = null;
-      draft.value = '';
-    }
+    close();
     await load();
   } catch (e) {
     error.value = String(e);
@@ -75,99 +93,77 @@ async function remove(entry: AgentMemory) {
 onMounted(() => void load());
 </script>
 <template>
-  <div>
+  <Transition name="drop">
+    <p v-if="error && !open" class="notice" role="alert">{{ error }}</p>
+  </Transition>
+  <SettingGroup title="全局记忆">
+    <EmptyState
+      v-if="loading && !entries.length"
+      compact
+      :icon="LoaderCircle"
+      busy
+      title="正在读取记忆…"
+    />
+    <EmptyState v-else-if="!entries.length" compact :icon="Brain" title="还没有长期记忆" />
+    <SettingRow
+      v-for="entry in entries"
+      :key="entry.id"
+      clickable
+      :title="summary(entry.content)"
+      :disabled="busy"
+      @select="openEntry(entry)"
+    />
+    <SettingRow clickable title="新增记忆" :disabled="busy" @select="openNew">
+      <template #leading
+        ><IconTile :size="30"><Plus :size="16" /></IconTile
+      ></template>
+    </SettingRow>
+  </SettingGroup>
+
+  <SettingsDialog :open="open" :title="title" wide @close="close">
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
     </Transition>
-    <Transition name="drop">
-      <p v-if="status" class="notice success" role="status">{{ status }}</p>
-    </Transition>
-    <SettingGroup
-      title="全局记忆"
-      footnote="记忆会附加到每次对话的系统提示词。Agent 也可以在你明确要求时自行记录；这里可以手动增删改。"
-    >
-      <form class="memory-form" @submit.prevent="save">
-        <textarea
-          v-model="draft"
-          rows="3"
-          maxlength="1000"
-          placeholder="例如：习惯用简洁的中文回答；每周三下午没有课。"
-        ></textarea>
-        <div class="memory-actions">
-          <UiButton
-            variant="ghost"
-            size="sm"
-            v-if="editing"
-            type="button"
-            @click="
-              editing = null;
-              draft = '';
-            "
-          >
-            取消编辑
-          </UiButton>
-          <UiButton variant="primary" size="sm" type="submit" :disabled="!draft.trim() || busy">
-            <Plus :size="13" />{{ editing ? '保存修改' : '添加记忆' }}
-          </UiButton>
-        </div>
-      </form>
-      <EmptyState
-        v-if="loading && !entries.length"
-        compact
-        :icon="LoaderCircle"
-        busy
-        title="正在读取记忆…"
-      />
-      <EmptyState
-        v-else-if="!entries.length"
-        compact
-        :icon="Brain"
-        title="还没有长期记忆"
-        description="告诉 Agent“记住我喜欢简洁回答”，它也能自己写入。"
-      />
-      <div v-for="entry in entries" :key="entry.id" class="memory-row">
-        <span class="memory-text">{{ entry.content }}</span>
-        <UiButton size="sm" :disabled="busy" @click="edit(entry)">编辑</UiButton>
-        <UiIconButton label="删除记忆" :disabled="busy" @click="remove(entry)">
-          <Trash2 :size="15" />
-        </UiIconButton>
-      </div>
-    </SettingGroup>
-  </div>
+    <textarea
+      v-model="content"
+      class="memory-field"
+      rows="6"
+      maxlength="1000"
+      placeholder="例如：习惯用简洁的中文回答；每周三下午没有课。"
+    ></textarea>
+
+    <template #footer>
+      <UiButton
+        v-if="now && now !== 'new'"
+        variant="ghost"
+        size="sm"
+        danger
+        :disabled="busy"
+        @click="removeCurrent"
+      >
+        <Trash2 :size="13" />删除
+      </UiButton>
+      <UiButton variant="primary" size="sm" :disabled="!saveable" @click="save">
+        {{ busy ? '保存中…' : '保存' }}
+      </UiButton>
+    </template>
+  </SettingsDialog>
 </template>
 <style scoped>
-.memory-form {
-  display: grid;
-  gap: 8px;
-  padding: 14px 12px;
-}
-.memory-form textarea {
+.memory-field {
   border: 1px solid var(--control-border);
   border-radius: var(--radius);
   background: var(--control-bg);
   color: var(--text);
   font: inherit;
   font-size: 13px;
+  line-height: 1.6;
   padding: 8px 10px;
   resize: vertical;
 }
-.memory-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.memory-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-}
-.memory-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
+.memory-field:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 </style>

@@ -41,6 +41,9 @@ struct ServerState {
 pub struct Status {
     pub running: bool,
     pub enabled: bool,
+    /// The port actually serving, which can differ from the saved one after a
+    /// fallback to a free port.
+    pub port: u16,
     pub address: String,
     pub error: Option<String>,
 }
@@ -49,8 +52,15 @@ pub struct Status {
 pub struct Tool {
     pub name: String,
     pub description: String,
-    /// Small display group in the page's tool list.
+    /// Short Chinese name the page shows instead of the raw tool name.
+    pub title: String,
+    /// One line saying what the tool does; no argument chatter.
+    pub summary: String,
+    /// Section in the page's tool list.
     pub category: String,
+    /// What the tool does to data: `read`, `write`, `update` or `delete`. The
+    /// page marks each kind so a tool that changes something stands out.
+    pub access: Vec<&'static str>,
 }
 
 pub fn address(port: u16) -> String {
@@ -61,15 +71,13 @@ impl State {
     /// The address reflects the listener that is actually bound, so a port
     /// change is not claimed before the new socket is open.
     pub fn status(&self, enabled: bool, configured_port: u16) -> Status {
-        let port = self
-            .running
-            .lock()
-            .ok()
-            .and_then(|running| running.as_ref().map(|running| running.port));
+        let live = self.running_port();
+        let port = live.unwrap_or(configured_port);
         Status {
-            running: port.is_some(),
+            running: live.is_some(),
             enabled,
-            address: address(port.unwrap_or(configured_port)),
+            port,
+            address: address(port),
             error: self.error.lock().ok().and_then(|error| error.clone()),
         }
     }
@@ -90,29 +98,33 @@ impl State {
     }
 }
 
-/// Loopback bind shared by the startup and port-change paths. Binding happens
-/// on the caller's thread so a port that is already taken fails the request
-/// instead of silently serving somewhere else.
-fn bind(port: u16) -> Result<TcpListener, String> {
-    TcpListener::bind(("127.0.0.1", port))
-        .map_err(|error| format!("无法监听本机端口 {port}：{error}"))
+/// Loopback bind shared by the startup and port-change paths. The preferred
+/// port is tried first; if another process holds it, the OS picks a free one
+/// instead of leaving the user with a switch that cannot be turned on. The
+/// returned port is the one actually bound.
+fn bind(preferred: u16) -> Result<(TcpListener, u16), String> {
+    if let Ok(listener) = TcpListener::bind(("127.0.0.1", preferred)) {
+        return Ok((listener, preferred));
+    }
+    TcpListener::bind(("127.0.0.1", 0))
+        .and_then(|listener| listener.local_addr().map(|addr| (listener, addr.port())))
+        .map_err(|error| format!("无法监听本机端口：{error}"))
 }
 
-/// Bind and serve on the calling thread's runtime. A bind failure is returned
-/// before the listener is handed to the background task, so the caller can show
-/// the real reason (usually another process on the port).
-pub fn start(app: &AppHandle, state: &State, port: u16) -> Result<(), String> {
+/// Bind and serve on the calling thread's runtime. The caller learns which port
+/// is serving so the page can show the real address after a fallback.
+pub fn start(app: &AppHandle, state: &State, preferred: u16) -> Result<u16, String> {
     let mut running = state.running.lock().map_err(|_| "MCP 服务状态不可用")?;
     if let Some(current) = running.as_ref() {
-        if current.port == port {
-            return Ok(());
+        if current.port == preferred {
+            return Ok(current.port);
         }
         let message = format!("MCP 服务已在端口 {} 运行", current.port);
         state.set_error(Some(message.clone()));
         return Err(message);
     }
-    let listener = match bind(port) {
-        Ok(listener) => listener,
+    let (listener, port) = match bind(preferred) {
+        Ok(bound) => bound,
         Err(message) => {
             state.set_error(Some(message.clone()));
             return Err(message);
@@ -155,7 +167,7 @@ pub fn start(app: &AppHandle, state: &State, port: u16) -> Result<(), String> {
         shutdown: Some(shutdown),
     });
     state.set_error(None);
-    Ok(())
+    Ok(port)
 }
 
 pub fn stop(state: &State) {
@@ -172,29 +184,69 @@ pub fn stop(state: &State) {
 /// Every built-in campus tool, including the ones the user currently keeps out.
 /// The page needs the full list to offer checkboxes.
 pub fn tools() -> Vec<Tool> {
-    tools::builtin()
+    let mut list: Vec<Tool> = tools::builtin()
         .into_iter()
-        .map(|tool| Tool {
-            category: category(&tool.name).into(),
-            name: tool.name,
-            description: tool.description,
+        .map(|tool| {
+            let (category, title, summary) = label(&tool.name);
+            Tool {
+                access: access(&tool.name).to_vec(),
+                category: category.into(),
+                title: title.into(),
+                summary: summary.into(),
+                name: tool.name,
+                description: tool.description,
+            }
         })
-        .collect()
+        .collect();
+    // Sorting by section keeps each group together while the stable sort keeps
+    // the tool order inside it.
+    list.sort_by_key(|tool| group_rank(&tool.category));
+    list
 }
 
-/// Kept in the backend so the page and `tools/list` describe the same tools.
-fn category(name: &str) -> &'static str {
+/// Every tool reads campus data; only a few change something. Those are the
+/// ones a user should never mistake for a query.
+fn access(name: &str) -> &'static [&'static str] {
     match name {
-        "campus_timetable" | "campus_timetable_edit" | "campus_academic" => "教务与成绩",
-        "campus_attendance" => "考勤",
-        "campus_card" => "校园卡",
-        "campus_fitness" => "体测",
-        "campus_evaluation" | "campus_evaluations_submit" => "评教",
-        "campus_notices" => "校园通知",
-        "campus_lms" | "campus_lms_submit" => "思源学堂",
-        "campus_library" | "campus_venues" => "图书馆与场馆",
-        "campus_classroom" => "教室与校历",
-        _ => "其他",
+        // save creates or changes a course, hide changes, reset deletes.
+        "campus_timetable_edit" => &["write", "update", "delete"],
+        // Uploading and submitting homework changes the course's state.
+        "campus_lms_submit" => &["write"],
+        "campus_evaluations_submit" => &["write"],
+        _ => &["read"],
+    }
+}
+
+/// Display name, one-line purpose and section for each built-in tool. Kept in
+/// the backend so the page and `tools/list` describe the same tools.
+fn label(name: &str) -> (&'static str, &'static str, &'static str) {
+    match name {
+        "campus_timetable" => ("课程与成绩", "课表查询", "查看本学期课表"),
+        "campus_timetable_edit" => ("课程与成绩", "修改课表", "新增、隐藏或恢复本机课程"),
+        "campus_academic" => ("课程与成绩", "学业查询", "查看成绩、考试、校历与学籍"),
+        "campus_classroom" => ("课程与成绩", "教室查询", "查询空闲自习教室"),
+        "campus_lms" => ("学习", "思源学堂", "查看课程、活动与作业"),
+        "campus_lms_submit" => ("学习", "提交作业", "上传并提交思源学堂作业"),
+        "campus_evaluation" => ("学习", "评教", "查看待评问卷并生成预览"),
+        "campus_evaluations_submit" => ("学习", "提交评教", "提交已确认的评教"),
+        "campus_attendance" => ("校园生活", "考勤", "查询考勤记录"),
+        "campus_card" => ("校园生活", "校园卡", "查询余额与消费流水"),
+        "campus_fitness" => ("校园生活", "体测", "查询体测成绩"),
+        "campus_library" => ("校园生活", "图书馆", "查询楼层、区域与空闲座位"),
+        "campus_venues" => ("校园生活", "场馆", "查看可预约场馆与时段"),
+        "campus_notices" => ("通知", "校园通知", "查看教务处等栏目公告"),
+        _ => ("其他", "其他", ""),
+    }
+}
+
+/// Fixed section order for the page; unknown sections land at the end.
+fn group_rank(category: &str) -> usize {
+    match category {
+        "课程与成绩" => 0,
+        "学习" => 1,
+        "校园生活" => 2,
+        "通知" => 3,
+        _ => 4,
     }
 }
 
@@ -388,14 +440,22 @@ mod tests {
     }
 
     #[test]
-    fn an_occupied_port_is_refused_and_freed_on_release() {
+    fn an_occupied_port_falls_back_to_a_free_one() {
         let occupied = TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = occupied.local_addr().unwrap().port();
-        let error = bind(port).unwrap_err();
-        assert!(error.contains(&port.to_string()), "{error}");
+        let taken = occupied.local_addr().unwrap().port();
+        let (_listener, port) = bind(taken).unwrap();
+        assert_ne!(port, taken);
+        assert!(port > 0);
         drop(occupied);
-        // Whoever held the port released it, so the requested port binds again.
-        bind(port).unwrap();
+        // Once the preferred port is free it is used again.
+        assert_eq!(bind(taken).unwrap().1, taken);
+    }
+
+    #[test]
+    fn writing_tools_are_marked_apart_from_queries() {
+        assert_eq!(access("campus_timetable"), &["read"]);
+        assert!(access("campus_timetable_edit").contains(&"delete"));
+        assert_eq!(access("campus_lms_submit"), &["write"]);
     }
 
     #[test]
@@ -412,6 +472,9 @@ mod tests {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
             assert!(!tool.category.is_empty());
+            assert!(!tool.access.is_empty());
+            assert_ne!(tool.title, "其他", "{} 缺少显示名称", tool.name);
+            assert!(!tool.summary.is_empty());
         }
         let listed = open_tools(&[])
             .iter()

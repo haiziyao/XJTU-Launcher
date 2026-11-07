@@ -2354,6 +2354,19 @@ fn expose_tools(window: WebviewWindow) -> Result<Vec<expose::Tool>, String> {
     Ok(expose::tools())
 }
 
+/// A busy port makes the endpoint fall back to a free one; save that port so
+/// the next start tries it first instead of stumbling on the same conflict.
+fn remember_expose_port(app: &tauri::AppHandle, port: u16) {
+    let Ok(path) = config_path(app) else { return };
+    let Ok(mut config) = config::load(&path) else {
+        return;
+    };
+    if config.mcp_server_port != port {
+        config.mcp_server_port = port;
+        let _ = config::save(&path, &config);
+    }
+}
+
 #[tauri::command]
 fn expose_set_enabled(
     app: tauri::AppHandle,
@@ -2364,11 +2377,14 @@ fn expose_set_enabled(
     main_only(&window)?;
     let port = config::load(&config_path(&app)?)?.mcp_server_port;
     let state = state.inner();
-    if enabled {
-        expose::start(&app, state, port)?;
+    let port = if enabled {
+        let port = expose::start(&app, state, port)?;
+        remember_expose_port(&app, port);
+        port
     } else {
         expose::stop(state);
-    }
+        port
+    };
     Ok(state.status(enabled, port))
 }
 
@@ -2393,7 +2409,10 @@ fn expose_set_port(
     let previous = state.running_port();
     expose::stop(state);
     match expose::start(&app, state, port) {
-        Ok(()) => Ok(state.status(true, port)),
+        Ok(port) => {
+            remember_expose_port(&app, port);
+            Ok(state.status(true, port))
+        }
         Err(error) => {
             if let Some(previous) = previous {
                 let _ = expose::start(&app, state, previous);
@@ -2493,7 +2512,7 @@ pub fn run() {
         .manage(updates::State::default())
         .manage(expose::State::default())
         .setup(|app| {
-            vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
+            vault::initialize(storage::home(app.handle())?)?;
             // Moves the agent data and MCP config older builds wrote to
             // ~/.xjtu-launcher into the single data folder; the credentials
             // file next to them stays where the convention says it lives.
@@ -2505,7 +2524,11 @@ pub fn run() {
             if let Ok(config) = config_path(app.handle()).and_then(|path| config::load(&path)) {
                 if config.mcp_server_enabled {
                     let state = app.state::<expose::State>();
-                    let _ = expose::start(app.handle(), state.inner(), config.mcp_server_port);
+                    if let Ok(port) =
+                        expose::start(app.handle(), state.inner(), config.mcp_server_port)
+                    {
+                        remember_expose_port(app.handle(), port);
+                    }
                 }
             }
             Ok(())

@@ -34,7 +34,12 @@ use std::{
 use tauri::{AppHandle, Manager as _};
 
 /// Hidden folder directly under the user's home, like Codex's `.codex`.
-const HOME_DIR: &str = ".xjtu-launcher";
+/// A compile-time override keeps an acceptance build beside the normal app
+/// without both reading and writing the same settings and credentials.
+const HOME_DIR: &str = match option_env!("XJTU_LAUNCHER_HOME_DIR") {
+    Some(value) => value,
+    None => ".xjtu-launcher",
+};
 /// Visible folder for the user's own files, by default under Documents.
 const FILE_DIR: &str = "xjtu-launcher-file";
 const STORE: &str = "storage.json";

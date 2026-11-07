@@ -222,12 +222,7 @@ onBeforeUnmount(() => {
       <p v-if="status" class="notice success" role="status">{{ status }}</p>
     </Transition>
     <Transition name="section" mode="out-in">
-      <SettingGroup
-        v-if="!editing"
-        key="list"
-        title="模型厂商"
-        footnote="配置和密钥保存在本机；密钥默认隐藏，可点右侧按钮查看或替换。"
-      >
+      <SettingGroup v-if="!editing" key="list" title="模型厂商">
         <template #actions>
           <UiButton size="sm" :disabled="busy || loading" @click="edit()">
             <Plus :size="14" />添加厂商

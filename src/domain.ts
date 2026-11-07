@@ -16,6 +16,7 @@ export const defaultConfig = (): AppConfig => ({
   version: 1,
   sidebarCollapsed: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  agentSidebarVisible: true,
   nickname: '',
   avatar: null,
   wallpaper: null,
