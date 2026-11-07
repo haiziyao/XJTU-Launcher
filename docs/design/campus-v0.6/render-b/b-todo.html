@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+/* 单张表：分组标题仍在表内，用彩色渐变边和渐变分隔线区分三组 */
+.table.styled {
+  margin-top: 14px; border-radius: var(--radius-lg); overflow: hidden; flex: 0 0 auto;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.86));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(15,23,42,.04);
+}
+.tgroup { position: relative; }
+.tgroup + .tgroup { border-top: 1px solid transparent; border-image: linear-gradient(90deg, rgba(31,111,229,.35), rgba(31,111,229,0)) 1; }
+.tgroup::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+.tgroup.today::before { background: linear-gradient(180deg, #d98a1a, #f0c48a); }
+.tgroup.week::before { background: linear-gradient(180deg, #1f6fe5, #9dc0f2); }
+.tgroup.later::before { background: linear-gradient(180deg, #b9bec6, #e6e8eb); }
+.ghead {
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px 0 16px;
+  font-size: 12.5px; font-weight: 600;
+}
+.tgroup.today .ghead { background: linear-gradient(90deg, rgba(253,243,230,1) 0%, rgba(253,243,230,.55) 34%, rgba(253,243,230,0) 76%), repeating-linear-gradient(115deg, rgba(255,255,255,.55) 0 1px, rgba(255,255,255,0) 1px 7px); box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(217,138,26,.10); color: #8a4f00; }
+.tgroup.week .ghead { background: linear-gradient(90deg, rgba(234,241,253,1) 0%, rgba(234,241,253,.55) 34%, rgba(234,241,253,0) 76%), repeating-linear-gradient(115deg, rgba(255,255,255,.55) 0 1px, rgba(255,255,255,0) 1px 7px); box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(31,111,229,.08); color: var(--accent-text); }
+.tgroup.later .ghead { background: linear-gradient(90deg, rgba(238,240,243,1) 0%, rgba(238,240,243,.5) 34%, rgba(238,240,243,0) 76%), repeating-linear-gradient(115deg, rgba(255,255,255,.6) 0 1px, rgba(255,255,255,0) 1px 7px); box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(15,23,42,.04); color: var(--text-secondary); }
+.ghead .count {
+  font-size: 11px; font-weight: 500; color: var(--text-secondary);
+  background: rgba(255,255,255,.75); border: 1px solid rgba(15,23,42,.06);
+  border-radius: 999px; padding: 0 6px; font-variant-numeric: tabular-nums;
+}
+.ghead .right { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--text-tertiary); }
+.row { display: grid; grid-template-columns: 18px 2.2fr 1.2fr 1fr 0.9fr 64px; gap: 12px; align-items: center; padding: 0 14px 0 16px; height: 34px; border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--surface-subtle); }
+.row .name { font-weight: 500; }
+.row .name span { font-weight: 400; color: var(--text-tertiary); font-size: 11px; margin-left: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; box-shadow: 0 0 0 3px rgba(31,111,229,.10), inset 0 1px 1px rgba(255,255,255,.55); }
+.dot.amber { background: #d98a1a; box-shadow: 0 0 0 3px rgba(217,138,26,.14), inset 0 1px 1px rgba(255,255,255,.55); }
+.muted { color: var(--text-tertiary); }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+.link { color: var(--accent-text); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg></div>
+    <div class="spacer"></div>
+    <div class="me"></div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h1>畅行校园</h1>
+      <div class="tools"><span class="sample">示例数据</span></div>
+    </div>
+
+    <nav class="primary">
+      <span class="ptab active">待办<span class="n">11</span></span>
+      <span class="ptab">通知<span class="n">12</span></span>
+      <span class="vsep"></span>
+      <span class="ptab">学习</span>
+      <span class="ptab">学业</span>
+      <span class="ptab">生活</span>
+    </nav>
+
+    <div class="section">
+      <div class="left"><h2>待办</h2><span class="meta">2026–2027 · 11 项待交 · 更新于 刚刚</span></div>
+      <div class="right">
+        <span class="seg"><span class="on">全部</span><span>作业</span><span>评教</span><span>考试</span></span>
+        <div class="search">搜索作业或课程</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">未交</div><div class="v">11</div><div class="s">3 门课程</div></div>
+      <div class="stat hot"><div class="k">今天截止</div><div class="v">1</div><div class="s">还剩 13 小时</div></div>
+      <div class="stat"><div class="k">本周</div><div class="v">4</div><div class="s">含今天</div></div>
+      <div class="stat"><div class="k">逾期</div><div class="v">0</div><div class="s">仍可提交</div></div>
+      <div class="stat"><div class="k">待评教</div><div class="v">6</div><div class="s">截止 11月10日</div></div>
+    </div>
+
+    <div class="table styled">
+      <section class="tgroup today">
+        <div class="ghead"><span>今天</span><span class="count">1</span><span class="right">最晚今天 23:59</span></div>
+        <div class="row"><span><i class="dot amber"></i></span><span class="name">第二次作业</span><span>文学经典与热点透视</span><span class="num">今天 23:59</span><span class="muted">13 小时</span><span class="num link">打开</span></div>
+      </section>
+      <section class="tgroup week">
+        <div class="ghead"><span>本周</span><span class="count">2</span><span class="right">周五至周日</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第三章作业<span>第三次</span></span><span>计算机组成</span><span class="num">周五 23:59</span><span class="muted">4 天</span><span class="num link">打开</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第二章作业</span><span>计算机网络原理</span><span class="num">周日 23:59</span><span class="muted">6 天</span><span class="num link">打开</span></div>
+      </section>
+      <section class="tgroup later">
+        <div class="ghead"><span>以后</span><span class="count">8</span><span class="right">11月14日之后 · 显示前 5 项</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第四章作业<span>第一次</span></span><span>计算机组成</span><span class="num">11月14日 23:59</span><span class="muted">12 天</span><span class="num link">打开</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第四章作业<span>第二次</span></span><span>计算机组成</span><span class="num">11月14日 23:59</span><span class="muted">12 天</span><span class="num link">打开</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">实验二</span><span>计算机组成与结构专题实验</span><span class="num">11月14日 23:59</span><span class="muted">12 天</span><span class="num link">打开</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第五章作业<span>第一次</span></span><span>计算机组成</span><span class="num">12月16日 23:59</span><span class="muted">44 天</span><span class="num link">打开</span></div>
+        <div class="row"><span><i class="dot"></i></span><span class="name">第五章作业<span>第二次</span></span><span>计算机组成</span><span class="num">12月17日 00:00</span><span class="muted">45 天</span><span class="num link">打开</span></div>
+      </section>
+    </div>
+    <div class="footer-note">颜色条带渐变分组，标题带细纹理与高光；表体加轻微磨砂质感；行首圆点 10px（示例数据）</div>
+  </main>
+</div>
+</body></html>

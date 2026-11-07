@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XJTU Launcher — 西安交通大学桌面校园工作台</title>
+<meta name="description" content="XJTU Launcher 把课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆收进一个桌面应用。Rust 直接对接校园协议，凭据只保存在本机。">
+<link rel="icon" href="assets/favicon.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="styles.css">
+<meta property="og:type" content="website">
+<meta property="og:title" content="XJTU Launcher — 西安交通大学桌面校园工作台">
+<meta property="og:description" content="课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆，都在同一个窗口里。">
+<meta property="og:url" content="https://xjtu-launcher.cn/">
+<meta property="og:image" content="https://xjtu-launcher.cn/assets/home.jpg">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="./">
+      <img src="assets/icon.png" width="28" height="28" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="#features">功能</a>
+      <a href="#download">下载</a>
+      <a href="#install">安装</a>
+      <a class="ghost" href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="wrap hero-inner">
+      <span class="pill"><i></i><span id="pill-version">v0.5.2 · 开源 · MIT</span></span>
+      <h1>把交大人的校园生活<br>收进一个窗口</h1>
+      <p class="lede">课表、成绩、思源学堂、Agent 与工作台。Rust 直接对接校园系统，凭据只保存在你的电脑上。</p>
+    </div>
+
+    <div class="carousel wrap" id="carousel" tabindex="0" aria-roledescription="carousel" aria-label="应用界面预览">
+      <div class="stage">
+        <div class="glow" id="glow"></div>
+        <div class="slides" id="slides">
+          <figure class="slide is-active" data-accent="#7c5cff" data-tag="纯原生" data-title="干净的页面，原生实现" data-desc="Rust 直接对接校园系统，登录、课表、成绩都在原生界面里完成，不内嵌网页。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>主页</span></div>
+              <img src="assets/home.jpg" width="1280" height="870" alt="主页：问候、今日课程、校园快捷入口与插件开关">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#14a08a" data-tag="畅行校园" data-title="一个工作区，看完校园" data-desc="学习、成绩、考试、考勤、空闲教室与场馆，按任务组织，不再到处找入口。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>畅行校园</span></div>
+              <img src="assets/campus.jpg" width="1280" height="870" alt="畅行校园：成绩、考试、空闲教室、校历与评教">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#e8503a" data-tag="MCP" data-title="把校园能力交给 Agent" data-desc="本机 MCP 模式，Claude Code 等编程 Agent 可以直接调用同一批校园工具。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>MCP</span></div>
+              <img src="assets/mcp.jpg" width="1280" height="870" alt="本机 MCP 模式">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#3b7ddd" data-tag="工具" data-title="每一项都由你开放" data-desc="工具按分类逐项授权，端口可改，默认只监听本机，不需要时不暴露。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>工具</span></div>
+              <img src="assets/mcp-tools.jpg" width="1280" height="870" alt="MCP 工具列表">
+            </div>
+          </figure>
+        </div>
+
+        <button class="arrow prev" id="prev" aria-label="上一张">‹</button>
+        <button class="arrow next" id="next" aria-label="下一张">›</button>
+      </div>
+
+      <div class="carousel-foot">
+        <div class="caption" id="caption" aria-live="polite">
+          <span class="tag" id="tag">纯原生</span>
+          <strong id="ctitle">干净的页面，原生实现</strong>
+          <span class="cdesc" id="cdesc">Rust 直接对接校园系统，登录、课表、成绩都在原生界面里完成，不内嵌网页。</span>
+        </div>
+        <div class="dots" id="dots" role="tablist" aria-label="选择截图"></div>
+      </div>
+    </div>
+
+    <div class="download wrap" id="download">
+      <a class="dl" data-platform="macOS" data-arch="arm64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 12.6c0-2 1.6-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.5-.4 6.1 1 8.1.7 1 1.4 2.1 2.5 2 1 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.1zM14.6 6.4c.5-.6.9-1.4.8-2.2-.8 0-1.7.5-2.2 1.1-.5.5-.9 1.3-.8 2.1.9.1 1.7-.4 2.2-1z"/></svg></span>
+        <span class="dl-text"><strong>macOS</strong><small>Apple 芯片</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+      <a class="dl" data-platform="macOS" data-arch="x64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 12.6c0-2 1.6-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.5-.4 6.1 1 8.1.7 1 1.4 2.1 2.5 2 1 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.1zM14.6 6.4c.5-.6.9-1.4.8-2.2-.8 0-1.7.5-2.2 1.1-.5.5-.9 1.3-.8 2.1.9.1 1.7-.4 2.2-1z"/></svg></span>
+        <span class="dl-text"><strong>macOS</strong><small>Intel 芯片</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+      <a class="dl" data-platform="Windows" data-arch="x64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon win"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.7l7.2-1v6.9H3.5zm0 7.7h7.2v6.9l-7.2-1zM11.8 4.5l8.7-1.2v8.3h-8.7zm0 8h8.7v8.2l-8.7-1.2z"/></svg></span>
+        <span class="dl-text"><strong>Windows</strong><small>10 / 11 · x64</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+    </div>
+    <p class="meta" id="version-meta">正在读取版本…</p>
+    <details class="checksums">
+      <summary>SHA256 校验值</summary>
+      <div id="checksum-list"></div>
+    </details>
+  </section>
+
+  <section class="features-sec" id="features">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">功能</p>
+        <h2>原生、完整、可控</h2>
+        <p class="sub">不是把网页塞进客户端。查询走原生请求，写操作先预览、再确认。</p>
+      </div>
+      <div class="cards">
+        <article><span class="tile" style="--tint:#efeaff;--c:#7c5cff"></span><h3>一处登录</h3><p>密码、短信验证码、扫码三种方式；多账号保存，WebVPN 自动回退，凭据只存在本机。</p></article>
+        <article><span class="tile" style="--tint:#e4f6f1;--c:#14a08a"></span><h3>课表与成绩</h3><p>今日课程与完整学期课表，按周切换；成绩、考试、考勤、校园卡、空闲教室一页查完。</p></article>
+        <article><span class="tile" style="--tint:#fff4dd;--c:#dd9a1a"></span><h3>思源学堂</h3><p>作业、学习资料、课程回放、讨论按类型切换；附件可另存，录播课直接取回放地址。</p></article>
+        <article><span class="tile" style="--tint:#ffebe7;--c:#e8503a"></span><h3>Agent</h3><p>用自然语言查询校园数据；改课表、交作业、评教都会先给出预览，你同意后才执行。</p></article>
+        <article><span class="tile" style="--tint:#e7f0ff;--c:#3b7ddd"></span><h3>本机 MCP</h3><p>打开 MCP 模式后，Claude Code 等编程 Agent 可以在本机直接调用同一批校园工具。</p></article>
+        <article><span class="tile" style="--tint:#e9f7ea;--c:#2f9e44"></span><h3>插件与更新</h3><p>课表、畅行校园、主页主题以插件形式出现；应用更新带签名校验，可更换镜像源。</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="install-sec" id="install">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">安装</p>
+        <h2>第一次打开</h2>
+      </div>
+      <div class="install">
+        <div class="step">
+          <h3>macOS</h3>
+          <ol>
+            <li>打开 DMG，把 XJTU Launcher 拖进「应用程序」。</li>
+            <li>提示「无法验证开发者」时，去「系统设置 → 隐私与安全性」点「仍要打开」。</li>
+            <li>每个新版本确认一次，之后直接启动。</li>
+          </ol>
+        </div>
+        <div class="step">
+          <h3>Windows</h3>
+          <ol>
+            <li>运行 setup.exe，按向导完成安装。</li>
+            <li>出现「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。</li>
+            <li>安装完成后从开始菜单启动。</li>
+          </ol>
+        </div>
+      </div>
+      <p class="fine">应用没有 Apple 与 Windows 代码签名证书，系统提示不代表安装包损坏；可以用官网公布的 SHA256 核对后再打开。</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="fbrand">
+      <img src="assets/icon.png" width="32" height="32" alt="">
+      <span>XJTU Launcher</span>
+    </div>
+    <p>MIT License · <a href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a><br>学生个人项目，与西安交通大学官方无关。凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+<script src="carousel.js" defer></script>
+</body>
+</html>

@@ -84,8 +84,8 @@ const sections = [
   { id: 'home', title: '主页', icon: Home },
   { id: 'pet', title: '桌面宠物', icon: Cat },
   { id: 'plugins', title: '插件服务', icon: Package },
-  { id: 'updates', title: '软件更新', icon: Download },
   { id: 'storage', title: '存储', icon: HardDrive },
+  { id: 'updates', title: '软件更新', icon: Download },
 ] as const;
 
 const DESKTOP_PETS = [

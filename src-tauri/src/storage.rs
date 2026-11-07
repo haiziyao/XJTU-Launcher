@@ -285,6 +285,35 @@ pub fn download_target(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     Ok(downloads(app)?.join(safe_name(name)))
 }
 
+/// Like [`download_target`], but never returns an existing path: a repeated
+/// download becomes `名字 (2).pdf` instead of overwriting the earlier file.
+pub fn unique_download_target(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let dir = downloads(app)?;
+    let name = safe_name(name);
+    let target = dir.join(name);
+    if !target.exists() {
+        return Ok(target);
+    }
+    let path = Path::new(name);
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("下载");
+    let extension = path.extension().and_then(|value| value.to_str());
+    for index in 2..1_000 {
+        let candidate = match extension {
+            Some(extension) => format!("{stem} ({index}).{extension}"),
+            None => format!("{stem} ({index})"),
+        };
+        let target = dir.join(candidate);
+        if !target.exists() {
+            return Ok(target);
+        }
+    }
+    Err("下载目录中同名文件太多，请先整理后重试".into())
+}
+
 fn measure(path: &Path) -> Result<(u64, u64), String> {
     let meta = fs::symlink_metadata(path).map_err(|_| "无法读取数据文件夹".to_string())?;
     if meta.is_file() {

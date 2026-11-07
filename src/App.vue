@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   AlertCircle,
   ArrowLeft,
@@ -12,8 +12,11 @@ import {
   Home,
   LayoutGrid,
   LoaderCircle,
+  MapPinned,
   MessagesSquare,
+  Presentation,
   Route,
+  Briefcase,
   Settings,
   Palette,
   Settings2,
@@ -27,7 +30,13 @@ import { bridge, native } from './bridge';
 import { ensureDirectSession } from './campusSession';
 import { prefetchCampus } from './campusPrefetch';
 import { resetLmsOverview } from './campusOverview';
-import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
+import {
+  coursesForDay,
+  defaultConfig,
+  moveItem,
+  orderedPlugins,
+  sidebarPlugins as pluginsForSidebar,
+} from './domain';
 import type {
   AccountStatus,
   AppConfig,
@@ -44,6 +53,7 @@ import AccountsView from './components/AccountsView.vue';
 import PersonalView from './components/PersonalView.vue';
 import SettingsView from './components/SettingsView.vue';
 import CommunityView from './components/CommunityView.vue';
+import WorkbenchView from './components/WorkbenchView.vue';
 import AgentView from './components/AgentView.vue';
 import AgentSettingsView from './components/AgentSettingsView.vue';
 import HomeThemeView from './components/HomeThemeView.vue';
@@ -54,6 +64,8 @@ import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
 import { applyCached } from './cache';
 import CampusView from './components/CampusView.vue';
+import PptCaptureView from './components/PptCaptureView.vue';
+import type { CaptureTarget } from './capture/target';
 import EmptyState from './components/ui/EmptyState.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
@@ -69,24 +81,27 @@ import {
 } from './theme';
 import './ui.css';
 import './pages.css';
+import './campus.css';
 import './desktop-shell.css';
 import './pet-toast.css';
 import './pet-art.css';
 
 const route = ref('home');
+/** Set when 思源学堂 hands a lesson to the capture page; that page reads it on mount. */
+const captureTarget = ref<CaptureTarget | null>(null);
+function openCapture(target: CaptureTarget) {
+  const plugin = enabledPlugins.value.find((p) => p.page.type === 'pptCapture');
+  if (!plugin) {
+    showToast('回放截取已停用，先在「设置 → 插件」里启用', 'neutral');
+    return;
+  }
+  captureTarget.value = target;
+  route.value = plugin.id;
+}
 const navigation = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
 const navIndicator = useSlidingIndicator(navigation, () => route.value);
-const primaryNav = [
-  { id: 'home', title: '主页', icon: Home },
-  { id: 'agent', title: 'Agent', icon: Bot },
-  { id: 'community', title: '社区', icon: MessagesSquare },
-];
-// 组件画廊只在开发构建里存在；生产包不会导入它，也不显示入口。
-const KitGallery = import.meta.env.DEV
-  ? defineAsyncComponent(() => import('./components/dev/KitGallery.vue'))
-  : null;
-if (KitGallery) primaryNav.push({ id: 'kit', title: '组件', icon: LayoutGrid });
+// 主页 / Agent / 社区是固定入口；畅行校园跟随插件启用状态，工作台始终可用。
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -139,7 +154,24 @@ const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, co
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
 );
-const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
+// 畅行校园固定在主导航里（社区下方）；其余插件仍归到「插件」分组。
+const campusPlugin = computed(() =>
+  enabledPlugins.value.find((plugin) => plugin.page.type === 'campus'),
+);
+const sidebarPlugins = computed(() =>
+  pluginsForSidebar(sortedPlugins.value, config.value).filter(
+    (plugin) => plugin.page.type !== 'campus',
+  ),
+);
+const primaryNav = computed(() => [
+  { id: 'home', title: '主页', icon: Home },
+  { id: 'agent', title: 'Agent', icon: Bot },
+  { id: 'community', title: '社区', icon: MessagesSquare },
+  ...(campusPlugin.value
+    ? [{ id: campusPlugin.value.id, title: '畅行校园', icon: MapPinned }]
+    : []),
+  { id: 'workbench', title: '工作台', icon: Briefcase },
+]);
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 // The campus workspace holds per-account data (including the local 资料库).
 // Remount it when the active account changes so a switch never leaves the
@@ -184,9 +216,16 @@ watch(
 );
 watch(enabledPlugins, () => {
   if (
-    !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent', 'kit'].includes(
-      route.value,
-    ) &&
+    ![
+      'home',
+      'settings',
+      'market',
+      'personal',
+      'accounts',
+      'community',
+      'agent',
+      'workbench',
+    ].includes(route.value) &&
     !activePlugin.value
   )
     route.value = 'home';
@@ -384,9 +423,6 @@ async function openLink(url: string) {
 async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
-}
-async function setRailCollapsed(collapsed: boolean) {
-  await persist({ ...config.value, campusRailCollapsed: collapsed });
 }
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
@@ -587,10 +623,13 @@ onBeforeUnmount(() => {
             <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
               v-else-if="plugin.page.type === 'campus'"
               :size="20"
-            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Settings2
-              v-else-if="plugin.page.type === 'agentSettings'"
+            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Presentation
+              v-else-if="plugin.page.type === 'pptCapture'"
               :size="20"
-            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
+            /><Settings2 v-else-if="plugin.page.type === 'agentSettings'" :size="20" /><Compass
+              v-else
+              :size="20"
+            /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -720,7 +759,10 @@ onBeforeUnmount(() => {
           class="desktop-content-inner"
           :class="{
             'is-home': route === 'home',
-            'is-wide': activePlugin?.page.type === 'campus',
+            'is-wide':
+              route === 'workbench' ||
+              activePlugin?.page.type === 'campus' ||
+              activePlugin?.page.type === 'pptCapture',
           }"
         >
           <Transition name="drop">
@@ -780,6 +822,7 @@ onBeforeUnmount(() => {
                 @update="persist"
               />
               <CommunityView v-else-if="route === 'community'" />
+              <WorkbenchView v-else-if="route === 'workbench'" :key="campusScope" />
               <AgentView
                 v-else-if="route === 'agent'"
                 @settings="route = 'cn.xjtu.agent-settings'"
@@ -831,9 +874,14 @@ onBeforeUnmount(() => {
                 :name="activePlugin.name"
                 :access-mode="account.accessMode ?? null"
                 :direct-session="account.directSession ?? false"
-                :rail-collapsed="config.campusRailCollapsed"
-                @update-rail-collapsed="setRailCollapsed"
                 @direct-session="refreshAccountStatus"
+                @capture="openCapture"
+              />
+              <PptCaptureView
+                v-else-if="activePlugin?.page.type === 'pptCapture'"
+                :key="activePlugin.id"
+                :target="captureTarget"
+                :scope="account.studentId ?? account.name ?? ''"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"
@@ -842,8 +890,8 @@ onBeforeUnmount(() => {
                 :links="activePlugin.page.links"
                 @open="openLink"
               />
-              <component v-else-if="KitGallery && route === 'kit'" :is="KitGallery" /></div
-          ></Transition>
+            </div>
+          </Transition>
         </div>
       </div>
     </main>

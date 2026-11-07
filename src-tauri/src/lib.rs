@@ -2,9 +2,9 @@ mod agent;
 mod cache;
 mod campus;
 mod campus_browser;
+mod capture_store;
 mod config;
 mod expose;
-mod library;
 mod market;
 mod mcp;
 mod personal_image;
@@ -15,6 +15,7 @@ mod timetable_custom;
 mod tool_names;
 mod updates;
 mod vault;
+mod workbench;
 
 mod accounts;
 mod auth;
@@ -1312,45 +1313,197 @@ async fn lms_save_file(
         .await
 }
 
-/// Local 资料库 roots are per campus account and live in the app data folder.
-/// Requiring the active account keeps files from two people on one machine
-/// apart, the same way school caches are isolated.
-async fn library_root(
-    app: &tauri::AppHandle,
-    state: &tauri::State<'_, AppState>,
-) -> Result<PathBuf, String> {
-    let (account, _) = school_account(app, state).await?;
-    let workspace = storage::file_path(app, "workspace")?;
-    Ok(library::root(&workspace, &account.id))
+/// Resolve the direct replay videos for one lesson. The addresses are
+/// presigned and expire, so the result is never cached; the RMS bearer token
+/// stays in the backend.
+#[tauri::command]
+async fn lms_replay_videos(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    activity: u64,
+) -> Result<school::lms::ReplayVideos, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "lms")?;
+    let _service_guard = state.school_lock.lock().await;
+    let (account, _) = school_account(&app, &state).await?;
+    school::lms::Client::connect(&account)?
+        .replay_videos(activity)
+        .await
 }
 
-/// File work (hashing, copying, index writes) must not hold an async worker.
-async fn run_library<T: Send + 'static>(
+/// Write a capture export (PDF / ZIP) to the path the user chose in the save
+/// dialog. Bytes cross IPC as base64 because the webview has no fs permission.
+#[tauri::command]
+async fn save_export(window: WebviewWindow, path: String, data: String) -> Result<u64, String> {
+    const MAX_EXPORT: usize = 256 * 1024 * 1024;
+    main_only(&window)?;
+    if data.len() > MAX_EXPORT / 3 * 4 + 8 {
+        return Err("导出文件超过 256 MB，未保存".into());
+    }
+    let bytes = {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        STANDARD
+            .decode(data.as_bytes())
+            .map_err(|_| "导出数据无效")?
+    };
+    if bytes.len() > MAX_EXPORT {
+        return Err("导出文件超过 256 MB，未保存".into());
+    }
+    let target = std::path::PathBuf::from(path);
+    if !target.is_absolute() {
+        return Err("请选择有效的保存位置".into());
+    }
+    let written = bytes.len() as u64;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::config::write_atomic(&target, &bytes).map(|_| written)
+    })
+    .await
+    .map_err(|_| "导出任务失败".to_string())?
+}
+
+/// 工作台 roots are per campus account and live in the visible file folder.
+/// Requiring the active account keeps two people's folders apart.
+async fn workbench_root(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<(PathBuf, String), String> {
+    let (account, _) = school_account(app, state).await?;
+    let workspace = storage::file_path(app, "workspace")?;
+    Ok((workbench::root(&workspace, &account.id), account.id))
+}
+
+fn sync_state_path(app: &tauri::AppHandle, account_id: &str) -> Result<PathBuf, String> {
+    storage::path(
+        app,
+        &format!("state/workbench/{}.json", workbench::owner_key(account_id)),
+    )
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncCourse {
+    id: u64,
+    code: String,
+    subject_code: String,
+    name: String,
+    folder: String,
+    assignments: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncState {
+    version: u32,
+    term: String,
+    synced_at: i64,
+    courses: Vec<SyncCourse>,
+}
+
+impl Default for SyncState {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            term: String::new(),
+            synced_at: 0,
+            courses: Vec::new(),
+        }
+    }
+}
+
+fn load_sync(path: &PathBuf) -> Result<SyncState, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(SyncState::default())
+        }
+        Err(_) => return Err("无法读取工作台同步记录".into()),
+    };
+    let state: SyncState = serde_json::from_slice(&bytes).map_err(|_| "工作台同步记录损坏")?;
+    if state.version != 1 {
+        return Err("工作台同步记录版本不受支持".into());
+    }
+    Ok(state)
+}
+
+fn save_sync(path: &PathBuf, state: &SyncState) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| "无法创建工作台同步目录")?;
+    }
+    let bytes = serde_json::to_vec_pretty(state).map_err(|_| "无法编码工作台同步记录")?;
+    let temp = path.with_extension("json.tmp");
+    std::fs::write(&temp, bytes).map_err(|_| "无法写入工作台同步记录")?;
+    std::fs::rename(&temp, path).map_err(|_| "无法写入工作台同步记录")?;
+    Ok(())
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// File work (copying, index writes, folder scans) must not hold an async worker.
+async fn run_workbench<T: Send + 'static>(
     task: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(task)
         .await
-        .map_err(|_| "资料库任务失败".to_string())?
+        .map_err(|_| "工作台任务失败".to_string())?
 }
 
 #[tauri::command]
-async fn library_list(
+async fn workbench_overview(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-) -> Result<Vec<library::Entry>, String> {
+) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    let root = library_root(&app, &state).await?;
-    run_library(move || library::list(&root)).await
+    let (root, account_id) = workbench_root(&app, &state).await?;
+    let store = load_sync(&sync_state_path(&app, &account_id)?)?;
+    let folders = run_workbench(move || workbench::tree(&root)).await?;
+    Ok(serde_json::json!({
+        "currentTerm": store.term,
+        "syncedAt": store.synced_at,
+        "folders": folders,
+        "courses": store.courses,
+    }))
 }
 
 #[tauri::command]
-async fn library_import(
+async fn workbench_folder(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
+    folder: String,
+) -> Result<Vec<workbench::FileNode>, String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    run_workbench(move || workbench::files(&root, &folder)).await
+}
+
+#[tauri::command]
+async fn workbench_create_folder(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    parent: String,
+    name: String,
+) -> Result<workbench::FolderNode, String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    run_workbench(move || workbench::create_folder(&root, &parent, &name)).await
+}
+
+#[tauri::command]
+async fn workbench_import(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    folder: String,
     paths: Vec<String>,
-) -> Result<Vec<library::ImportResult>, String> {
+) -> Result<Vec<workbench::ImportOutcome>, String> {
     main_only(&window)?;
     if paths.len() > 32 {
         return Err("一次最多添加 32 个文件".into());
@@ -1358,49 +1511,49 @@ async fn library_import(
     if paths.is_empty() {
         return Ok(Vec::new());
     }
-    let root = library_root(&app, &state).await?;
+    let (root, _) = workbench_root(&app, &state).await?;
     let lock = state.library_lock.clone();
-    run_library(move || Ok(library::import_all(&root, &paths, &lock))).await
+    run_workbench(move || Ok(workbench::import_files(&root, &folder, &paths, &lock))).await
 }
 
 #[tauri::command]
-async fn library_update(
+async fn workbench_update(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-    id: String,
-    input: library::EditInput,
-) -> Result<library::Entry, String> {
+    path: String,
+    input: workbench::BindingInput,
+) -> Result<workbench::FileNode, String> {
     main_only(&window)?;
-    let root = library_root(&app, &state).await?;
+    let (root, _) = workbench_root(&app, &state).await?;
     let lock = state.library_lock.clone();
-    run_library(move || library::update(&root, &id, input, &lock)).await
+    run_workbench(move || workbench::set_binding(&root, &path, input, &lock)).await
 }
 
 #[tauri::command]
-async fn library_delete(
+async fn workbench_delete(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-    id: String,
+    path: String,
 ) -> Result<(), String> {
     main_only(&window)?;
-    let root = library_root(&app, &state).await?;
+    let (root, _) = workbench_root(&app, &state).await?;
     let lock = state.library_lock.clone();
-    run_library(move || library::delete(&root, &id, &lock)).await
+    run_workbench(move || workbench::delete_file(&root, &path, &lock)).await
 }
 
 #[tauri::command]
-async fn library_open(
+async fn workbench_open(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-    id: String,
+    path: String,
 ) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     main_only(&window)?;
-    let root = library_root(&app, &state).await?;
-    let path = run_library(move || library::entry_path(&root, &id)).await?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let path = run_workbench(move || workbench::absolute(&root, &path)).await?;
     let path = path.to_str().ok_or("文件路径不是有效的 UTF-8")?;
     app.opener()
         .open_path(path, None::<&str>)
@@ -1408,36 +1561,164 @@ async fn library_open(
 }
 
 #[tauri::command]
-async fn library_reveal(
+async fn workbench_reveal(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-    id: String,
+    path: String,
 ) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     main_only(&window)?;
-    let root = library_root(&app, &state).await?;
-    let path = run_library(move || library::entry_path(&root, &id)).await?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let path = run_workbench(move || {
+        workbench::absolute(&root, &path).or_else(|_| workbench::folder_absolute(&root, &path))
+    })
+    .await?;
     app.opener()
         .reveal_item_in_dir(path)
         .map_err(|_| "无法在文件管理器中显示".into())
 }
 
+/// One 工作台 submission, resolved from workspace paths. The active campus
+/// account is checked again just before the school call.
+async fn workbench_submit_inner(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+    state: &tauri::State<'_, AppState>,
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+    confirm: bool,
+) -> Result<serde_json::Value, String> {
+    main_only(window)?;
+    if paths.len() > school::lms::MAX_UPLOAD_FILES {
+        return Err(format!(
+            "一次最多上传 {} 个文件",
+            school::lms::MAX_UPLOAD_FILES
+        ));
+    }
+    let (account, _) = school_account(app, state).await?;
+    let workspace = storage::file_path(app, "workspace")?;
+    let root = workbench::root(&workspace, &account.id);
+    let files = run_workbench(move || {
+        paths
+            .iter()
+            .map(|path| -> Result<String, String> {
+                let path = workbench::absolute(&root, path)?;
+                path.to_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| "文件路径不是有效的 UTF-8".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()
+    })
+    .await?;
+    let request = school::lms::Homework {
+        activity,
+        comment,
+        files,
+        draft: false,
+    };
+    run_lms_homework_checked(app, request, confirm, Some(&account.id)).await
+}
+
+/// Preview only: reads the activity and the local files, never posts.
 #[tauri::command]
-async fn library_export(
+async fn workbench_submit_preview(
     app: tauri::AppHandle,
     window: WebviewWindow,
     state: tauri::State<'_, AppState>,
-    id: String,
-    path: String,
-) -> Result<u64, String> {
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    workbench_submit_inner(&app, &window, &state, activity, comment, paths, false).await
+}
+
+/// The caller must have shown the preview and asked the user first.
+#[tauri::command]
+async fn workbench_submit(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    workbench_submit_inner(&app, &window, &state, activity, comment, paths, true).await
+}
+
+/// Refresh the current semester from 思源学堂: create missing course folders and
+/// keep each course's assignment list in app state (never as files on disk).
+#[tauri::command]
+async fn workbench_sync(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    let target = PathBuf::from(path);
-    if !target.is_absolute() {
-        return Err("请选择有效的保存位置".into());
+    require_school_feature(&app, "lms")?;
+    let (root, account_id) = workbench_root(&app, &state).await?;
+    let (account, _) = school_account(&app, &state).await?;
+    let _service_guard = state.school_lock.lock().await;
+    let client = school::lms::Client::connect(&account)?;
+    let data = client.workbench().await?;
+    let term = data["term"].as_str().unwrap_or_default().trim().to_string();
+    if term.is_empty() {
+        return Err("思源学堂没有返回当前学期，暂时无法建立学期文件夹".into());
     }
-    let root = library_root(&app, &state).await?;
-    run_library(move || library::export(&root, &id, &target)).await
+    if term.chars().count() > 120 {
+        return Err("学期名称过长".into());
+    }
+    let courses = data["courses"].as_array().cloned().unwrap_or_default();
+    let course_count = courses.len();
+    let failed = data["failed"].as_u64().unwrap_or(0);
+    let synced = run_workbench(move || {
+        let mut state = SyncState {
+            version: 1,
+            term: term.clone(),
+            synced_at: now_millis(),
+            courses: Vec::new(),
+        };
+        for course in &courses {
+            let meta = workbench::CourseMeta {
+                id: course["id"].as_u64().unwrap_or(0),
+                code: course["code"].as_str().unwrap_or_default().to_string(),
+                subject_code: course["subjectCode"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                name: course["name"].as_str().unwrap_or_default().to_string(),
+                term: term.clone(),
+            };
+            let folder = workbench::ensure_course_folder(&root, &term, &meta)?;
+            state.courses.push(SyncCourse {
+                id: meta.id,
+                code: meta.code,
+                subject_code: meta.subject_code,
+                name: meta.name,
+                folder,
+                assignments: course["assignments"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default(),
+            });
+        }
+        Ok(state)
+    })
+    .await?;
+    save_sync(&sync_state_path(&app, &account_id)?, &synced)?;
+    let assignment_count: usize = synced
+        .courses
+        .iter()
+        .map(|course| course.assignments.len())
+        .sum();
+    Ok(serde_json::json!({
+        "term": synced.term,
+        "syncedAt": synced.synced_at,
+        "courses": course_count,
+        "assignments": assignment_count,
+        "failed": failed,
+    }))
 }
 
 #[tauri::command]
@@ -1557,17 +1838,65 @@ pub(crate) async fn run_lms_homework(
     request: school::lms::Homework,
     confirm: bool,
 ) -> Result<serde_json::Value, String> {
+    run_lms_homework_checked(app, request, confirm, None).await
+}
+
+/// `expected_account` guards file uploads resolved under one campus account:
+/// if the active account changed in the meantime, the request is refused
+/// instead of sending the previous account's files through the new session.
+pub(crate) async fn run_lms_homework_checked(
+    app: &tauri::AppHandle,
+    request: school::lms::Homework,
+    confirm: bool,
+    expected_account: Option<&str>,
+) -> Result<serde_json::Value, String> {
     require_school_feature(app, "lms")?;
     request.validate()?;
     let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
     let (account, _) = school_account(app, &state).await?;
+    if let Some(expected) = expected_account {
+        if account.id != expected {
+            return Err("校园账号已切换，请重新选择文件".into());
+        }
+    }
     let client = school::lms::Client::connect(&account)?;
     if confirm {
         client.homework_submit(&request).await
     } else {
         client.homework_preview(&request).await
     }
+}
+
+/// Agent-facing 课程资料 download. The file lands in the visible download
+/// folder under a sanitized, unique name; the model cannot choose a path. The
+/// body comes from the public media host, so the school lock is not held while
+/// streaming.
+pub(crate) async fn download_lms_file(
+    app: &tauri::AppHandle,
+    upload_id: u64,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    require_school_feature(app, "lms")?;
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("请提供附件的文件名".into());
+    }
+    let state = app.state::<AppState>();
+    let (account, _) = school_account(app, &state).await?;
+    let path = storage::unique_download_target(app, name)?;
+    let size = school::lms::Client::connect(&account)?
+        .save_file(upload_id, &path)
+        .await?;
+    let display = path
+        .to_str()
+        .map(|value| storage::display_for(app, value))
+        .unwrap_or_default();
+    Ok(serde_json::json!({
+        "path": display,
+        "name": path.file_name().and_then(|value| value.to_str()).unwrap_or_default(),
+        "size": size,
+    }))
 }
 
 /// Build an evaluation preview for the Agent. It queries the school but never
@@ -2550,13 +2879,26 @@ pub fn run() {
             pet_desktop::pet_preview,
             lms_open_file,
             lms_save_file,
-            library_list,
-            library_import,
-            library_update,
-            library_delete,
-            library_open,
-            library_reveal,
-            library_export,
+            lms_replay_videos,
+            save_export,
+            capture_store::capture_session_load,
+            capture_store::capture_session_save,
+            capture_store::capture_page_add,
+            capture_store::capture_pages_read,
+            capture_store::capture_pages_delete,
+            capture_store::capture_pages_order,
+            capture_store::capture_session_clear,
+            workbench_overview,
+            workbench_folder,
+            workbench_create_folder,
+            workbench_import,
+            workbench_update,
+            workbench_delete,
+            workbench_open,
+            workbench_reveal,
+            workbench_sync,
+            workbench_submit_preview,
+            workbench_submit,
             school_prepare_evaluations,
             school_submit_evaluations,
             school_cancel_evaluations,

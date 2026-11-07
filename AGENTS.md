@@ -6,7 +6,7 @@
 
 ## 硬约束
 
-- **设计**：新前端必须先有参考图，且用户明确同意设计与开始实现。`docs/design/plugin-market-v2/` 已获准；`campus-agent-v1` 的 Agent / 评教页与最小化桌宠设计**未获准**，不得按旧稿或设想直接改视觉。`docs/design/campus-v0.6/` 范围与信息架构已确认（方案 A 工作区），视觉未获准，参考图获批前不改校园前端。
+- **设计**：新前端必须先有参考图，且用户明确同意设计与开始实现。`docs/design/plugin-market-v2/` 已获准；`campus-agent-v1` 的 Agent / 评教页与最小化桌宠设计**未获准**，不得按旧稿或设想直接改视觉。`docs/design/campus-v0.6/` 范围与信息架构已确认；版本 B 的导航、待办、课程资料版式已获准并实现（2026-11-02），其余页面参考图获批前不改视觉。
 - **技术栈**：Rust + Tauri 2 + Vue 3 + TypeScript，目标 macOS / Windows。校园功能先研究本地 XJTUToolBox，再独立适配；复用 GPL-3.0 代码前核对分发要求。
 - **凭据**：保存在 `~/.xjtu-launcher/auth.json`，不使用系统钥匙串。密码、Cookie、API Key、令牌、私钥不得进入日志、截图或仓库。
 - **文件与数据位置**：隐藏的 `~/.xjtu-launcher` 固定放设置、凭据与缓存（`config.json`、`auth.json`、`storage.json` 在顶层，`cache/`、`plugins/`、`agent/`、`state/` 在子文件夹）；用户自己的文件放可见的 `xjtu-launcher-file`（默认 `~/Documents/xjtu-launcher-file`，下有 `workspace/` 与 `download/`），位置可在「应用设置 → 存储」改，记录在 `~/.xjtu-launcher/storage.json`。界面路径一律显示为 `~/...`，不出现用户账号名。迁移必须先复制核对、再切换、最后删旧；`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不参与迁移。

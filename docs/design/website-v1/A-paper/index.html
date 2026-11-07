@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 A · 纸感 · XJTU Launcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="#">
+      <img src="../../../../website/assets/icon.png" width="30" height="30" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav>
+      <a href="#features">功能</a>
+      <a href="#download">下载</a>
+      <a href="#install">安装</a>
+      <a class="ghost" href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot"></span>西安交通大学 · 学生项目</p>
+        <h1>把交大人的<br><em>校园生活</em><br>收进一个桌面应用</h1>
+        <p class="lede">课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆，都在同一个窗口里。登录一次校园账号，凭据只保存在本机。</p>
+        <div class="actions">
+          <a class="btn primary" href="#download">下载 macOS 版</a>
+          <a class="btn text" href="#download">其他平台 →</a>
+        </div>
+        <p class="meta">当前版本 0.5.2 · 2026-10-29 · 安装包约 23.1 MB</p>
+      </div>
+      <figure class="shot">
+        <div class="shot-bar"><i></i><i></i><i></i></div>
+        <img src="../../../../website/assets/home.jpg" width="1280" height="870" alt="XJTU Launcher 主页">
+        <figcaption>主页 · 今日课程与校园快捷入口</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div class="ticker">
+    <div class="wrap ticker-inner">
+      <span>课表</span><span>成绩</span><span>考试</span><span>考勤</span><span>校园卡</span><span>空闲教室</span><span>思源学堂</span><span>评教</span><span>图书馆</span><span>场馆</span>
+    </div>
+  </div>
+
+  <section class="section wrap" id="features">
+    <div class="section-head">
+      <p class="kicker">01 — 能力</p>
+      <h2>不是把网页<br>塞进客户端</h2>
+      <p class="section-lede">Rust 直接对接校园系统，查询走原生请求。评教和作业提交先预览、再确认，不做你没同意的写操作。</p>
+    </div>
+    <div class="features">
+      <article><span class="num">01</span><h3>一处登录</h3><p>密码、短信验证码、扫码三种方式；多账号保存，WebVPN 自动回退，凭据只存在本机。</p></article>
+      <article><span class="num">02</span><h3>课表与成绩</h3><p>今日课程与完整学期课表，按周切换；成绩、考试、考勤、校园卡、空闲教室一页查完。</p></article>
+      <article><span class="num">03</span><h3>思源学堂</h3><p>作业、学习资料、课程回放、讨论按类型切换；附件可另存，录播课直接取回放地址。</p></article>
+      <article><span class="num">04</span><h3>Agent</h3><p>用自然语言查询校园数据；改课表、交作业、评教都会先给出预览，你同意后才执行。</p></article>
+      <article><span class="num">05</span><h3>本机 MCP</h3><p>打开 MCP 模式后，Claude Code 等编程 Agent 可以在本机直接调用同一批校园工具。</p></article>
+      <article><span class="num">06</span><h3>插件与更新</h3><p>课表、畅行校园、主页主题以插件形式出现；应用更新带签名校验，可更换镜像源。</p></article>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap band-grid">
+      <div>
+        <p class="kicker light">02 — 校园</p>
+        <h2>一个窗口，<br>看完今天所有事</h2>
+        <p>不只是课表。今天上什么、还有哪门作业没交、这周考勤有没有异常，打开就知道。数据只在你自己的机器上解密。</p>
+        <ul class="ticks">
+          <li>原生 Rust 请求，不内嵌浏览器登录页</li>
+          <li>切换账号即关闭旧窗口，缓存按账号隔离</li>
+          <li>所有写操作先预览，结果不明不自动重试</li>
+        </ul>
+      </div>
+      <figure class="band-shot">
+        <img src="../../../../website/assets/campus.jpg" width="1280" height="870" alt="畅行校园">
+        <figcaption>畅行校园 · 学习与成绩</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section wrap" id="download">
+    <div class="section-head">
+      <p class="kicker">03 — 下载</p>
+      <h2>选择你的平台</h2>
+      <p class="section-lede">安装包同时发布在 GitHub Release。没有购买 Apple 与 Windows 的代码签名证书，首次打开需要手动允许一次。</p>
+    </div>
+    <div class="download-card">
+      <div class="row">
+        <div class="plat"><strong>macOS</strong><span>Apple 芯片 · aarch64</span></div>
+        <code>XJTU.Launcher_0.5.2_aarch64.dmg</code>
+        <span class="size">23.1 MB</span>
+        <a class="btn small" href="#">下载</a>
+      </div>
+      <div class="row">
+        <div class="plat"><strong>macOS</strong><span>Intel · x86_64</span></div>
+        <code>XJTU.Launcher_0.5.2_x64.dmg</code>
+        <span class="size">23.9 MB</span>
+        <a class="btn small" href="#">下载</a>
+      </div>
+      <div class="row">
+        <div class="plat"><strong>Windows</strong><span>10 / 11 · x64</span></div>
+        <code>XJTU.Launcher_0.5.2_x64-setup.exe</code>
+        <span class="size">20.8 MB</span>
+        <a class="btn small" href="#">下载</a>
+      </div>
+    </div>
+    <details class="checksums">
+      <summary>SHA256 校验值</summary>
+      <p>aarch64.dmg · 4a5c8fe2…05af1<br>x64.dmg · 896580b7…b7c1<br>x64-setup.exe · 91547b2d…4ed6</p>
+    </details>
+  </section>
+
+  <section class="section wrap" id="install">
+    <div class="section-head">
+      <p class="kicker">04 — 安装</p>
+      <h2>第一次打开</h2>
+    </div>
+    <div class="install">
+      <div>
+        <h3>macOS</h3>
+        <ol>
+          <li>打开 DMG，把 <strong>XJTU Launcher</strong> 拖进「应用程序」。</li>
+          <li>首次打开提示「无法验证开发者」时，去「系统设置 → 隐私与安全性」，底部点「仍要打开」。</li>
+          <li>每个新版本确认一次，之后直接启动。</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Windows</h3>
+        <ol>
+          <li>运行 <strong>setup.exe</strong>，按向导完成安装。</li>
+          <li>出现「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。</li>
+          <li>安装完成后从开始菜单启动。</li>
+        </ol>
+      </div>
+    </div>
+    <p class="note">系统提示不代表安装包损坏。介意的话，先用上面的 SHA256 核对文件，再从本站或 GitHub Release 打开。</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <img src="../../../../website/assets/icon.png" width="34" height="34" alt="">
+      <p class="footer-brand">XJTU Launcher</p>
+    </div>
+    <p>MIT License · <a href="#">GitHub</a><br>学生个人项目，与西安交通大学官方无关。<br>不收集校园账号密码，凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<script>
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}, { threshold: 0.15 });
+document.querySelectorAll('.section-head, .features article, .band-grid > *, .download-card, .install > *').forEach((el) => {
+  el.classList.add('reveal'); io.observe(el);
+});
+</script>
+</body>
+</html>

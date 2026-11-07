@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="wb.css">
+<style>
+  .tree { width: 258px; }
+</style></head>
+<body>
+<svg style="display:none">
+  <symbol id="folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+    <path d="M1.6 4.2A1.6 1.6 0 0 1 3.2 2.6h3l1.4 1.5h5.2a1.6 1.6 0 0 1 1.6 1.6v6.1a1.6 1.6 0 0 1-1.6 1.6H3.2a1.6 1.6 0 0 1-1.6-1.6z"/>
+  </symbol>
+</svg>
+
+<div class="window">
+  <aside class="appbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9.5" r="2.5"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M15 14.4c2.6.2 4.5 2 4.5 4.6"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></div>
+    <div class="ico active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7.5" width="18" height="12" rx="2"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5"/><path d="M3 12.5h18"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="spacer"></div>
+    <div class="me"></div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <div class="wbhead">
+        <h1>工作台</h1>
+        <span class="term">2026-2027 秋季学期</span>
+        <span class="term-sub"><b>13</b> 门课程 · <b>128</b> 个文件 · 作业清单已同步 <b>10:24</b></span>
+      </div>
+      <div class="wbtools">
+        <div class="search">搜索文件或文件夹</div>
+        <span class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>新建文件夹</span>
+        <span class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>刷新</span>
+      </div>
+    </div>
+
+    <div class="wbbody">
+      <section class="pane">
+        <div class="crumb"><span>2026-2027 秋季学期</span><span class="sep">/</span><span>计组</span></div>
+        <div class="chead">
+          <div>
+            <h2>计组<span class="real">计算机组成</span></h2>
+            <div class="desc"><span>课程编号 <b>COMP4501</b></span><span>3 学分</span><span>王鸽 · 丁菡 · 惠维</span><span>教学班 0502</span></div>
+          </div>
+          <div class="cactions">
+            <span class="btn">在访达中显示</span>
+            <span class="btn primary">提交作业</span>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <h3>作业（4）</h3>
+            <span class="meta">自动同步自习源学堂 · 未交 1</span>
+            <span class="more">全部作业 ›</span>
+          </div>
+          <div class="table">
+            <div class="thead" style="grid-template-columns: 2.4fr 1fr 0.9fr 1fr 0.6fr; height: 28px">
+              <span>作业</span><span>截止</span><span>状态</span><span>文件夹</span><span class="num">操作</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.4fr 1fr 0.9fr 1fr 0.6fr; height: 33px">
+              <span>第 5 次作业 · 流水线与冒险</span><span class="late">11-14 23:59</span><span class="late">未交</span>
+              <span class="folder-cell"><svg><use href="#folder"/></svg>作业</span><span class="ops">提交 ›</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.4fr 1fr 0.9fr 1fr 0.6fr; height: 33px">
+              <span>第 4 次作业 · 存储层次</span><span class="muted">10-31 23:59</span><span class="ok">已交 10-30</span>
+              <span class="folder-cell"><svg><use href="#folder"/></svg>作业</span><span class="ops">查看 ›</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.4fr 1fr 0.9fr 1fr 0.6fr; height: 33px">
+              <span>第 3 次作业 · 指令系统</span><span class="muted">10-17 23:59</span><span class="ok">已交 10-16</span>
+              <span class="folder-cell"><svg><use href="#folder"/></svg>作业</span><span class="ops">查看 ›</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.4fr 1fr 0.9fr 1fr 0.6fr; height: 33px">
+              <span>专题实验报告一</span><span class="muted">10-10 23:59</span><span class="warn">已截止 · 未交</span>
+              <span class="folder-cell"><svg><use href="#folder"/></svg>作业</span><span class="ops">查看 ›</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <h3>文件（24）</h3>
+            <span class="meta">本机文件夹 · 可在访达中直接整理</span>
+            <span class="more">添加文件 ›</span>
+          </div>
+          <div class="table">
+            <div class="thead" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 28px">
+              <span>文件名</span><span>类型</span><span class="num">大小</span><span class="num">修改时间</span><span>绑定</span><span class="num">操作</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 32px">
+              <span>Chapter7 控制器.pptx</span><span class="muted">PPT</span><span class="num muted">4.1 MB</span><span class="num muted">10-28 14:02</span>
+              <span class="muted">课程课件</span><span class="ops">打开</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 32px">
+              <span>第三章作业参考答案.pdf</span><span class="muted">PDF</span><span class="num muted">1.2 MB</span><span class="num muted">10-21 09:31</span>
+              <span class="muted">第 3 次作业</span><span class="ops">打开</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 32px">
+              <span>第4次作业_存储层次.pdf</span><span class="muted">PDF</span><span class="num muted">386 KB</span><span class="num muted">10-30 22:10</span>
+              <span class="muted">第 4 次作业</span><span class="ops">打开</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 32px">
+              <span>复习提纲.md</span><span class="muted">MD</span><span class="num muted">12 KB</span><span class="num muted">10-26 18:44</span>
+              <span class="muted">未绑定</span><span class="ops">打开</span>
+            </div>
+            <div class="row" style="grid-template-columns: 2.6fr 0.6fr 0.7fr 1fr 0.9fr 0.6fr; height: 32px">
+              <span>实验二 说明.pdf</span><span class="muted">PDF</span><span class="num muted">2.4 MB</span><span class="num muted">10-19 10:08</span>
+              <span class="muted">专题实验一</span><span class="ops">打开</span>
+            </div>
+          </div>
+          <div class="tip">文件与课程文件夹都在本地磁盘上，应用只是把它们显示出来；在访达里新建、移动、重命名文件夹，回到这里刷新即可看到。</div>
+        </div>
+      </section>
+
+      <aside class="tree">
+        <div class="tree-head">
+          <span>文件</span>
+          <span class="acts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+          </span>
+        </div>
+        <div class="tree-body">
+          <div class="tnode term"><span class="tw">▾</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">2026-2027 秋季学期</span><span class="ct">128</span></div>
+          <div class="tnode course on"><span class="tw">▾</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">计组</span><span class="real">计算机组成</span><span class="ct">24</span></div>
+          <div class="tnode sub"><span class="tw"></span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">课件</span><span class="ct">12</span></div>
+          <div class="tnode sub"><span class="tw"></span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">作业</span><span class="ct">8</span></div>
+          <div class="tnode sub"><span class="tw"></span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">实验</span><span class="ct">4</span></div>
+          <div class="tnode course"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">计网</span><span class="real">计算机网络原理</span><span class="ct">18</span></div>
+          <div class="tnode course"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">操作系统原理I</span><span class="ct">12</span></div>
+          <div class="tnode course"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">人工智能</span><span class="ct">9</span></div>
+          <div class="tnode course"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">文学经典与热点透视</span><span class="ct">3</span></div>
+          <div class="tnode course"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">期末复习</span><span class="real">自己建的</span><span class="ct">6</span></div>
+          <div class="tnode term" style="margin-top:6px"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">2025-2026 春季学期</span><span class="ct">96</span></div>
+          <div class="tnode term"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">2025-2026 秋季学期</span><span class="ct">84</span></div>
+          <div class="tnode term"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">2024-2025 春季学期</span><span class="ct">71</span></div>
+          <div class="tnode term"><span class="tw">▸</span><span class="fi"><svg><use href="#folder"/></svg></span><span class="nm">2024-2025 秋季学期</span><span class="ct">58</span></div>
+        </div>
+        <div class="tree-foot">学期管理…</div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body></html>

@@ -162,9 +162,12 @@ pub enum Input {
         #[serde(default)]
         description: String,
         prompt: String,
-        #[serde(default)]
+        // `rename_all` on the enum only renames variants, so the fields that
+        // contain underscores need explicit camelCase names to match the
+        // frontend payload (`roleId` / `skillIds`).
+        #[serde(default, rename = "roleId")]
         role_id: Option<String>,
-        #[serde(default)]
+        #[serde(default, rename = "skillIds")]
         skill_ids: Vec<String>,
     },
 }
@@ -233,6 +236,28 @@ pub fn upsert(presets: &mut Presets, input: Input) -> Result<String, String> {
                 None => presets.tasks.push(task),
             }
             Ok(id)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_input_accepts_camel_case_fields() {
+        let input: Input = serde_json::from_str(
+            r#"{"kind":"task","name":"整理课表","description":"","prompt":"帮我整理","roleId":"r1","skillIds":["s1"]}"#,
+        )
+        .expect("task input should deserialize");
+        match input {
+            Input::Task {
+                role_id, skill_ids, ..
+            } => {
+                assert_eq!(role_id.as_deref(), Some("r1"));
+                assert_eq!(skill_ids, vec!["s1".to_string()]);
+            }
+            _ => panic!("expected a task input"),
         }
     }
 }

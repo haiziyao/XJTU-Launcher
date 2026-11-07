@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+.card .teacher { font-size: 11.5px; color: var(--text-tertiary); }
+.card .counts { display: flex; gap: 10px; font-size: 11.5px; color: var(--text-secondary); }
+.card .counts b { font-weight: 600; color: var(--text); }
+.card .next { margin-top: 2px; font-size: 11.5px; color: var(--text-secondary); }
+.card .next em { font-style: normal; color: var(--warning); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg></div>
+    <div class="spacer"></div>
+    <div class="me"></div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h1>畅行校园</h1>
+      <div class="tools"><span class="sample">示例数据</span></div>
+    </div>
+
+    <nav class="primary">
+      <span class="ptab">待办<span class="n">11</span></span>
+      <span class="ptab">通知<span class="n">12</span></span>
+      <span class="vsep"></span>
+      <span class="ptab active">学习</span>
+      <span class="ptab">学业</span>
+      <span class="ptab">生活</span>
+    </nav>
+    <nav class="secondary">
+      <span class="stab active">思源学堂</span>
+      <span class="stab">课程资料</span>
+      <span class="stab">资料库</span>
+    </nav>
+
+    <div class="section">
+      <div class="left"><h2>思源学堂</h2><span class="meta">2026–2027 · 11 门课程 · 11 项待交 · 更新于 刚刚</span></div>
+      <div class="right">
+        <span class="seg"><span class="on">2026–2027</span><span>全部学期</span></span>
+        <div class="search">搜索课程</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h3>计算机组成</h3>
+        <div class="teacher">王老师 · COMP3021 · 3.0 学分</div>
+        <div class="counts"><span>未交 <b>5</b></span><span>资料 <b>11</b></span><span>回放 <b>3</b></span></div>
+        <div class="next">下次截止 <em>周五 23:59</em> · 第三章作业</div>
+        <div class="foot"><span>最近活动 10-30</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>计算机网络原理</h3>
+        <div class="teacher">李老师 · COMP3013 · 3.0 学分</div>
+        <div class="counts"><span>未交 <b>2</b></span><span>资料 <b>2</b></span><span>回放 <b>5</b></span></div>
+        <div class="next">下次截止 <em>周日 23:59</em> · 第二章作业</div>
+        <div class="foot"><span>最近活动 10-29</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>操作系统设计专题实验</h3>
+        <div class="teacher">张老师 · COMP3081 · 2.0 学分</div>
+        <div class="counts"><span>未交 <b>1</b></span><span>资料 <b>4</b></span><span>回放 <b>0</b></span></div>
+        <div class="next">下次截止 11月14日 · 实验二</div>
+        <div class="foot"><span>最近活动 10-28</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>文学经典与热点透视</h3>
+        <div class="teacher">刘老师 · GE2041 · 2.0 学分</div>
+        <div class="counts"><span>未交 <b>1</b></span><span>资料 <b>5</b></span><span>回放 <b>1</b></span></div>
+        <div class="next">下次截止 <em>今天 23:59</em> · 第二次作业</div>
+        <div class="foot"><span>最近活动 10-27</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>计算机组成与结构专题实验</h3>
+        <div class="teacher">王老师 · COMP3022 · 2.0 学分</div>
+        <div class="counts"><span>未交 <b>1</b></span><span>资料 <b>6</b></span><span>回放 <b>0</b></span></div>
+        <div class="next">下次截止 11月14日 · 实验二</div>
+        <div class="foot"><span>最近活动 10-26</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>思想道德与法治</h3>
+        <div class="teacher">陈老师 · GE1012 · 3.0 学分</div>
+        <div class="counts"><span>未交 <b>0</b></span><span>资料 <b>8</b></span><span>回放 <b>2</b></span></div>
+        <div class="next">暂无待交作业</div>
+        <div class="foot"><span>最近活动 10-20</span><span class="link">打开 ›</span></div>
+      </div>
+    </div>
+    <div class="section" style="margin-top:16px">
+      <div class="left"><h2 style="font-size:13px">即将截止</h2><span class="meta">按截止时间升序 · 前 6 项</span></div>
+      <div class="right"><span class="link" style="font-size:11.5px">全部待办 ›</span></div>
+    </div>
+    <div class="table" style="margin-top:10px; flex:0 0 auto">
+      <div class="thead" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:30px">
+        <span>作业</span><span>课程</span><span>截止</span><span class="num">剩余</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>第二次作业</span><span class="muted">文学经典与热点透视</span><span class="num">今天 23:59</span><span class="num muted">13 小时</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>第三章作业（第三次）</span><span class="muted">计算机组成</span><span class="num">周五 23:59</span><span class="num muted">4 天</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>第二章作业</span><span class="muted">计算机网络原理</span><span class="num">周日 23:59</span><span class="num muted">6 天</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>第四章作业（第一次）</span><span class="muted">计算机组成</span><span class="num">11月14日 23:59</span><span class="num muted">12 天</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>实验二</span><span class="muted">计算机组成与结构专题实验</span><span class="num">11月14日 23:59</span><span class="num muted">12 天</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 1fr 0.8fr; height:32px">
+        <span>第五章作业（第一次）</span><span class="muted">计算机组成</span><span class="num">12月16日 23:59</span><span class="num muted">44 天</span>
+      </div>
+    </div>
+    <div class="footer-note">课程是卡片而不是横条；点开课程后是活动表格 + 右侧详情（示例数据）</div>
+  </main>
+</div>
+</body></html>

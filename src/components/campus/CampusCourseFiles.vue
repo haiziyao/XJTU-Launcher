@@ -3,31 +3,35 @@ import { computed, onMounted, ref } from 'vue';
 import { FolderOpen } from 'lucide-vue-next';
 import { save } from '@tauri-apps/plugin-dialog';
 import SectionHeader from '../ui/SectionHeader.vue';
-import FilterBar from '../ui/FilterBar.vue';
-import FileRow from './FileRow.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import InlineAlert from '../ui/InlineAlert.vue';
 import UiButton from '../ui/UiButton.vue';
 import { bridge } from '../../bridge';
 import { loadLmsOverview } from '../../campusOverview';
 import { applyCached } from '../../cache';
-import { fileSize } from '../../domain';
+import { fileSize, lmsTime } from '../../domain';
 import type { LmsLibraryFile, LmsOverview } from '../../types';
 
 /**
- * 课程资料 (LAYOUT §9.3): files attached to material activities in the
- * current semester, grouped by course. This is the school's course material,
- * not the user's local file library. Opening and downloading are user-initiated and
- * reuse the same read-only LMS file endpoints as the course page.
+ * 课程资料 (LAYOUT §9.3, version B): files attached to material activities in
+ * the current semester, shown as one card per course plus a cross-course
+ * table. Clicking a card narrows the table to that course.
+ * The overview has no upload time, only the material activity's end date, so
+ * the table labels that column 活动截止 and never claims a "latest" order.
+ * Opening and downloading are user-initiated and reuse the same read-only LMS
+ * file endpoints as the course page.
  */
 interface FileGroup {
   course: string;
   items: LmsLibraryFile[];
+  size: number;
+  types: string[];
 }
 const files = ref<LmsLibraryFile[]>([]);
 const semester = ref('');
 const failed = ref(0);
 const query = ref('');
+const courseFilter = ref('');
 const loading = ref(true);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
@@ -46,13 +50,46 @@ const groups = computed<FileGroup[]>(() => {
   for (const item of visible.value) {
     const course = item.course || '未标注课程';
     const group = map.get(course);
-    if (group) group.items.push(item);
-    else map.set(course, { course, items: [item] });
+    if (group) {
+      group.items.push(item);
+      group.size += item.file.size ?? 0;
+    } else {
+      map.set(course, {
+        course,
+        items: [item],
+        size: item.file.size ?? 0,
+        types: [],
+      });
+    }
   }
-  return [...map.values()].sort((left, right) =>
-    left.course.localeCompare(right.course, 'zh-Hans-CN'),
-  );
+  const result = [...map.values()];
+  for (const group of result) {
+    group.items.sort((left, right) => left.file.name.localeCompare(right.file.name, 'zh-Hans-CN'));
+    group.types = [
+      ...new Set(
+        group.items
+          .map((item) =>
+            item.file.name.includes('.') ? item.file.name.split('.').pop()!.toUpperCase() : '',
+          )
+          .filter(Boolean),
+      ),
+    ].slice(0, 3);
+  }
+  return result.sort((left, right) => left.course.localeCompare(right.course, 'zh-Hans-CN'));
 });
+const tableFiles = computed(() =>
+  [...visible.value]
+    .filter((item) => !courseFilter.value || item.course === courseFilter.value)
+    .sort(
+      (left, right) =>
+        left.course.localeCompare(right.course, 'zh-Hans-CN') ||
+        left.file.name.localeCompare(right.file.name, 'zh-Hans-CN'),
+    )
+    .slice(0, 8),
+);
+const filteredCount = computed(
+  () => visible.value.filter((item) => item.course === courseFilter.value).length,
+);
 const subtitle = computed(() => {
   if (!files.value.length) return '';
   const courses = new Set(files.value.map((item) => item.course)).size;
@@ -60,6 +97,11 @@ const subtitle = computed(() => {
     .filter(Boolean)
     .join(' · ');
 });
+
+function day(value: string): string {
+  const text = lmsTime(value);
+  return text.length >= 10 ? text.slice(5, 10) : text;
+}
 
 async function load(force = false) {
   loading.value = true;
@@ -81,6 +123,10 @@ async function load(force = false) {
   } finally {
     loading.value = false;
   }
+}
+
+function toggleCourse(course: string) {
+  courseFilter.value = courseFilter.value === course ? '' : course;
 }
 
 async function openFile(item: LmsLibraryFile) {
@@ -127,25 +173,37 @@ onMounted(() => void load());
       :updated-at="loadedAt"
       :refreshing="loading"
       @refresh="load(true)"
-    />
-
-    <FilterBar
-      :query="query"
-      :active="Boolean(query)"
-      placeholder="搜索文件名、资料名或课程"
-      label="搜索资料"
-      @update:query="query = $event"
-      @clear="query = ''"
-    />
+    >
+      <template #filters>
+        <label class="field-shell search files-search">
+          <FolderOpen :size="13" aria-hidden="true" />
+          <input
+            v-model="query"
+            type="search"
+            placeholder="搜索文件名、资料名或课程"
+            aria-label="搜索资料"
+            spellcheck="false"
+          />
+        </label>
+        <UiButton
+          v-if="courseFilter || query"
+          variant="ghost"
+          size="sm"
+          @click="
+            courseFilter = '';
+            query = '';
+          "
+        >
+          清除筛选
+        </UiButton>
+      </template>
+    </SectionHeader>
 
     <InlineAlert v-if="error" tone="error" :title="error" />
     <InlineAlert v-if="failed" tone="partial" title="部分内容未能读取">
       {{ failed }} 个课程或作业请求失败，列表可能不完整；刷新可重试。
     </InlineAlert>
     <InlineAlert v-if="notice" tone="info" :title="notice" dismissible @dismiss="notice = ''" />
-    <p v-if="files.length" class="library-source">
-      这是本学期课程中老师发布的资料附件；打开或下载由你手动触发。
-    </p>
 
     <EmptyState
       v-if="loading && !files.length"
@@ -169,76 +227,111 @@ onMounted(() => void load());
       description="换一个文件名或课程名试试。"
     />
 
-    <section v-for="group in groups" :key="group.course" class="library-group">
-      <h3 class="library-group-title">
-        {{ group.course }}
-        <span>{{ group.items.length }}</span>
-      </h3>
-      <div class="library-list">
-        <FileRow
-          v-for="item in group.items"
-          :key="item.file.id"
-          :name="item.file.name"
-          :size="item.file.size"
-          :detail="[item.title, item.semester].filter(Boolean).join(' · ')"
-          :previewable="false"
-          :downloadable="item.file.allowDownload"
-          :busy="busy === item.file.id"
-          @download="downloadFile(item)"
+    <template v-if="visible.length">
+      <div class="campus-cards">
+        <article
+          v-for="group in groups"
+          :key="group.course"
+          class="campus-course-card"
+          :class="{ active: courseFilter === group.course }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="courseFilter === group.course"
+          @click="toggleCourse(group.course)"
+          @keydown.enter.prevent="toggleCourse(group.course)"
+          @keydown.space.prevent="toggleCourse(group.course)"
         >
-          <template #actions>
-            <UiButton
-              v-if="item.file.allowDownload"
-              size="sm"
-              variant="ghost"
-              :disabled="busy === item.file.id"
-              @click="openFile(item)"
+          <span class="card-title">{{ group.course }}</span>
+          <span class="card-meta">
+            <span>{{ group.items.length }} 个文件</span>
+            <span v-if="group.size">{{ fileSize(group.size) }}</span>
+          </span>
+          <ul class="card-files">
+            <li v-for="item in group.items.slice(0, 3)" :key="item.file.id">
+              {{ item.file.name }}
+            </li>
+          </ul>
+          <span class="card-foot">
+            <span
+              >{{ group.types.join(' · ') || '文件'
+              }}<template v-if="group.size"> · {{ fileSize(group.size) }}</template></span
             >
-              打开
-            </UiButton>
-            <span v-else class="library-locked">不可下载</span>
-          </template>
-        </FileRow>
+            <span class="card-open">{{ courseFilter === group.course ? '已筛选' : '筛选 ›' }}</span>
+          </span>
+        </article>
       </div>
-    </section>
+
+      <div class="files-subhead">
+        <div>
+          <h3>全部文件</h3>
+          <span>{{
+            courseFilter
+              ? `${courseFilter} · ${filteredCount} 个文件`
+              : `跨课程 · 共 ${visible.length} 个文件 · 按课程排列`
+          }}</span>
+        </div>
+        <UiButton v-if="courseFilter" variant="ghost" size="sm" @click="courseFilter = ''">
+          显示全部课程
+        </UiButton>
+      </div>
+
+      <div class="campus-table">
+        <div class="campus-table-head files-head">
+          <span>文件</span>
+          <span>课程</span>
+          <span class="num">大小</span>
+          <span class="num">活动截止</span>
+          <span class="num">操作</span>
+        </div>
+        <div v-for="item in tableFiles" :key="item.file.id" class="campus-row files-row">
+          <span class="name" :title="item.file.name">{{ item.file.name }}</span>
+          <span class="course" :title="item.course">{{ item.course || '未标注课程' }}</span>
+          <span class="num muted">{{ item.file.size ? fileSize(item.file.size) : '—' }}</span>
+          <span class="num muted" :title="item.end ? lmsTime(item.end) : ''">{{
+            day(item.end) || '—'
+          }}</span>
+          <button
+            v-if="item.file.allowDownload"
+            type="button"
+            class="row-action"
+            :disabled="busy === item.file.id"
+            @click="downloadFile(item)"
+          >
+            {{ busy === item.file.id ? '保存中' : '下载' }}
+          </button>
+          <button v-else type="button" class="row-action" @click="openFile(item)">打开</button>
+        </div>
+      </div>
+    </template>
   </section>
 </template>
 
 <style scoped>
-.library-source {
-  margin: 0 0 14px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
+.files-search {
+  width: 240px;
 }
-.library-group + .library-group {
-  margin-top: 18px;
-}
-.library-group-title {
+.files-subhead {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 6px;
-  padding: 0 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 10px;
+}
+.files-subhead h3 {
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
 }
-.library-group-title span {
-  color: var(--text-tertiary);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.library-list {
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.library-list > :deep(.file-row + .file-row) {
-  border-top: 1px solid var(--border);
-}
-.library-locked {
+.files-subhead span {
+  margin-left: 8px;
   color: var(--text-tertiary);
   font-size: 11.5px;
+}
+.files-head,
+.files-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 76px 64px 56px;
+}
+.files-row .name {
+  font-weight: 400;
 }
 </style>

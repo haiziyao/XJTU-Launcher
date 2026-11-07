@@ -89,6 +89,9 @@ function edit(item?: { id: string; name: string; description: string } & Record<
   };
   status.value = '';
   error.value = '';
+  // Roles and skills are edited by sibling sections that keep their own copy
+  // of the store; refresh so a newly added one shows up in this form.
+  if (props.kind === 'task') void load();
 }
 const valid = computed(() => {
   const value = draft.value;

@@ -29,6 +29,7 @@
 | [按钮与通用控件](UI_COMPONENTS.md)             | `UiButton` / `UiIconButton` 的变体与用法 |
 | [插件格式](PLUGINS.md)                         | 声明式插件、安装和管理                   |
 | [插件市场与更新](PLUGIN_MARKET_AND_UPDATES.md) | 已获准方案、实现及部署边界               |
+| [回放截取插件方案](PLUGIN_PPT_CAPTURE.md)      | 内置插件、截取流水线与分阶段实施（已实现，真机验收待做） |
 | [插件服务](../tools/plugin-server/README.md)   | 本地服务、目录契约和真实 HTTP 联调       |
 
 ## 校园功能与 Agent
@@ -43,6 +44,8 @@
 | 文档                                   | 内容                                            |
 | -------------------------------------- | ----------------------------------------------- |
 | [发布指南](RELEASING.md)               | 签名更新、镜像更新源、发布变量与草稿工作流      |
+| [官网与下载分发](WEBSITE.md)           | 官网源码、服务器部署、OSS 安装包与 HTTPS 迁移   |
+| [OSS 下载网关](../tools/oss-gateway/README.md) | 私有 Bucket、60 秒签名链接与 IP 限流 |
 | [版本记录](../docs/releases/README.md) | 每个版本的改动、验证与撤回情况                  |
 | [安装包签名](SIGNING.md)               | macOS Developer ID 与公证、Windows 代码签名进度 |
 | [P0 待办](P0.md)                       | 发布前必须处理的事项（当前：更新镜像使用 HTTP） |

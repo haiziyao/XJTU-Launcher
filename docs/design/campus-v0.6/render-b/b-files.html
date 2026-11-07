@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+.cards.files { grid-template-columns: repeat(3, 1fr); }
+.card .count { display: flex; gap: 8px; align-items: center; }
+.card .new { font-size: 10.5px; color: var(--accent-text); background: var(--accent-soft); border-radius: 999px; padding: 0 6px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg></div>
+    <div class="spacer"></div>
+    <div class="me"></div>
+  </aside>
+
+  <main class="main">
+    <div class="pagehead">
+      <h1>畅行校园</h1>
+      <div class="tools"><span class="sample">示例数据</span></div>
+    </div>
+
+    <nav class="primary">
+      <span class="ptab">待办<span class="n">11</span></span>
+      <span class="ptab">通知<span class="n">12</span></span>
+      <span class="vsep"></span>
+      <span class="ptab active">学习</span>
+      <span class="ptab">学业</span>
+      <span class="ptab">生活</span>
+    </nav>
+    <nav class="secondary">
+      <span class="stab">思源学堂</span>
+      <span class="stab active">课程资料</span>
+      <span class="stab">资料库</span>
+    </nav>
+
+    <div class="section">
+      <div class="left"><h2>课程资料</h2><span class="meta">2026–2027 · 36 个文件 · 6 门课程 · 更新于 刚刚</span></div>
+      <div class="right">
+        <div class="search">搜索文件名、资料名或课程</div>
+        <span class="seg"><span class="on">卡片</span><span>表格</span></span>
+      </div>
+    </div>
+
+    <div class="cards files">
+      <div class="card">
+        <h3>操作系统设计专题实验</h3>
+        <div class="sub"><span class="count">4 个文件</span><span>最近 10-28</span><span class="new">新 1</span></div>
+        <ul>
+          <li>MCP与openEuler操作系统实验学生课件.pdf</li>
+          <li>openEuler_MCP代码框架.zip</li>
+          <li>基于MCP的openEuler实验指导书.pdf</li>
+        </ul>
+        <div class="foot"><span>PDF · ZIP · 共 5.3 MB</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>计算机网络原理</h3>
+        <div class="sub"><span class="count">2 个文件</span><span>最近 10-21</span></div>
+        <ul>
+          <li>第1章 引论(1).pptx</li>
+          <li>第2章 网络体系结构.pptx</li>
+        </ul>
+        <div class="foot"><span>PPT · 共 4.5 MB</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>计算机组成</h3>
+        <div class="sub"><span class="count">11 个文件</span><span>最近 10-20</span><span class="new">新 2</span></div>
+        <ul>
+          <li>Chapter7 控制器.pptx</li>
+          <li>Chapter3 存储器-第一部分.pdf</li>
+          <li>第三章作业参考答案.pdf</li>
+        </ul>
+        <div class="foot"><span>PPT · PDF · 共 24.1 MB</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>计算机组成与结构专题实验</h3>
+        <div class="sub"><span class="count">6 个文件</span><span>最近 10-19</span></div>
+        <ul>
+          <li>实验二 说明.pdf</li>
+          <li>实验环境配置.md</li>
+          <li>实验报告模板.docx</li>
+        </ul>
+        <div class="foot"><span>PDF · MD · DOCX</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>文学经典与热点透视</h3>
+        <div class="sub"><span class="count">5 个文件</span><span>最近 10-15</span></div>
+        <ul>
+          <li>课程大纲.pdf</li>
+          <li>第一讲 阅读材料.pdf</li>
+          <li>期末论文要求.docx</li>
+        </ul>
+        <div class="foot"><span>PDF · DOCX</span><span class="link">打开 ›</span></div>
+      </div>
+      <div class="card">
+        <h3>思想道德与法治</h3>
+        <div class="sub"><span class="count">8 个文件</span><span>最近 10-08</span></div>
+        <ul>
+          <li>专题一 课件.pptx</li>
+          <li>专题二 课件.pptx</li>
+          <li>实践作业说明.pdf</li>
+        </ul>
+        <div class="foot"><span>PPT · PDF</span><span class="link">打开 ›</span></div>
+      </div>
+    </div>
+    <div class="section" style="margin-top:16px">
+      <div class="left"><h2 style="font-size:13px">最近更新</h2><span class="meta">跨课程 · 按时间倒序</span></div>
+      <div class="right"><span class="link" style="font-size:11.5px">全部文件 ›</span></div>
+    </div>
+    <div class="table" style="margin-top:10px; flex:0 0 auto">
+      <div class="thead" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:30px">
+        <span>文件</span><span>课程</span><span>大小</span><span>时间</span><span class="num">操作</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:32px">
+        <span>MCP与openEuler操作系统实验学生课件.pdf</span><span class="muted">操作系统设计专题实验</span><span class="num muted">2.4 MB</span><span class="num muted">10-28</span><span class="num link">下载</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:32px">
+        <span>openEuler_MCP代码框架.zip</span><span class="muted">操作系统设计专题实验</span><span class="num muted">76 KB</span><span class="num muted">10-28</span><span class="num link">打开</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:32px">
+        <span>基于MCP的openEuler操作系统实验指导书.pdf</span><span class="muted">操作系统设计专题实验</span><span class="num muted">2.6 MB</span><span class="num muted">10-28</span><span class="num link">下载</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:32px">
+        <span>第1章 引论(1).pptx</span><span class="muted">计算机网络原理</span><span class="num muted">3.2 MB</span><span class="num muted">10-21</span><span class="num link">下载</span>
+      </div>
+      <div class="row" style="grid-template-columns: 2fr 1.4fr 0.7fr 0.9fr 0.6fr; height:32px">
+        <span>第2章 网络体系结构.pptx</span><span class="muted">计算机网络原理</span><span class="num muted">1.3 MB</span><span class="num muted">10-21</span><span class="num link">下载</span>
+      </div>
+    </div>
+    <div class="footer-note">卡片按课程归并，一屏 6 门课；下方补最近文件，页面不再留大块空白（示例数据）</div>
+  </main>
+</div>
+</body></html>

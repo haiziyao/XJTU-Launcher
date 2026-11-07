@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.ppt-capture",
+  "name": "回放截取",
+  "version": "0.1.0",
+  "description": "从思源学堂课程回放中截取讲义页面，导出为 PDF 或图片包",
+  "icon": "presentation",
+  "page": { "type": "pptCapture" },
+  "widget": false,
+  "sidebar": false
+}

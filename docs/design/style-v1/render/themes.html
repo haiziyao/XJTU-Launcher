@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="ink">
+<head>
+<meta charset="utf-8">
+<title>风格参考 · 壁纸全域 + 自适应标题</title>
+<link rel="stylesheet" href="themes.css">
+<script>
+  // ?theme=ink | cream | sea
+  const t = new URLSearchParams(location.search).get('theme');
+  if (t) document.documentElement.dataset.theme = t;
+</script>
+</head>
+<body>
+<div class="window">
+  <div class="wallpaper"></div>
+
+  <aside class="appbar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="sep"></div>
+    <div class="ico active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg></div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg></div>
+    <div class="spacer"></div>
+    <div class="me"></div>
+  </aside>
+
+  <main class="main">
+    <div class="chrome">
+      <div class="pagehead">
+        <div class="title-copy">
+          <h1>畅行校园</h1>
+          <p class="sub"><b>2026–2027 秋季学期</b> · 37 个文件 · 6 门课程 · 更新于 刚刚</p>
+        </div>
+        <div class="tools">
+          <span class="sample">示例数据</span>
+          <span class="iconbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></span>
+          <span class="iconbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span>
+        </div>
+      </div>
+
+      <nav class="primary">
+        <span class="ptab" style="--c: var(--cat-todo)"><i class="dot"></i>待办<span class="n">11</span></span>
+        <span class="ptab" style="--c: var(--cat-notice)"><i class="dot"></i>通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab active" style="--c: var(--cat-study)"><i class="dot"></i>学习</span>
+        <span class="ptab" style="--c: var(--cat-academic)"><i class="dot"></i>学业</span>
+        <span class="ptab" style="--c: var(--cat-life)"><i class="dot"></i>生活</span>
+      </nav>
+
+      <div class="secondary-row">
+        <nav class="secondary">
+          <span class="stab">思源学堂</span>
+          <span class="stab active">课程资料</span>
+          <span class="stab">回放</span>
+        </nav>
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          搜索文件名、资料名或课程
+        </div>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="cards">
+        <div class="card">
+          <h3>操作系统设计专题实验</h3>
+          <div class="sub"><span>4 个文件</span><span>最近 10-28</span></div>
+          <ul>
+            <li>操作系统原理 Project.pdf</li>
+            <li>基于 MCP 的 openEuler 实验指导书.pdf</li>
+            <li>MCP 与 openEuler 实验_学生课件.pdf</li>
+          </ul>
+          <div class="foot"><span>PDF · ZIP · 5.3 MB</span><span class="link">打开 ›</span></div>
+        </div>
+        <div class="card">
+          <h3>计算机网络原理</h3>
+          <div class="sub"><span>2 个文件</span><span>最近 10-21</span></div>
+          <ul>
+            <li>第1章 引论(1).pptx</li>
+            <li>第2章 网络体系结构.pptx</li>
+          </ul>
+          <div class="foot"><span>PPTX · 4.5 MB</span><span class="link">打开 ›</span></div>
+        </div>
+        <div class="card">
+          <h3>计算机组成</h3>
+          <div class="sub"><span>11 个文件</span><span>最近 10-20</span></div>
+          <ul>
+            <li>Chapter1 计算机系统概论.ppt</li>
+            <li>Chapter2 指令系统.ppt</li>
+            <li>Chapter3 存储器-第二部分.ppt</li>
+          </ul>
+          <div class="foot"><span>PPT · PPTX · 23.3 MB</span><span class="link">打开 ›</span></div>
+        </div>
+        <div class="card">
+          <h3>计算机组成与结构专题实验</h3>
+          <div class="sub"><span>3 个文件</span><span>最近 10-18</span></div>
+          <ul>
+            <li>专题实验-综述(1).pptx</li>
+            <li>专题实验-实验二(1).pptx</li>
+            <li>专题实验-实验一(1).pptx</li>
+          </ul>
+          <div class="foot"><span>PPTX · 12.0 MB</span><span class="link">打开 ›</span></div>
+        </div>
+        <div class="card">
+          <h3>人工智能</h3>
+          <div class="sub"><span>7 个文件</span><span>最近 10-30</span></div>
+          <ul>
+            <li>第二章 知识工程.pdf</li>
+            <li>第三章 搜索算法.pdf</li>
+            <li>第四章 机器学习基础.pdf</li>
+          </ul>
+          <div class="foot"><span>PDF · DOCX · 28.3 MB</span><span class="link">打开 ›</span></div>
+        </div>
+        <div class="card">
+          <h3>文学经典与热点透视</h3>
+          <div class="sub"><span>10 个文件</span><span>最近 10-26</span></div>
+          <ul>
+            <li>《上林赋》的图像之旅.pptx</li>
+            <li>《史记·司马相如列传》.pdf</li>
+            <li>《史记·司马相如列传》导读.pptx</li>
+          </ul>
+          <div class="foot"><span>PPTX · PDF · 78.0 MB</span><span class="link">打开 ›</span></div>
+        </div>
+      </div>
+
+      <div class="table">
+        <div class="table-head">
+          <h2>全部文件</h2>
+          <span class="count">跨课程 · 共 37 个文件 · 按课程排列</span>
+        </div>
+        <div class="row thead"><span>文件</span><span>课程</span><span class="num">大小</span><span>活动截止</span><span>操作</span></div>
+        <div class="row tr"><span>操作系统原理 Project.pdf</span><span class="muted">操作系统设计专题实验</span><span class="num">231 KB</span><span class="muted">—</span><span class="link">下载</span></div>
+        <div class="row tr"><span>基于 MCP 的 openEuler 操作系统实验指导书.pdf</span><span class="muted">操作系统设计专题实验</span><span class="num">2.6 MB</span><span class="muted">—</span><span class="link">打开</span></div>
+        <div class="row tr"><span>Chapter3 存储器-第二部分.ppt</span><span class="muted">计算机组成</span><span class="num">4.1 MB</span><span class="muted">—</span><span class="link">打开</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

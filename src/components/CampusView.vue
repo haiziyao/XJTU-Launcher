@@ -1,33 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue';
-import {
-  Activity,
-  BarChart3,
-  Bell,
-  BookMarked,
-  BookOpen,
-  BookOpenText,
-  CalendarCheck,
-  CalendarDays,
-  ClipboardCheck,
-  ClipboardList,
-  CreditCard,
-  DoorOpen,
-  FolderArchive,
-  FolderOpen,
-  IdCard,
-  MapPin,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from 'lucide-vue-next';
 import PageHeader from './ui/PageHeader.vue';
-import UiIconButton from './ui/UiIconButton.vue';
 import InlineAlert from './ui/InlineAlert.vue';
-import CampusRail, { type RailItem } from './campus/CampusRail.vue';
+import CampusTabs, {
+  type CampusPrimaryTab,
+  type CampusSecondaryTab,
+} from './campus/CampusTabs.vue';
 import CampusNotices from './campus/CampusNotices.vue';
 import CampusLms from './campus/CampusLms.vue';
 import CampusTodos from './campus/CampusTodos.vue';
-import CampusLocalLibrary from './campus/CampusLocalLibrary.vue';
 import CampusCourseFiles from './campus/CampusCourseFiles.vue';
 import CampusGrades from './campus/CampusGrades.vue';
 import CampusExams from './campus/CampusExams.vue';
@@ -42,22 +23,25 @@ import CampusFitness from './campus/CampusFitness.vue';
 import CampusProfile from './campus/CampusProfile.vue';
 import CampusCalendar from './campus/CampusCalendar.vue';
 import { ensureDirectSession } from '../campusSession';
+import { campusTodoCount } from '../campusNav';
 
 /**
- * 畅行校园 workspace (LAYOUT §2.1, §3.3): a section rail on the left and the
- * selected section on the right. Sections the backend cannot serve stay in the
- * rail, disabled with their reason, instead of disappearing.
+ * 畅行校园 workspace (LAYOUT §3.3, version B): top-level partitions with a
+ * second row for 学习 / 学业 / 生活. Sections the backend cannot serve stay in
+ * the tabs, disabled with their reason, instead of disappearing.
  */
 const props = withDefaults(
   defineProps<{
     name: string;
     accessMode: 'direct' | 'webvpn' | null;
     directSession?: boolean;
-    railCollapsed?: boolean;
   }>(),
-  { directSession: false, railCollapsed: false },
+  { directSession: false },
 );
-const emit = defineEmits<{ 'update-rail-collapsed': [collapsed: boolean]; 'direct-session': [] }>();
+const emit = defineEmits<{
+  'direct-session': [];
+  capture: [target: { activity: number; course: number | null; title: string }];
+}>();
 
 const tool = ref('notices');
 const error = ref('');
@@ -73,7 +57,6 @@ const views: Record<string, Component> = {
   notices: CampusNotices,
   todo: CampusTodos,
   lms: CampusLms,
-  localLibrary: CampusLocalLibrary,
   courseFiles: CampusCourseFiles,
   grades: CampusGrades,
   exams: CampusExams,
@@ -89,51 +72,73 @@ const views: Record<string, Component> = {
   profile: CampusProfile,
 };
 
-const items: RailItem[] = [
-  { id: 'todo', title: '待办', icon: ClipboardList },
-  { id: 'notices', title: '通知', icon: Bell },
-  { id: 'lms', title: '思源学堂', icon: BookOpen, group: '学习' },
-  { id: 'localLibrary', title: '资料库', icon: FolderArchive, group: '学习' },
-  { id: 'courseFiles', title: '课程资料', icon: FolderOpen, group: '学习' },
-  { id: 'grades', title: '成绩', icon: BarChart3, group: '学业' },
-  { id: 'exams', title: '考试', icon: ClipboardList, group: '学业' },
-  { id: 'evaluations', title: '评教', icon: ClipboardCheck, group: '学业' },
-  { id: 'rooms', title: '空闲教室', icon: DoorOpen, group: '学业' },
-  { id: 'courses', title: '全校课程', icon: BookOpenText, group: '学业' },
-  { id: 'calendar', title: '校历', icon: CalendarDays, group: '学业' },
-  { id: 'card', title: '校园卡', icon: CreditCard, group: '生活' },
-  { id: 'library', title: '图书馆', icon: BookMarked, group: '生活' },
-  { id: 'venues', title: '场馆', icon: MapPin, group: '生活' },
-  { id: 'attendance', title: '考勤', icon: CalendarCheck, group: '生活' },
-  { id: 'fitness', title: '体测', icon: Activity, group: '生活' },
-  { id: 'profile', title: '学籍档案', icon: IdCard, group: '生活' },
+const SECTIONS: Record<string, { title: string; group?: string }> = {
+  todo: { title: '待办' },
+  notices: { title: '通知' },
+  lms: { title: '思源学堂', group: 'study' },
+  courseFiles: { title: '课程资料', group: 'study' },
+  grades: { title: '成绩', group: 'academic' },
+  exams: { title: '考试', group: 'academic' },
+  evaluations: { title: '评教', group: 'academic' },
+  rooms: { title: '空闲教室', group: 'academic' },
+  courses: { title: '全校课程', group: 'academic' },
+  calendar: { title: '校历', group: 'academic' },
+  card: { title: '校园卡', group: 'life' },
+  library: { title: '图书馆', group: 'life' },
+  venues: { title: '场馆', group: 'life' },
+  attendance: { title: '考勤', group: 'life' },
+  fitness: { title: '体测', group: 'life' },
+  profile: { title: '学籍档案', group: 'life' },
+};
+
+const GROUPS = [
+  { id: 'study', title: '学习', children: ['lms', 'courseFiles'] },
+  {
+    id: 'academic',
+    title: '学业',
+    children: ['grades', 'exams', 'evaluations', 'rooms', 'courses', 'calendar'],
+  },
+  {
+    id: 'life',
+    title: '生活',
+    children: ['card', 'library', 'venues', 'attendance', 'fitness', 'profile'],
+  },
 ];
+
 // Remember the last open section so the campus page never lands on an empty
 // default. A disabled section is ignored, in case the list changed.
 const LAST_SECTION = 'campus.lastSection';
 const savedSection = (() => {
   try {
     const saved = localStorage.getItem(LAST_SECTION) ?? '';
-    // The LMS course materials were briefly called 资料库; keep that choice.
-    return saved === 'libraryFiles' ? 'courseFiles' : saved;
+    // Course materials were briefly called 资料库, and the user's own
+    // 资料库 used to live here; both now map to 课程资料 or the 工作台.
+    return saved === 'libraryFiles' || saved === 'localLibrary' ? 'courseFiles' : saved;
   } catch {
     return '';
   }
 })();
-if (
-  savedSection &&
-  views[savedSection] &&
-  !items.find((item) => item.id === savedSection)?.disabled
-)
-  tool.value = savedSection;
+if (savedSection && views[savedSection] && !vpnBlocked(savedSection)) tool.value = savedSection;
 
-const railItems = computed<RailItem[]>(() =>
-  items.map((item) => ({
-    ...item,
-    disabled: item.disabled || false,
-    reason: vpnBlocked(item.id) ? 'WebVPN 下不可用，需要先建立直连会话' : item.reason,
-  })),
+const activePrimary = computed(() => SECTIONS[tool.value]?.group ?? tool.value);
+const activeGroup = computed(() => GROUPS.find((group) => group.id === activePrimary.value));
+const secondaryItems = computed<CampusSecondaryTab[]>(
+  () =>
+    activeGroup.value?.children
+      .filter((id) => views[id])
+      .map((id) => ({ id, title: SECTIONS[id].title })) ?? [],
 );
+const primaryTabs = computed<CampusPrimaryTab[]>(() => [
+  { id: 'todo', title: '待办', count: campusTodoCount.value },
+  { id: 'notices', title: '通知' },
+  { id: 'study', title: '学习', startGroup: true },
+  { id: 'academic', title: '学业' },
+  { id: 'life', title: '生活' },
+]);
+// Quick switches inside a group (学习 → 资料库 → 学习) return to the section the
+// user last had open there, not always the first child.
+const lastByGroup = new Map<string, string>();
+if (activeGroup.value && savedSection) lastByGroup.set(activeGroup.value.id, tool.value);
 
 /** Direct-only sections log in on demand; a failed login explains itself. */
 async function openDirect(id: string): Promise<boolean> {
@@ -151,11 +156,13 @@ async function openDirect(id: string): Promise<boolean> {
 }
 
 async function select(id: string) {
-  if (items.find((item) => item.id === id)?.disabled) return;
+  if (!views[id]) return;
   error.value = '';
   if (!(await openDirect(id))) return;
   tool.value = id;
   error.value = '';
+  const group = SECTIONS[id]?.group;
+  if (group) lastByGroup.set(group, id);
   try {
     localStorage.setItem(LAST_SECTION, id);
   } catch {
@@ -163,49 +170,43 @@ async function select(id: string) {
   }
 }
 
-function toggleRail() {
-  emit('update-rail-collapsed', !props.railCollapsed);
+function selectPrimary(id: string) {
+  if (SECTIONS[id] && !SECTIONS[id].group) {
+    void select(id);
+    return;
+  }
+  const group = GROUPS.find((entry) => entry.id === id);
+  if (!group) return;
+  const remembered = lastByGroup.get(id);
+  const target = remembered && group.children.includes(remembered) ? remembered : group.children[0];
+  void select(target);
 }
 </script>
 
 <template>
   <section class="desktop-page">
-    <PageHeader :title="name">
-      <template #actions>
-        <UiIconButton
-          :label="railCollapsed ? '展开分区导航' : '收起分区导航'"
-          :title="railCollapsed ? '展开分区导航' : '收起分区导航'"
-          @click="toggleRail"
-        >
-          <PanelLeftOpen v-if="railCollapsed" :size="16" />
-          <PanelLeftClose v-else :size="16" />
-        </UiIconButton>
-      </template>
-    </PageHeader>
+    <PageHeader :title="name" />
 
     <div class="campus-workspace">
-      <CampusRail
-        :items="railItems"
-        :model-value="tool"
-        :collapsed="railCollapsed"
-        @update:model-value="select"
+      <CampusTabs
+        :primary="primaryTabs"
+        :active-primary="activePrimary"
+        :secondary="secondaryItems"
+        :active-secondary="tool"
+        @primary="selectPrimary"
+        @secondary="select"
       />
       <div class="campus-workspace-main">
         <InlineAlert v-if="error" tone="error" :title="error" />
-        <component :is="views[tool]" />
+        <CampusTodos v-if="tool === 'todo'" @open-section="select" />
+        <component :is="views[tool]" v-else @capture="emit('capture', $event)" />
       </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.campus-workspace {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-}
 .campus-workspace-main {
-  flex: 1;
   min-width: 0;
 }
 </style>

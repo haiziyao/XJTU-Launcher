@@ -169,6 +169,11 @@ export function visiblePlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
   return plugins.filter((p) => !config.disabledPlugins.includes(p.id));
 }
 
+/** Plugins that get a sidebar entry; workflow pages opt out in their manifest. */
+export function sidebarPlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
+  return visiblePlugins(plugins, config).filter((p) => p.sidebar !== false);
+}
+
 /* ---------------------------------------------------------------------------
  * 校园原生化（v0.6）用的纯函数：时间文案、金额、文件大小和派生指标。
  * 所有时间都按 Asia/Shanghai（UTC+8，无夏令时）计算，不依赖运行环境时区。
@@ -319,6 +324,15 @@ export function fileSize(bytes: number | null | undefined): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+/**
+ * 思源学堂的课程编号前 9 位是学期码（`202620271` = 2026-2027 学年第一学期）。
+ * 工作台已经按学期分组，界面上只显示后面的课程号；没有学期前缀就原样返回。
+ */
+export function displayCourseCode(code: string | null | undefined): string {
+  if (!code) return '';
+  return code.replace(/^\d{8}\d?(?=[A-Za-z])/, '');
 }
 
 /** 比例出百分比文案：0.864 → “86.4%”；没有值显示 “—”。 */

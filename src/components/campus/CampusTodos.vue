@@ -1,25 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { ClipboardCheck, ExternalLink } from 'lucide-vue-next';
+import { ClipboardCheck, ExternalLink, Search } from 'lucide-vue-next';
 import SectionHeader from '../ui/SectionHeader.vue';
-import DueLabel from '../ui/DueLabel.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import InlineAlert from '../ui/InlineAlert.vue';
 import MoreMenu, { type MoreItem } from '../ui/MoreMenu.vue';
+import UiButton from '../ui/UiButton.vue';
 import { bridge } from '../../bridge';
 import { loadLmsOverview } from '../../campusOverview';
 import { applyCached } from '../../cache';
-import { campusTimestamp, todoBuckets } from '../../domain';
-import type { LmsOverview, LmsTodo } from '../../types';
+import { campusTimestamp, dueInfo, todoBuckets } from '../../domain';
+import type { EvaluationList, LmsOverview, LmsTodo } from '../../types';
+import { campusTodoCount } from '../../campusNav';
 
 /**
- * 待办 (LAYOUT §9.3): homework that is still unsubmitted in the current
- * semester, aggregated across courses. Submissions stay on the campus website;
- * this page only reads and groups what is due.
+ * 待办 (LAYOUT §9.2, version B): homework that is still unsubmitted in the
+ * current semester, grouped into one dense table. Submissions stay on the
+ * campus website; this page only reads and groups what is due.
  */
 interface TodoRow extends LmsTodo {
   dueAt: number | null;
 }
+type Filter = 'all' | 'overdue' | 'today' | 'week';
+type Tone = 'overdue' | 'today' | 'soon' | 'later';
+
+const emit = defineEmits<{ 'open-section': [id: string] }>();
 const rows = ref<TodoRow[]>([]);
 const semester = ref('');
 const failed = ref(0);
@@ -27,12 +32,96 @@ const loading = ref(true);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
 const now = ref(Date.now());
+const query = ref('');
+const filter = ref<Filter>('all');
+const evaluationCount = ref<number | null>(null);
 const moreItems: MoreItem[] = [{ id: 'lms', label: '在思源学堂中打开', icon: ExternalLink }];
 
-const buckets = computed(() => todoBuckets(rows.value, now.value));
+const allBuckets = computed(() => todoBuckets(rows.value, now.value));
+const matched = computed(() => {
+  const keyword = query.value.trim().toLowerCase();
+  if (!keyword) return rows.value;
+  return rows.value.filter((item) =>
+    `${item.title} ${item.course}`.toLowerCase().includes(keyword),
+  );
+});
+const visibleBuckets = computed(() => {
+  const groups = todoBuckets(matched.value, now.value);
+  if (filter.value === 'all') return groups;
+  if (filter.value === 'week')
+    return groups.filter((group) => ['today', 'tomorrow', 'week'].includes(group.id));
+  return groups.filter((group) => group.id === filter.value);
+});
 const subtitle = computed(() =>
   rows.value.length ? `${semester.value || '当前学期'} · ${rows.value.length} 项待交` : '',
 );
+
+function countBucket(id: string): number {
+  return allBuckets.value.find((group) => group.id === id)?.items.length ?? 0;
+}
+const todayCount = computed(() => countBucket('today'));
+const overdueCount = computed(() => countBucket('overdue'));
+const courseCount = computed(() => new Set(rows.value.map((item) => item.course)).size);
+const todaySub = computed(() => {
+  const first = allBuckets.value.find((group) => group.id === 'today')?.items[0];
+  return first ? dueInfo(first.dueAt, now.value).countdown : '今天没有截止';
+});
+const stats = computed(() => [
+  {
+    key: 'open' as const,
+    label: '未交',
+    value: rows.value.length,
+    sub: `${courseCount.value} 门课程`,
+    filter: 'all' as Filter,
+  },
+  {
+    key: 'today' as const,
+    label: '今天截止',
+    value: todayCount.value,
+    sub: todaySub.value,
+    filter: 'today' as Filter,
+    hot: todayCount.value > 0,
+  },
+  {
+    key: 'week' as const,
+    label: '本周',
+    value: todayCount.value + countBucket('tomorrow') + countBucket('week'),
+    sub: todayCount.value ? '含今天' : '本周内',
+    filter: 'week' as Filter,
+  },
+  {
+    key: 'overdue' as const,
+    label: '逾期',
+    value: overdueCount.value,
+    sub: overdueCount.value ? '已过截止时间' : '没有逾期',
+    filter: 'overdue' as Filter,
+    danger: overdueCount.value > 0,
+  },
+  {
+    key: 'evaluations' as const,
+    label: '待评教',
+    value: evaluationCount.value ?? '—',
+    sub: evaluationCount.value == null ? '未读取' : evaluationCount.value ? '未完成' : '全部完成',
+    section: 'evaluations',
+    link: true,
+  },
+]);
+
+const tone = (id: string): Tone => {
+  if (id === 'overdue') return 'overdue';
+  if (id === 'today') return 'today';
+  if (id === 'tomorrow' || id === 'week') return 'soon';
+  return 'later';
+};
+const due = (item: TodoRow) => dueInfo(item.dueAt, now.value);
+const bandMeta = (group: { id: string; items: TodoRow[] }): string => {
+  if (group.id === 'overdue') return '已过截止时间';
+  if (group.id === 'today') return `最晚${due(group.items[group.items.length - 1]).text}`;
+  if (group.id === 'tomorrow') return '明天截止';
+  if (group.id === 'week') return '本周内';
+  if (group.id === 'none') return '无截止时间';
+  return `共 ${group.items.length} 项`;
+};
 
 function toRows(list: LmsTodo[]): TodoRow[] {
   return list.map((item) => {
@@ -41,20 +130,38 @@ function toRows(list: LmsTodo[]): TodoRow[] {
   });
 }
 
+async function loadEvaluations(force = false) {
+  try {
+    const list = (await bridge.schoolQuery(
+      { type: 'evaluations', finished: false },
+      'evaluations',
+      force,
+    )) as EvaluationList;
+    evaluationCount.value = list.rows.length;
+  } catch (e) {
+    // The tile is a shortcut, not the page; a failed count must not hide 待办.
+    console.error('[campus] todo evaluations', e);
+    evaluationCount.value = null;
+  }
+}
+
 async function load(force = false) {
   loading.value = true;
   error.value = '';
+  void loadEvaluations(force);
   try {
     await applyCached<LmsOverview>('lmsOverview', undefined, (value) => {
       if (!rows.value.length) rows.value = toRows(value.rows);
       if (!semester.value) semester.value = value.semester;
       failed.value = value.failed ?? 0;
+      campusTodoCount.value = value.rows.length;
     });
     const fresh = await loadLmsOverview(force);
     rows.value = toRows(fresh.rows);
     semester.value = fresh.semester;
     failed.value = fresh.failed;
     loadedAt.value = Date.now();
+    campusTodoCount.value = fresh.rows.length;
   } catch (e) {
     console.error('[campus] lms todos', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -63,8 +170,33 @@ async function load(force = false) {
   }
 }
 
+function onStat(stat: (typeof stats.value)[number]) {
+  if ('section' in stat && stat.section) {
+    emit('open-section', stat.section);
+    return;
+  }
+  if ('filter' in stat && stat.filter) {
+    filter.value = filter.value === stat.filter ? 'all' : stat.filter;
+  }
+}
+
+function clearFilters() {
+  filter.value = 'all';
+  query.value = '';
+}
+
 function onMore(id: string) {
   if (id === 'lms') void bridge.openUrl('https://lms.xjtu.edu.cn');
+}
+
+async function openLms() {
+  error.value = '';
+  try {
+    await bridge.openUrl('https://lms.xjtu.edu.cn');
+  } catch (e) {
+    console.error('[campus] open lms', e);
+    error.value = e instanceof Error ? e.message : String(e);
+  }
 }
 
 let clock = 0;
@@ -84,6 +216,21 @@ onUnmounted(() => window.clearInterval(clock));
       :refreshing="loading"
       @refresh="load(true)"
     >
+      <template #filters>
+        <label class="field-shell search todo-search">
+          <Search :size="13" aria-hidden="true" />
+          <input
+            v-model="query"
+            type="search"
+            placeholder="搜索作业或课程"
+            aria-label="搜索待办"
+            spellcheck="false"
+          />
+        </label>
+        <UiButton v-if="filter !== 'all' || query" variant="ghost" size="sm" @click="clearFilters">
+          清除筛选
+        </UiButton>
+      </template>
       <template #more><MoreMenu :items="moreItems" @select="onMore" /></template>
     </SectionHeader>
 
@@ -91,9 +238,26 @@ onUnmounted(() => window.clearInterval(clock));
     <InlineAlert v-if="failed" tone="partial" title="部分内容未能读取">
       {{ failed }} 个课程或作业请求失败，列表可能不完整；刷新可重试。
     </InlineAlert>
-    <p v-if="rows.length" class="todo-source">
-      汇总思源学堂本学期尚未提交的作业；提交仍在思源学堂网页完成。
-    </p>
+
+    <div v-if="rows.length" class="campus-stat-row">
+      <button
+        v-for="stat in stats"
+        :key="stat.key"
+        type="button"
+        class="campus-stat"
+        :class="{
+          hot: 'hot' in stat && stat.hot,
+          danger: 'danger' in stat && stat.danger,
+          link: 'link' in stat && stat.link,
+          active: 'filter' in stat && stat.filter !== 'all' && filter === stat.filter,
+        }"
+        @click="onStat(stat)"
+      >
+        <span class="k">{{ stat.label }}</span>
+        <span class="v">{{ stat.value }}</span>
+        <span class="s">{{ stat.sub }}</span>
+      </button>
+    </div>
 
     <EmptyState
       v-if="loading && !rows.length"
@@ -109,91 +273,54 @@ onUnmounted(() => window.clearInterval(clock));
       title="当前学期没有待交作业"
       description="这里只显示尚未提交、且老师尚未截止的作业。"
     />
+    <EmptyState
+      v-else-if="!visibleBuckets.length"
+      :icon="ClipboardCheck"
+      compact
+      title="没有符合筛选条件的待办"
+      description="清除筛选或换一个关键词试试。"
+    />
 
-    <section v-for="group in buckets" :key="group.id" class="todo-group">
-      <h3 class="todo-group-title">
-        {{ group.title }}
-        <span>{{ group.items.length }}</span>
-      </h3>
-      <ul class="todo-list">
-        <li v-for="item in group.items" :key="item.id" class="todo-row">
-          <span class="todo-copy">
-            <span class="todo-title">{{ item.title }}</span>
-            <span class="todo-meta">
-              <span>{{ item.course || '未标注课程' }}</span>
-              <span v-if="item.submitByGroup">小组作业</span>
-              <span v-if="item.submitTimes">最多提交 {{ item.submitTimes }} 次</span>
-            </span>
+    <div v-if="visibleBuckets.length" class="campus-table">
+      <div class="campus-table-head">
+        <span></span>
+        <span>作业</span>
+        <span>课程</span>
+        <span class="num">截止</span>
+        <span class="num remain">剩余</span>
+        <span class="num">操作</span>
+      </div>
+      <section
+        v-for="group in visibleBuckets"
+        :key="group.id"
+        class="campus-band"
+        :data-tone="tone(group.id)"
+      >
+        <div class="campus-band-head">
+          <span>{{ group.title }}</span>
+          <span class="campus-band-count">{{ group.items.length }}</span>
+          <span class="campus-band-meta">{{ bandMeta(group) }}</span>
+        </div>
+        <div v-for="item in group.items" :key="item.id" class="campus-row">
+          <span><i class="campus-dot" :data-tone="tone(group.id)" aria-hidden="true"></i></span>
+          <span class="name">
+            {{ item.title }}
+            <small v-if="item.submitByGroup">小组</small>
           </span>
-          <DueLabel :at="item.dueAt" :now="now" />
-        </li>
-      </ul>
-    </section>
+          <span class="course">{{ item.course || '未标注课程' }}</span>
+          <span class="num">{{ due(item).text }}</span>
+          <span class="num muted remain">{{ due(item).countdown || '—' }}</span>
+          <button type="button" class="row-action" title="在思源学堂网页打开" @click="openLms">
+            打开
+          </button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.todo-source {
-  margin: 0 0 14px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-}
-.todo-group + .todo-group {
-  margin-top: 18px;
-}
-.todo-group-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 6px;
-  padding: 0 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.todo-group-title span {
-  color: var(--text-tertiary);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.todo-list {
-  margin: 0;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  list-style: none;
-}
-.todo-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 52px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-}
-.todo-row + .todo-row {
-  border-top: 1px solid var(--border);
-}
-.todo-copy {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.todo-title {
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.todo-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
+.todo-search {
+  width: 220px;
 }
 </style>

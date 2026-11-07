@@ -1,0 +1,347 @@
+/* Campus layout B: one dense table with gradient group bands (B-01).
+   Surfaces reuse --surface / --border so the wallpaper tint in
+   desktop-shell.css keeps working; the grain and band tints are light enough
+   to sit on both the plain and the frosted surface. */
+
+.campus-stat-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 16px;
+}
+.campus-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+button.campus-stat {
+  cursor: pointer;
+}
+button.campus-stat:hover {
+  background: var(--surface-subtle);
+}
+.campus-stat:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.campus-stat .k {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+.campus-stat .v {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+.campus-stat .s {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campus-stat.hot .v,
+.campus-stat.danger .v {
+  color: var(--danger);
+}
+.campus-stat.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.campus-stat.link .s::after {
+  content: ' ›';
+}
+
+.campus-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.campus-table-head,
+.campus-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 2.2fr) minmax(0, 1.25fr) 136px 88px 52px;
+  gap: 12px;
+  align-items: center;
+  padding: 0 16px;
+}
+.campus-table-head {
+  height: 32px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.campus-table-head .num,
+.campus-row .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.campus-band {
+  position: relative;
+}
+.campus-band + .campus-band {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(31, 111, 229, 0.3), rgba(31, 111, 229, 0)) 1;
+}
+.campus-band::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  background: var(--band-bar);
+}
+.campus-band[data-tone='overdue'] {
+  --band-bar: linear-gradient(180deg, #c23a2f, #e8a19a);
+  --band-tint: rgba(253, 238, 236, 0.96);
+  --band-clear: rgba(253, 238, 236, 0);
+  --band-text: #a32a20;
+  --band-edge: rgba(194, 58, 47, 0.12);
+}
+.campus-band[data-tone='today'] {
+  --band-bar: linear-gradient(180deg, #d98a1a, #f0c48a);
+  --band-tint: rgba(253, 243, 230, 0.96);
+  --band-clear: rgba(253, 243, 230, 0);
+  --band-text: #8a4f00;
+  --band-edge: rgba(217, 138, 26, 0.12);
+}
+.campus-band[data-tone='soon'] {
+  --band-bar: linear-gradient(180deg, #1f6fe5, #9dc0f2);
+  --band-tint: rgba(234, 241, 253, 0.96);
+  --band-clear: rgba(234, 241, 253, 0);
+  --band-text: var(--accent-text);
+  --band-edge: rgba(31, 111, 229, 0.1);
+}
+.campus-band[data-tone='later'] {
+  --band-bar: linear-gradient(180deg, #b9bec6, #e6e8eb);
+  --band-tint: rgba(238, 240, 243, 0.94);
+  --band-clear: rgba(238, 240, 243, 0);
+  --band-text: var(--text-secondary);
+  --band-edge: rgba(15, 23, 42, 0.05);
+}
+.campus-band-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  background-image:
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.55) 0 1px,
+      rgba(255, 255, 255, 0) 1px 7px
+    ),
+    linear-gradient(90deg, var(--band-tint) 0%, var(--band-tint) 34%, var(--band-clear) 76%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 var(--band-edge);
+  color: var(--band-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.campus-band-count {
+  padding: 0 6px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.campus-band-meta {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.campus-row {
+  height: 34px;
+  border-top: 1px solid var(--divider);
+  font-size: 12.5px;
+}
+.campus-row:hover {
+  background: var(--surface-hover);
+}
+.campus-row .name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campus-row .name small {
+  margin-left: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.campus-row .course {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campus-row .muted {
+  color: var(--text-tertiary);
+}
+.campus-row .row-action {
+  justify-self: end;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.campus-row .row-action:hover {
+  background: var(--accent-wash);
+}
+
+.campus-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot-color, var(--accent));
+  box-shadow:
+    0 0 0 3px var(--dot-halo, rgba(31, 111, 229, 0.1)),
+    inset 0 1px 1px rgba(255, 255, 255, 0.55);
+}
+.campus-dot[data-tone='overdue'] {
+  --dot-color: var(--danger);
+  --dot-halo: rgba(194, 58, 47, 0.12);
+}
+.campus-dot[data-tone='today'] {
+  --dot-color: #d98a1a;
+  --dot-halo: rgba(217, 138, 26, 0.14);
+}
+.campus-dot[data-tone='soon'],
+.campus-dot[data-tone='later'] {
+  --dot-color: var(--accent);
+  --dot-halo: rgba(31, 111, 229, 0.1);
+}
+
+@media (max-width: 900px) {
+  .campus-table-head,
+  .campus-row {
+    grid-template-columns: 20px minmax(0, 2fr) minmax(0, 1.2fr) 132px 52px;
+  }
+  .campus-table-head .remain,
+  .campus-row .remain {
+    display: none;
+  }
+}
+
+/* One card per course (B-02): name, counts, first files, footer summary. */
+.campus-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 2px 0 18px;
+}
+.campus-course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  min-height: 150px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+.campus-course-card:hover {
+  background: var(--surface-subtle);
+}
+.campus-course-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.campus-course-card.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.campus-course-card .card-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campus-course-card .card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.campus-course-card .card-files {
+  flex: 1;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.campus-course-card .card-files li {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campus-course-card .card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.campus-course-card .card-open {
+  flex-shrink: 0;
+  color: var(--accent-text);
+}
+@media (max-width: 980px) {
+  .campus-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

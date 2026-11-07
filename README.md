@@ -124,6 +124,8 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 XJTUToolBox 以 **GPL-3.0** 许可证发布；本项目按其公开行为独立用 Rust 重新实现，不复制其源码，也不将其作为运行时依赖。若未来直接复用其代码，将按其许可证要求处理。
 
+「回放截取」插件的采样、翻页判定与 PDF / ZIP 导出移植自 [XJTU-PPT-Capture-Extension](https://github.com/MeowSaint/XJTU-PPT-Capture-Extension)（MIT，Copyright (c) 2026 MeowSaint and contributors），用 TypeScript 重写并适配本项目。逐文件说明与许可证文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
 同时感谢 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/)、[lucide](https://lucide.dev/)、[Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC) 等开源项目。
 
 ## 许可证

@@ -191,7 +191,7 @@ fn category(name: &str) -> &'static str {
         "campus_fitness" => "体测",
         "campus_evaluation" | "campus_evaluations_submit" => "评教",
         "campus_notices" => "校园通知",
-        "campus_lms" | "campus_lms_submit" => "思源学堂",
+        "campus_lms" | "campus_lms_download" | "campus_lms_submit" => "思源学堂",
         "campus_library" | "campus_venues" => "图书馆与场馆",
         "campus_classroom" => "教室与校历",
         _ => "其他",

@@ -3,7 +3,7 @@
 //! posts one submission, never retrying when the outcome is unknown.
 use crate::{
     accounts::Account,
-    network::{AccessMode, Transport},
+    network::{self, AccessMode, Transport},
 };
 use serde_json::{json, Value};
 use std::{
@@ -16,13 +16,15 @@ use url::Url;
 const BASE: &str = "https://lms.xjtu.edu.cn";
 const MEDIA_HOST: &str = "media.xjtu.edu.cn";
 const PLAYER_HOST: &str = "rms-v5.xjtu.edu.cn";
+/// Replay videos are served from presigned S3 URLs on this host.
+const REVIEW_HOST: &str = "review-class.xjtu.edu.cn";
 /// Attachment and replay downloads are user-initiated; keep a hard ceiling so a
 /// wrong link cannot fill the disk.
 const MAX_DOWNLOAD: u64 = 2 * 1024 * 1024 * 1024;
 /// Homework attachments are user-chosen; bound each upload and the whole call.
 const MAX_UPLOAD: u64 = 100 * 1024 * 1024;
 const MAX_UPLOAD_TOTAL: u64 = 200 * 1024 * 1024;
-const MAX_UPLOAD_FILES: usize = 10;
+pub(crate) const MAX_UPLOAD_FILES: usize = 10;
 const MAX_COMMENT: usize = 10_000;
 pub(crate) const LOGIN_URL: &str = BASE;
 
@@ -53,6 +55,27 @@ struct UploadFile {
     size: u64,
 }
 
+/// One replay video as the capture page needs it. `download_url` is a
+/// short-lived presigned address: it must stay out of logs, caches, error
+/// messages and screenshots.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayVideo {
+    pub label: String,
+    pub size: u64,
+    pub mute: bool,
+    pub best_audio: bool,
+    pub download_url: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayVideos {
+    pub activity: u64,
+    pub title: String,
+    pub videos: Vec<ReplayVideo>,
+}
+
 impl Homework {
     pub fn validate(&self) -> Result<(), String> {
         if !(1..=9_999_999_999).contains(&self.activity) {
@@ -78,6 +101,23 @@ impl Homework {
 pub struct Client {
     transport: Transport,
     mode: AccessMode,
+}
+
+/// True when the school will not accept a submission right now: the activity is
+/// closed and no resubmission window is open. Drafts are always allowed.
+fn submission_blocked(activity: &Value, draft: bool) -> bool {
+    if draft {
+        return false;
+    }
+    let closed = activity
+        .get("is_closed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let resubmit_open = activity
+        .get("is_resubmit_open")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    closed && !resubmit_open
 }
 
 fn text(value: Option<&Value>) -> String {
@@ -286,17 +326,29 @@ fn url(path: &str) -> Result<Url, String> {
 
 /// The download blob redirects to the media host; only that exact HTTPS origin
 /// is accepted, so a tampered response cannot point the download elsewhere.
-fn media_url(location: &str) -> Result<Url, String> {
+/// Through WebVPN the redirect may be either the plain media URL or an already
+/// mapped one, so the origin is checked after decoding and the request is sent
+/// through the same mapping.
+fn media_url(location: &str, mode: AccessMode) -> Result<Url, String> {
     let url = Url::parse(location).map_err(|_| "附件地址无效")?;
-    if url.scheme() != "https"
-        || url.host_str() != Some(MEDIA_HOST)
-        || url.port_or_known_default() != Some(443)
-        || !url.username().is_empty()
-        || url.password().is_some()
+    let original = if mode == AccessMode::Webvpn {
+        network::original_url(&url).unwrap_or_else(|_| url.clone())
+    } else {
+        url
+    };
+    if original.scheme() != "https"
+        || original.host_str() != Some(MEDIA_HOST)
+        || original.port_or_known_default() != Some(443)
+        || !original.username().is_empty()
+        || original.password().is_some()
     {
         return Err("附件地址不受支持".into());
     }
-    Ok(url)
+    if mode == AccessMode::Webvpn {
+        network::vpn_url(&original)
+    } else {
+        Ok(original)
+    }
 }
 
 fn player_url(value: &str) -> Option<String> {
@@ -313,6 +365,41 @@ fn player_url(value: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Presigned replay URLs must stay on the review host. Anything else is
+/// dropped instead of being handed to the webview.
+fn replay_video(value: &Value) -> Option<ReplayVideo> {
+    let address = value
+        .get("download_url")
+        .or_else(|| value.get("downloadUrl"))
+        .and_then(Value::as_str)?;
+    let url = Url::parse(address).ok()?;
+    if url.scheme() != "https"
+        || url.host_str() != Some(REVIEW_HOST)
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return None;
+    }
+    Some(ReplayVideo {
+        label: value
+            .get("label")
+            .or_else(|| value.get("name"))
+            .and_then(Value::as_str)
+            .filter(|label| !label.trim().is_empty())
+            .unwrap_or("回放")
+            .to_string(),
+        size: value.get("size").and_then(Value::as_u64).unwrap_or(0),
+        mute: value.get("mute").and_then(Value::as_bool).unwrap_or(false),
+        best_audio: value
+            .get("is_best_audio")
+            .or_else(|| value.get("isBestAudio"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        download_url: url.to_string(),
+    })
 }
 
 impl Client {
@@ -406,6 +493,80 @@ impl Client {
         Ok(detail)
     }
 
+    /// Resolve the direct replay videos for one lesson. The LMS player URL
+    /// carries a short-lived token; RMS exchanges it for a bearer token and
+    /// returns presigned S3 `download_url`s that need no cookies. The bearer
+    /// token stays here, and only the video addresses cross the IPC boundary.
+    pub async fn replay_videos(&self, activity: u64) -> Result<ReplayVideos, String> {
+        if !(1..=9_999_999_999).contains(&activity) {
+            return Err("回放编号无效".into());
+        }
+        let detail = self.activity(activity).await?;
+        if detail["type"] != "lesson" {
+            return Err("该活动不是课程回放".into());
+        }
+        let replay = detail["replayCode"].as_str().unwrap_or("");
+        let player = detail["player"].as_str().unwrap_or("");
+        if replay.is_empty() || player.is_empty() {
+            return Err("这节课暂时没有可用的回放".into());
+        }
+        let token = Url::parse(player)
+            .ok()
+            .and_then(|url| {
+                url.query_pairs()
+                    .find(|(key, _)| key == "token")
+                    .map(|(_, value)| value.into_owned())
+            })
+            .filter(|value| !value.is_empty())
+            .ok_or("回放地址缺少令牌")?;
+        let response = self
+            .transport
+            .client
+            .get("https://rms-v5.xjtu.edu.cn/api/v1/auth/embed-token")
+            .query(&[("token", token)])
+            .send()
+            .await
+            .map_err(|_| "RMS 令牌服务连接失败")?;
+        let value: Value = response.json().await.map_err(|_| "RMS 令牌响应格式异常")?;
+        let rms = value
+            .pointer("/data")
+            .and_then(Value::as_str)
+            .filter(|token| !token.is_empty())
+            .ok_or("RMS 未返回令牌")?;
+        let response = self
+            .transport
+            .client
+            .get(format!(
+                "https://rms-v5.xjtu.edu.cn/api/embed/lesson-activities/captures/{replay}"
+            ))
+            .query(&[("lesson_activity_id", activity.to_string())])
+            .header("Authorization", format!("Bearer {rms}"))
+            .send()
+            .await
+            .map_err(|_| "回放视频服务连接失败")?;
+        let status = response.status();
+        let value: Value = response.json().await.map_err(|_| "回放视频响应格式异常")?;
+        if !status.is_success() {
+            return Err(format!("回放视频服务返回 HTTP {status}"));
+        }
+        let videos = value
+            .pointer("/data/lesson_videos")
+            .or_else(|| value.get("lesson_videos"))
+            .and_then(Value::as_array)
+            .ok_or("回放视频响应格式异常")?
+            .iter()
+            .filter_map(replay_video)
+            .collect::<Vec<_>>();
+        if videos.is_empty() {
+            return Err("这节课没有可播放的回放视频".into());
+        }
+        Ok(ReplayVideos {
+            activity,
+            title: detail["title"].as_str().unwrap_or("").to_string(),
+            videos,
+        })
+    }
+
     /// Read the current user's submissions for one homework, including the
     /// teacher's score and comments. This is read-only.
     pub async fn submissions(&self, activity: u64) -> Result<Value, String> {
@@ -456,14 +617,11 @@ impl Client {
     pub async fn overview(&self) -> Result<Value, String> {
         let courses = self.current_courses().await?;
         // Courses in one cohort can carry different academic-year labels; show
-        // the label most of them agree on.
+        // the label most of them agree on. `termLabel` is the derived semester
+        // (`2026-2027 秋季学期`), because 思源学堂 usually leaves `term` empty.
         let mut labels: HashMap<String, usize> = HashMap::new();
         for course in &courses {
-            let label = [text(course.get("year")), text(course.get("term"))]
-                .into_iter()
-                .filter(|part| !part.is_empty())
-                .collect::<Vec<_>>()
-                .join(" · ");
+            let label = course_semester_label(course);
             if !label.is_empty() {
                 *labels.entry(label).or_insert(0) += 1;
             }
@@ -479,11 +637,7 @@ impl Client {
         for (course, items) in lists {
             let course_id = course["id"].as_u64().unwrap_or(0);
             let course_name = text(course.get("name"));
-            let course_semester = [text(course.get("year")), text(course.get("term"))]
-                .into_iter()
-                .filter(|part| !part.is_empty())
-                .collect::<Vec<_>>()
-                .join(" · ");
+            let course_semester = course_semester_label(&course);
             for item in items {
                 let kind = text(item.get("type"));
                 if !matches!(kind.as_str(), "homework" | "material")
@@ -575,6 +729,101 @@ impl Client {
             "semester": semester,
             "rows": rows,
             "files": files,
+            "failed": failed,
+        }))
+    }
+
+    /// The current term's courses with every homework activity, used by the
+    /// 工作台 sync to create course folders and keep an assignment list.
+    pub async fn workbench(&self) -> Result<Value, String> {
+        let all = self.courses().await?;
+        let all = all["courses"].as_array().cloned().unwrap_or_default();
+        let group = current_course_group(&all, &campus_today());
+        let mut labels: HashMap<String, usize> = HashMap::new();
+        for course in &group {
+            let label = text(course.get("termLabel"));
+            if !label.is_empty() {
+                *labels.entry(label).or_insert(0) += 1;
+            }
+        }
+        let term = labels
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(label, _)| label)
+            .unwrap_or_default();
+        let courses: Vec<Value> = group
+            .into_iter()
+            .filter(|course| term.is_empty() || text(course.get("termLabel")) == term)
+            .collect();
+        let (lists, mut failed) = self.activity_lists(&courses).await;
+        let mut owners = HashMap::new();
+        let mut ids = Vec::new();
+        for (course, items) in &lists {
+            let Some(course_id) = course.get("id").and_then(Value::as_u64) else {
+                continue;
+            };
+            for item in items {
+                if text(item.get("type")) != "homework"
+                    || item.get("published").and_then(Value::as_bool) == Some(false)
+                {
+                    continue;
+                }
+                if let Some(id) = item.get("id").and_then(Value::as_u64) {
+                    ids.push(id);
+                    owners.insert(id, course_id);
+                }
+            }
+        }
+        let (details, detail_failures) = self.details_of(&ids).await;
+        failed += detail_failures;
+        let mut assignments: HashMap<u64, Vec<Value>> = HashMap::new();
+        for detail in details {
+            let Some(id) = detail.get("id").and_then(Value::as_u64) else {
+                continue;
+            };
+            let Some(course_id) = owners.get(&id).copied() else {
+                continue;
+            };
+            assignments.entry(course_id).or_default().push(json!({
+                "id": id,
+                "title": detail["title"],
+                "start": detail["start"],
+                "end": detail["end"],
+                "closed": detail["closed"],
+                "submitCount": detail["submitCount"],
+                "submitByGroup": detail["submitByGroup"],
+            }));
+        }
+        let mut out = Vec::new();
+        for course in courses {
+            let Some(id) = course.get("id").and_then(Value::as_u64) else {
+                continue;
+            };
+            let mut list = assignments.remove(&id).unwrap_or_default();
+            list.sort_by(|left, right| {
+                let left_end = left["end"].as_str().unwrap_or("");
+                let right_end = right["end"].as_str().unwrap_or("");
+                match (left_end.is_empty(), right_end.is_empty()) {
+                    (true, true) => std::cmp::Ordering::Equal,
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    _ => left_end.cmp(right_end),
+                }
+            });
+            out.push(json!({
+                "id": id,
+                "name": course["name"],
+                "code": course["code"],
+                "subjectCode": course["subjectCode"],
+                "term": term,
+                "start": course["start"],
+                "end": course["end"],
+                "assignments": list,
+            }));
+        }
+        Ok(json!({
+            "term": term,
+            "courses": out,
             "failed": failed,
         }))
     }
@@ -672,7 +921,7 @@ impl Client {
             .get("location")
             .and_then(|value| value.to_str().ok())
             .ok_or("附件地址缺失")?;
-        media_url(location)
+        media_url(location, self.mode)
     }
 
     pub async fn open_file(&self, upload_id: u64) -> Result<Url, String> {
@@ -680,9 +929,14 @@ impl Client {
     }
 
     /// Stream an attachment to `path` and return the number of bytes written.
+    /// Bytes go to a sibling `.part` file and are renamed only on success, so a
+    /// broken download never leaves a truncated file where the user expects it.
     pub async fn save_file(&self, upload_id: u64, path: &Path) -> Result<u64, String> {
         let media = self.file_url(upload_id).await?;
+        // Keep the session cookies: through WebVPN the mapped media URL is
+        // only served to an authenticated portal session.
         let client = reqwest::Client::builder()
+            .cookie_provider(self.transport.cookies.clone())
             .user_agent(crate::network::USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(300))
@@ -705,20 +959,49 @@ impl Client {
         {
             return Err("附件超过 2 GB，未下载".into());
         }
-        let mut file = tokio::fs::File::create(path)
-            .await
-            .map_err(|_| "无法写入所选位置")?;
-        use tokio::io::AsyncWriteExt;
-        let mut written = 0u64;
-        while let Some(chunk) = response.chunk().await.map_err(|_| "附件下载中断")? {
-            written += chunk.len() as u64;
-            if written > MAX_DOWNLOAD {
-                return Err("附件超过 2 GB，已停止下载".into());
+        let temp = path.with_file_name(format!(
+            ".{}.part",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("附件")
+        ));
+        let written = async {
+            let mut file = tokio::fs::File::create(&temp)
+                .await
+                .map_err(|_| "无法写入所选位置")?;
+            use tokio::io::AsyncWriteExt;
+            let mut written = 0u64;
+            while let Some(chunk) = response.chunk().await.map_err(|_| "附件下载中断")? {
+                written += chunk.len() as u64;
+                if written > MAX_DOWNLOAD {
+                    return Err("附件超过 2 GB，已停止下载".to_string());
+                }
+                file.write_all(&chunk).await.map_err(|_| "写入附件失败")?;
             }
-            file.write_all(&chunk).await.map_err(|_| "写入附件失败")?;
+            file.flush().await.map_err(|_| "写入附件失败")?;
+            Ok::<u64, String>(written)
         }
-        file.flush().await.map_err(|_| "写入附件失败")?;
-        Ok(written)
+        .await;
+        match written {
+            Ok(written) => {
+                // Windows refuses to rename over an existing file; the user
+                // already agreed to replace it in the save dialog.
+                if tokio::fs::rename(&temp, path).await.is_err() {
+                    if tokio::fs::remove_file(path).await.is_err() {
+                        let _ = tokio::fs::remove_file(&temp).await;
+                        return Err("无法保存附件".into());
+                    }
+                    tokio::fs::rename(&temp, path)
+                        .await
+                        .map_err(|_| "无法保存附件".to_string())?;
+                }
+                Ok(written)
+            }
+            Err(error) => {
+                let _ = tokio::fs::remove_file(&temp).await;
+                Err(error)
+            }
+        }
     }
 
     /// Validate a submission without touching files or the school: the Agent
@@ -742,6 +1025,7 @@ impl Client {
             "end": campus_time(value.get("end_time")),
             "closed": value.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
             "resubmitOpen": value.get("is_resubmit_open").and_then(Value::as_bool).unwrap_or(false),
+            "canSubmit": !submission_blocked(&value, request.draft),
             "submitCount": value.get("user_submit_count").and_then(Value::as_u64),
             "draft": request.draft,
             "comment": request.comment.trim(),
@@ -764,6 +1048,11 @@ impl Client {
         let title = text(value.get("title"));
         if text(value.get("type")) != "homework" {
             return Err("该活动不是作业，不能提交".into());
+        }
+        // Refuse before uploading so no attachment is left orphaned on the
+        // school side when the activity cannot accept a submission.
+        if submission_blocked(&value, request.draft) {
+            return Err("作业已截止，思源学堂当前不允许补交；本次没有上传或提交".into());
         }
         let files = resolve_files(&request.files).await?;
         let mode = text(value.pointer("/data/mode"));
@@ -1122,7 +1411,9 @@ fn course(value: &Value) -> Option<Value> {
         "id": id,
         "name": text(value.get("name")),
         "code": text(value.get("course_code")),
+        "subjectCode": text(value.get("subject_code")),
         "type": text(value.get("course_type")),
+        "termLabel": course_term(value),
         "credit": value.get("credit").and_then(Value::as_f64),
         "class": text(value.get("klass")),
         "department": text(value.pointer("/department/name")),
@@ -1133,6 +1424,75 @@ fn course(value: &Value) -> Option<Value> {
         "end": text(value.get("end_date")),
         "published": value.pointer("/course_attributes/published").and_then(Value::as_bool).unwrap_or(true),
     }))
+}
+
+/// The label shown for a course's semester: the derived term when we have one,
+/// otherwise whatever year/term the school did fill in.
+fn course_semester_label(course: &Value) -> String {
+    let label = text(course.get("termLabel"));
+    if !label.is_empty() {
+        return label;
+    }
+    [text(course.get("year")), text(course.get("term"))]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// The semester a course belongs to, as a folder-shaped label
+/// (`2026-2027 秋季学期`). 思源学堂 usually leaves `semester.name` empty, but
+/// the prefix of `course_code` is the semester code (`202620271…` = first
+/// term). When that is missing the start date decides.
+fn course_term(value: &Value) -> String {
+    let start = text(value.get("start_date"));
+    let year = text(value.pointer("/academic_year/name"));
+    let code = text(value.get("course_code"));
+    let semester = text(value.pointer("/semester/code"));
+    let mut ordinal = 0u8;
+    let digits: String = year.chars().filter(char::is_ascii_digit).collect();
+    if digits.len() == 8 && code.starts_with(&digits) {
+        ordinal = code.as_bytes()[8].wrapping_sub(b'0');
+    }
+    if !(1..=3).contains(&ordinal) && semester.len() >= 9 {
+        ordinal = semester
+            .as_bytes()
+            .last()
+            .map(|byte| byte.wrapping_sub(b'0'))
+            .unwrap_or(0);
+    }
+    let month = start.get(5..7).and_then(|part| part.parse::<u8>().ok());
+    let start_year = start.get(..4).and_then(|part| part.parse::<i32>().ok());
+    if !(1..=3).contains(&ordinal) {
+        ordinal = match month {
+            Some(8..=12) | Some(1) => 1,
+            Some(2..=7) => 2,
+            _ => 0,
+        };
+    }
+    let year = if digits.len() == 8 {
+        format!("{}-{}", &digits[..4], &digits[4..])
+    } else if let Some(year) = start_year {
+        match month {
+            Some(1) => format!("{}-{}", year - 1, year),
+            Some(month) if month >= 8 => format!("{year}-{}", year + 1),
+            Some(_) => format!("{}-{year}", year - 1),
+            None => String::new(),
+        }
+    } else {
+        String::new()
+    };
+    let season = match ordinal {
+        1 => "秋季",
+        2 => "春季",
+        3 => "夏季",
+        _ => return String::new(),
+    };
+    if year.is_empty() {
+        String::new()
+    } else {
+        format!("{year} {season}学期")
+    }
 }
 
 fn activity(value: &Value) -> Option<Value> {
@@ -1302,6 +1662,29 @@ mod tests {
         assert_eq!(at("2026-09-01"), "2026-09-01");
         assert_eq!(at("2026-13-01T00:00:00Z"), "2026-13-01T00:00:00Z");
         assert_eq!(campus_time(None), "");
+    }
+
+    #[test]
+    fn semester_labels_prefer_the_derived_term() {
+        let derived = json!({"termLabel": "2026-2027 秋季学期", "year": "2026-2027", "term": ""});
+        assert_eq!(course_semester_label(&derived), "2026-2027 秋季学期");
+        let raw = json!({"termLabel": "", "year": "2026-2027", "term": "第一学期"});
+        assert_eq!(course_semester_label(&raw), "2026-2027 · 第一学期");
+        assert_eq!(course_semester_label(&json!({})), "");
+    }
+
+    #[test]
+    fn closed_homework_refuses_before_uploading() {
+        let open = json!({"is_closed": false, "is_resubmit_open": false});
+        let closed = json!({"is_closed": true, "is_resubmit_open": false});
+        let reopens = json!({"is_closed": true, "is_resubmit_open": true});
+        assert!(!submission_blocked(&open, false));
+        assert!(submission_blocked(&closed, false));
+        assert!(!submission_blocked(&reopens, false));
+        // Drafts may still be saved after the deadline.
+        assert!(!submission_blocked(&closed, true));
+        // Missing flags read as "not closed", never as a false refusal.
+        assert!(!submission_blocked(&json!({}), false));
     }
 
     #[test]
@@ -1511,23 +1894,269 @@ mod tests {
         assert!(server_reason(&json!({})).is_empty());
     }
 
+    /// Manual probe: compares the school's official todo list with the
+    /// per-course overview, to find stale or incorrectly filtered homework.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_todos_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-todos-probe",
+        )
+        .await
+        {
+            Ok(cookies) => cookies,
+            Err(error) => {
+                println!("login error: {error}");
+                return;
+            }
+        };
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
+        match client.get("/api/todos").await {
+            Ok(value) => {
+                println!(
+                    "todos keys={:?}",
+                    value
+                        .as_object()
+                        .map(|object| object.keys().cloned().collect::<Vec<_>>())
+                );
+                let list = value
+                    .get("todos")
+                    .or_else(|| value.get("data"))
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                println!("todos count={}", list.len());
+                for item in list.iter().take(30) {
+                    println!(
+                        "  id={} course={} title={} end={}",
+                        item.get("id").and_then(Value::as_u64).unwrap_or(0),
+                        item.get("course_name")
+                            .or_else(|| item.get("courseName"))
+                            .and_then(Value::as_str)
+                            .unwrap_or(""),
+                        item.get("title").and_then(Value::as_str).unwrap_or(""),
+                        item.get("end_time")
+                            .or_else(|| item.get("endTime"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                    );
+                }
+            }
+            Err(error) => println!("todos error: {error}"),
+        }
+        match client.overview().await {
+            Ok(value) => {
+                let rows = value["rows"].as_array().cloned().unwrap_or_default();
+                println!("overview count={}", rows.len());
+                for item in rows.iter().take(30) {
+                    println!(
+                        "  id={} course={} title={} submitCount={}",
+                        item["id"].as_u64().unwrap_or(0),
+                        item["course"].as_str().unwrap_or(""),
+                        item["title"].as_str().unwrap_or(""),
+                        item["submitCount"].as_u64().unwrap_or(0)
+                    );
+                }
+            }
+            Err(error) => println!("overview error: {error}"),
+        }
+    }
+
+    /// Manual probe: resolves one real replay without printing tokens or URLs.
+    #[tokio::test]
+    #[ignore = "live probe; reads the local account file and never prints secrets"]
+    async fn live_replay_video_probe() {
+        let home = std::env::var("HOME").expect("home");
+        let directory = std::path::PathBuf::from(home).join(".xjtu-launcher");
+        crate::vault::initialize(directory.clone()).expect("credential store");
+        let book = crate::accounts::load(&directory.join("auth.json")).expect("account file");
+        let account = book.active().expect("active account");
+        let Some(saved) = account.password.as_ref() else {
+            println!("no saved password");
+            return;
+        };
+        let cookies = match crate::auth::direct_login(
+            LOGIN_URL,
+            &account.username,
+            &saved.0,
+            "live-replay-probe",
+        )
+        .await
+        {
+            Ok(cookies) => cookies,
+            Err(error) => {
+                println!("login error: {error}");
+                return;
+            }
+        };
+        let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
+        // Probe one lesson by id: XJTU_PROBE_ACTIVITY=1291505.
+        let only = std::env::var("XJTU_PROBE_ACTIVITY")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok());
+        let courses = client.courses().await.expect("courses");
+        let courses = courses["courses"].as_array().cloned().unwrap_or_default();
+        for course in courses.iter().take(8) {
+            let course_id = course["id"].as_u64().unwrap_or(0);
+            let Ok(list) = client.activities(course_id).await else {
+                continue;
+            };
+            for item in list["activities"].as_array().cloned().unwrap_or_default() {
+                if item["type"] != "lesson" {
+                    continue;
+                }
+                let id = item["id"].as_u64().unwrap_or(0);
+                if only.is_some_and(|target| target != id) {
+                    continue;
+                }
+                let Ok(detail) = client.activity(id).await else {
+                    continue;
+                };
+                let replay = detail["replayCode"].as_str().unwrap_or("");
+                if replay.is_empty() {
+                    continue;
+                }
+                let player = detail["player"].as_str().unwrap_or("");
+                if player.is_empty() {
+                    continue;
+                }
+                println!(
+                    "lesson {id} replay={replay} title={}",
+                    detail["title"].as_str().unwrap_or("")
+                );
+                match client.replay_videos(id).await {
+                    Ok(found) => {
+                        println!("videos={}", found.videos.len());
+                        for video in &found.videos {
+                            let host = Url::parse(&video.download_url)
+                                .ok()
+                                .and_then(|url| url.host_str().map(str::to_owned))
+                                .unwrap_or_default();
+                            println!(
+                                "  label={} size={} mute={} best={} host={host} signed={}",
+                                video.label,
+                                video.size,
+                                video.mute,
+                                video.best_audio,
+                                video.download_url.contains("X-Amz-Signature"),
+                            );
+                        }
+                        if let Some(video) = found.videos.first() {
+                            if let Ok(parsed) = Url::parse(&video.download_url) {
+                                let probe = reqwest::Client::builder()
+                                    .timeout(std::time::Duration::from_secs(30))
+                                    .build()
+                                    .expect("probe client");
+                                match probe
+                                    .get(parsed)
+                                    .header("Range", "bytes=0-65535")
+                                    .send()
+                                    .await
+                                {
+                                    Ok(response) => println!(
+                                        "range status={} type={:?} ranges={:?} cors={:?}",
+                                        response.status(),
+                                        response
+                                            .headers()
+                                            .get("content-type")
+                                            .and_then(|v| v.to_str().ok()),
+                                        response
+                                            .headers()
+                                            .get("accept-ranges")
+                                            .and_then(|v| v.to_str().ok()),
+                                        response
+                                            .headers()
+                                            .get("access-control-allow-origin")
+                                            .and_then(|v| v.to_str().ok())
+                                    ),
+                                    Err(error) => println!("range error: {error}"),
+                                }
+                            }
+                        }
+                        return;
+                    }
+                    Err(error) => println!("replay error: {error}"),
+                }
+            }
+        }
+        println!("no replay found");
+    }
+
     #[test]
     fn media_and_player_urls_are_restricted() {
-        assert!(media_url("https://media.xjtu.edu.cn/download/file/abc").is_ok());
+        let direct = "https://media.xjtu.edu.cn/download/file/abc";
+        assert!(media_url(direct, AccessMode::Direct).is_ok());
         for bad in [
             "http://media.xjtu.edu.cn/download/file/abc",
             "https://media.xjtu.edu.cn.evil.test/file",
             "https://u:p@media.xjtu.edu.cn/file",
             "https://example.test/file",
         ] {
-            assert!(media_url(bad).is_err(), "{bad}");
+            assert!(media_url(bad, AccessMode::Direct).is_err(), "{bad}");
+            assert!(media_url(bad, AccessMode::Webvpn).is_err(), "{bad}");
         }
+        // Through WebVPN the plain redirect is mapped, and an already mapped
+        // redirect is checked by decoding it back to the media host.
+        let original = Url::parse(direct).unwrap();
+        let mapped = network::vpn_url(&original).unwrap();
+        for location in [direct, mapped.as_str()] {
+            let resolved = media_url(location, AccessMode::Webvpn).unwrap();
+            assert_eq!(resolved, mapped);
+        }
+        // A mapped URL for another host is still refused.
+        let other = network::vpn_url(&Url::parse("https://lms.xjtu.edu.cn/a").unwrap()).unwrap();
+        assert!(media_url(other.as_str(), AccessMode::Webvpn).is_err());
         assert!(player_url(
             "https://rms-v5.xjtu.edu.cn/embed/lms/lesson-activity/a/detail?token=t"
         )
         .is_some());
         assert!(player_url("https://example.test/player").is_none());
         assert!(player_url("http://rms-v5.xjtu.edu.cn/player").is_none());
+    }
+
+    #[test]
+    fn replay_videos_stay_on_the_review_host() {
+        let video = replay_video(&json!({
+            "label": "INSTRUCTOR",
+            "size": 960_000_000u64,
+            "mute": false,
+            "is_best_audio": true,
+            "download_url": "https://review-class.xjtu.edu.cn/v/1.mp4?X-Amz-Signature=abc",
+        }))
+        .expect("accepted");
+        assert_eq!(video.label, "INSTRUCTOR");
+        assert_eq!(video.size, 960_000_000);
+        assert!(video.best_audio);
+        for bad in [
+            json!({"download_url": "http://review-class.xjtu.edu.cn/a.mp4"}),
+            json!({"download_url": "https://review-class.xjtu.edu.cn.evil.test/a.mp4"}),
+            json!({"download_url": "https://u:p@review-class.xjtu.edu.cn/a.mp4"}),
+            json!({"download_url": "https://example.test/a.mp4"}),
+            json!({"download_url": "file:///etc/passwd"}),
+            json!({"label": "missing url"}),
+        ] {
+            assert!(replay_video(&bad).is_none(), "{bad}");
+        }
+        let camel = replay_video(&json!({
+            "downloadUrl": "https://review-class.xjtu.edu.cn/a.mp4",
+            "isBestAudio": true,
+            "name": "ENCODER",
+        }))
+        .expect("camel case accepted");
+        assert_eq!(camel.label, "ENCODER");
+        assert!(camel.best_audio);
     }
 
     /// Manual probe: builds a homework preview with a temporary text file. It

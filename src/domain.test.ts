@@ -10,6 +10,7 @@ import {
   coursesForDay,
   currentAcademicStart,
   defaultConfig,
+  displayCourseCode,
   dueInfo,
   examEntries,
   fileSize,
@@ -23,6 +24,7 @@ import {
   parseWeeks,
   percent,
   sectionTime,
+  sidebarPlugins,
   todoBuckets,
   updatedInfo,
   visiblePlugins,
@@ -219,6 +221,20 @@ describe('money, sizes and percentages', () => {
   it('formats ratios', () => {
     expect(percent(0.864)).toBe('86.4%');
     expect(percent(null)).toBe('—');
+  });
+});
+
+describe('course code labels', () => {
+  it('drops the semester prefix that the term heading already shows', () => {
+    expect(displayCourseCode('202620271COMP45020502')).toBe('COMP45020502');
+    expect(displayCourseCode('202620271CORE10030001')).toBe('CORE10030001');
+    expect(displayCourseCode('202520262MATH1001')).toBe('MATH1001');
+  });
+  it('keeps codes without a semester prefix', () => {
+    expect(displayCourseCode('COMP45020502')).toBe('COMP45020502');
+    expect(displayCourseCode('20262027')).toBe('20262027');
+    expect(displayCourseCode('')).toBe('');
+    expect(displayCourseCode(null)).toBe('');
   });
 });
 
@@ -469,4 +485,14 @@ it('shows enabled plugins and ignores the legacy hidden list', () => {
   expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual(['local.one', 'local.two']);
   config.disabledPlugins = ['local.one'];
   expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual(['local.two']);
+});
+
+it('keeps workflow pages out of the sidebar without disabling them', () => {
+  const plugins = [{ id: 'workflow.page', sidebar: false }, { id: 'normal.page' }] as Plugin[];
+  const config = defaultConfig();
+  expect(sidebarPlugins(plugins, config).map((p) => p.id)).toEqual(['normal.page']);
+  expect(visiblePlugins(plugins, config).map((p) => p.id)).toEqual([
+    'workflow.page',
+    'normal.page',
+  ]);
 });

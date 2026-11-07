@@ -161,11 +161,71 @@ jobs:
           kill "$pid" || true
           echo "App stayed alive for 10s."
 
+  # Copy the draft's assets into the private OSS bucket and rewrite latest.json
+  # to the download gateway before the release goes public. Skipped until the
+  # OSS_* repository variables and secrets are configured.
+  oss:
+    needs: [prepare, release]
+    if: needs.prepare.outputs.publish == 'true' && vars.OSS_BUCKET != ''
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+      OSS_PUBLIC_BASE: ${{ vars.OSS_PUBLIC_BASE }}
+      OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install ossutil 1.7.18
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ossutil.zip \
+            https://github.com/aliyun/ossutil/releases/download/v1.7.18/ossutil-v1.7.18-linux-amd64.zip
+          unzip -q -o /tmp/ossutil.zip -d /tmp/ossutil
+          install -m 755 "$(find /tmp/ossutil -type f -name 'ossutil*' ! -name '*.zip' | head -n1)" /usr/local/bin/ossutil
+          ossutil --version
+      - name: Write the ossutil config
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo '[Credentials]'
+            echo 'language=EN'
+            echo 'endpoint=https://oss-cn-beijing.aliyuncs.com'
+            echo "accessKeyID=$OSS_ACCESS_KEY_ID"
+            echo "accessKeySecret=$OSS_ACCESS_KEY_SECRET"
+          } > "$OSS_CONFIG_FILE"
+      - name: Download the draft assets
+        run: |
+          set -euo pipefail
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"v$VERSION\" and .draft == true) | .id" | head -n1)
+          [ -n "$release_id" ] || { echo "::error::Draft release v$VERSION not found."; exit 1; }
+          mkdir -p assets
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+            --jq '.[] | [.name, .id] | @tsv' |
+            while IFS=$'\t' read -r name id; do
+              gh api "repos/$GITHUB_REPOSITORY/releases/assets/$id" \
+                -H "Accept: application/octet-stream" > "assets/$name"
+            done
+          ls -l assets
+      - name: Upload to OSS and rewrite latest.json
+        run: node tools/upload-oss.mjs
+
   # Publishing only after every platform succeeded keeps the release and
   # latest.json complete; a failed run leaves a resumable draft.
   publish:
-    needs: [prepare, release]
-    if: needs.prepare.outputs.publish == 'true'
+    needs: [prepare, release, oss]
+    if: |
+      always() &&
+      needs.prepare.outputs.publish == 'true' &&
+      needs.release.result == 'success' &&
+      (needs.oss.result == 'success' || needs.oss.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

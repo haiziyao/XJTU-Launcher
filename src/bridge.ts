@@ -44,12 +44,18 @@ import type {
   PluginList,
   Timetable,
   TimetableEdit,
-  LocalLibraryEdit,
-  LocalLibraryEntry,
-  LocalLibraryImport,
+  WorkbenchBindingInput,
+  WorkbenchFile,
+  WorkbenchFolder,
+  WorkbenchImportOutcome,
+  WorkbenchOverview,
+  WorkbenchSyncResult,
+  LmsSubmitPreview,
+  LmsSubmitResult,
   StorageStatus,
   StoragePreview,
   StorageReport,
+  LmsReplayVideos,
 } from './types';
 
 export const native = isTauri();
@@ -66,6 +72,10 @@ export const bridge = {
   schoolQuery: (query: SchoolQuery, cacheName?: string, force = false) =>
     invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null, force }),
   lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
+  /** Resolve direct replay videos; the result is presigned and not cached. */
+  lmsReplayVideos: (activity: number) => invoke<LmsReplayVideos>('lms_replay_videos', { activity }),
+  /** Save a capture export (base64) to the user-chosen absolute path. */
+  saveExport: (path: string, data: string) => invoke<number>('save_export', { path, data }),
   lmsSaveFile: (uploadId: number, path: string) =>
     invoke<number>('lms_save_file', { uploadId, path }),
   // Save dialogs start inside the data folder's downloads directory. The
@@ -92,47 +102,67 @@ export const bridge = {
   storagePreview: (target: string) => invoke<StoragePreview>('storage_preview', { target }),
   storageMigrate: (target: string) => invoke<StorageReport>('storage_migrate', { target }),
   storageReveal: () => invoke<void>('storage_reveal'),
-  // 资料库 is local-only for now. The dialog returns native paths, so the
-  // backend copies the bytes and the webview never needs file-system access.
-  async libraryList(): Promise<LocalLibraryEntry[]> {
+  // 工作台 is a view of the user's own folders: the backend copies picked files
+  // in and keeps only the per-file extras, so Finder stays the source of truth.
+  async workbenchOverview(): Promise<WorkbenchOverview> {
     requireNative();
-    return invoke('library_list');
+    return invoke('workbench_overview');
   },
-  async libraryAdd(): Promise<LocalLibraryImport[]> {
+  async workbenchFolder(folder: string): Promise<WorkbenchFile[]> {
+    requireNative();
+    return invoke('workbench_folder', { folder });
+  },
+  async workbenchCreateFolder(parent: string, name: string): Promise<WorkbenchFolder> {
+    requireNative();
+    return invoke('workbench_create_folder', { parent, name });
+  },
+  async workbenchAdd(folder: string): Promise<WorkbenchImportOutcome[]> {
     requireNative();
     const paths = await open({
       multiple: true,
       directory: false,
-      title: '添加到资料库',
+      title: '添加到工作台',
     });
     if (!paths) return [];
-    return invoke('library_import', { paths });
+    return invoke('workbench_import', { folder, paths });
   },
-  async libraryUpdate(id: string, input: LocalLibraryEdit): Promise<LocalLibraryEntry> {
+  async workbenchUpdate(path: string, input: WorkbenchBindingInput): Promise<WorkbenchFile> {
     requireNative();
-    return invoke('library_update', { id, input });
+    return invoke('workbench_update', { path, input });
   },
-  async libraryDelete(id: string): Promise<void> {
+  async workbenchDelete(path: string): Promise<void> {
     requireNative();
-    return invoke('library_delete', { id });
+    return invoke('workbench_delete', { path });
   },
-  async libraryOpen(id: string): Promise<void> {
+  async workbenchOpen(path: string): Promise<void> {
     requireNative();
-    return invoke('library_open', { id });
+    return invoke('workbench_open', { path });
   },
-  async libraryReveal(id: string): Promise<void> {
+  async workbenchReveal(path: string): Promise<void> {
     requireNative();
-    return invoke('library_reveal', { id });
+    return invoke('workbench_reveal', { path });
   },
-  async libraryExport(
-    id: string,
-    name: string,
-  ): Promise<{ path: string; display: string; bytes: number } | null> {
+  async workbenchSync(): Promise<WorkbenchSyncResult> {
     requireNative();
-    const target = await save({ defaultPath: await bridge.saveTarget(name) });
-    if (!target) return null;
-    const bytes = await invoke<number>('library_export', { id, path: target });
-    return { path: target, display: await bridge.displayPath(target), bytes };
+    return invoke('workbench_sync');
+  },
+  /** Preview only: the backend reads the activity and local files, no upload. */
+  async workbenchSubmitPreview(
+    activity: number,
+    comment: string,
+    paths: string[],
+  ): Promise<LmsSubmitPreview> {
+    requireNative();
+    return invoke('workbench_submit_preview', { activity, comment, paths });
+  },
+  /** Only after the user saw the preview and explicitly confirmed. */
+  async workbenchSubmit(
+    activity: number,
+    comment: string,
+    paths: string[],
+  ): Promise<LmsSubmitResult> {
+    requireNative();
+    return invoke('workbench_submit', { activity, comment, paths });
   },
   schoolPrepareEvaluations: (input: EvaluationPrepare) =>
     invoke<EvaluationPreview>('school_prepare_evaluations', { input }),

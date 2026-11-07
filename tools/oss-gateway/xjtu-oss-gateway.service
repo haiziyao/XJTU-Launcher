@@ -1,0 +1,27 @@
+[Unit]
+Description=XJTU Launcher OSS download gateway
+After=network.target
+
+[Service]
+Type=simple
+# Alibaba Cloud Linux / 宝塔 的 nginx 用户是 www；Debian 系改成 www-data。
+User=www
+Group=www
+EnvironmentFile=/etc/xjtu-launcher/oss.env
+ExecStart=/usr/bin/python3 /srv/xjtu-launcher/gateway/oss-gateway.py
+Restart=on-failure
+RestartSec=3
+
+# The service only signs URLs; it needs no filesystem write access.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

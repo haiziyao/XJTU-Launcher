@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { BookOpen, ExternalLink, PlayCircle, Star } from 'lucide-vue-next';
+import { BookOpen, ExternalLink, PlayCircle, Presentation, Star } from 'lucide-vue-next';
 import { save } from '@tauri-apps/plugin-dialog';
 import SectionHeader from '../ui/SectionHeader.vue';
 import SplitView from '../ui/SplitView.vue';
@@ -38,6 +38,10 @@ import type {
  * stay on activities. Submitting homework is not implemented in the app; the
  * page says so and points at the campus website.
  */
+const emit = defineEmits<{
+  capture: [target: { activity: number; course: number | null; title: string }];
+}>();
+
 const TYPE_LABEL: Record<string, string> = {
   homework: '作业',
   material: '资料',
@@ -83,24 +87,32 @@ const notice = ref('');
 const moreItems: MoreItem[] = [{ id: 'lms', label: '在思源学堂中打开', icon: ExternalLink }];
 
 function semesterKey(item: LmsCourse) {
+  const label = item.termLabel.trim();
+  if (label) return label;
   return [item.year.trim(), item.term.trim()].filter(Boolean).join(' · ') || '未标注学期';
+}
+
+/** 秋季 = 1、春季 = 2、夏季 = 3，跟着学年一起倒序。 */
+function semesterRank(item: LmsCourse) {
+  const label = semesterKey(item);
+  const start = Number(label.match(/(\d{4})-\d{4}/)?.[1]);
+  const ordinal = label.includes('秋')
+    ? 1
+    : label.includes('春')
+      ? 2
+      : label.includes('夏')
+        ? 3
+        : TERM_RANK[item.term.trim()] || 0;
+  return Number.isFinite(start) ? start * 10 + ordinal : -Infinity;
 }
 
 const semesters = computed(() => {
   const groups = new Map<string, { id: string; title: string; rank: number; items: LmsCourse[] }>();
   for (const item of courses.value) {
-    const year = item.year.trim();
-    const term = item.term.trim();
     const title = semesterKey(item);
     let group = groups.get(title);
     if (!group) {
-      const start = Number(year.slice(0, 4));
-      group = {
-        id: title,
-        title,
-        rank: Number.isFinite(start) ? start * 10 + (TERM_RANK[term] || 0) : -Infinity,
-        items: [],
-      };
+      group = { id: title, title, rank: semesterRank(item), items: [] };
       groups.set(title, group);
     }
     group.items.push(item);
@@ -485,6 +497,10 @@ async function downloadFile(file: LmsUpload) {
   }
 }
 
+function startCapture(item: LmsActivityDetail) {
+  emit('capture', { activity: item.id, course: item.courseId, title: item.title });
+}
+
 async function openReplay(player: string) {
   error.value = '';
   try {
@@ -731,6 +747,15 @@ onMounted(async () => {
             >
               <UiButton size="sm" @click="openReplay(detail.player)">
                 <PlayCircle :size="14" />打开回放
+              </UiButton>
+            </SettingRow>
+            <SettingRow
+              v-if="detail.player"
+              title="截取讲义"
+              description="把回放里的幻灯片截成 PDF 或图片包，只保存在本机"
+            >
+              <UiButton size="sm" variant="ghost" @click="startCapture(detail)">
+                <Presentation :size="14" />截取讲义
               </UiButton>
             </SettingRow>
             <SettingRow

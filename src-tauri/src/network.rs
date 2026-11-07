@@ -50,6 +50,9 @@ pub fn trusted(url: &Url) -> bool {
                     // the login redirect and holds no user credentials.
                     | "identity1.xjtu.edu.cn"
                     | "lms.xjtu.edu.cn"
+                    // Course attachments. The LMS blob endpoint redirects here;
+                    // the adapter still checks the exact origin and path first.
+                    | "media.xjtu.edu.cn"
             )
         )
 }

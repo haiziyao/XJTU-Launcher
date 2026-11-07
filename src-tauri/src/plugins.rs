@@ -6,6 +6,7 @@ pub const TIMETABLE_ID: &str = "cn.xjtu.timetable";
 pub const CAMPUS_ID: &str = "cn.xjtu.campus";
 pub const AGENT_ID: &str = "cn.xjtu.agent-settings";
 pub const HOME_THEME_ID: &str = "cn.xjtu.home-theme";
+pub const PPT_CAPTURE_ID: &str = "cn.xjtu.ppt-capture";
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -18,6 +19,15 @@ pub struct Plugin {
     pub icon: String,
     pub page: Page,
     pub widget: bool,
+    /// Whether the plugin gets its own sidebar entry. Built-in pages that are
+    /// opened from inside a workflow (for example the replay capture page,
+    /// reached from a lesson) set this to false; the manifest default is true.
+    #[serde(default = "sidebar_default")]
+    pub sidebar: bool,
+}
+
+fn sidebar_default() -> bool {
+    true
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -32,6 +42,8 @@ pub enum Page {
     AgentSettings,
     #[serde(rename = "homeTheme")]
     HomeTheme,
+    #[serde(rename = "pptCapture")]
+    PptCapture,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -93,13 +105,16 @@ impl Plugin {
         {
             return Err("插件清单字段无效或版本不受支持".into());
         }
-        if [TIMETABLE_ID, CAMPUS_ID, AGENT_ID].contains(&self.id.as_str()) && !builtin {
+        if [TIMETABLE_ID, CAMPUS_ID, AGENT_ID, PPT_CAPTURE_ID].contains(&self.id.as_str())
+            && !builtin
+        {
             return Err("不能覆盖内置插件".into());
         }
         match &self.page {
             Page::Timetable if !builtin => return Err("课表服务目前仅供内置插件使用".into()),
             Page::Campus if !builtin => return Err("畅行校园仅供内置插件使用".into()),
             Page::AgentSettings if !builtin => return Err("Agent 设置仅供内置插件使用".into()),
+            Page::PptCapture if !builtin => return Err("回放截取仅供内置插件使用".into()),
             Page::Links { links } => {
                 if links.len() > 50 {
                     return Err("导航插件最多包含 50 个链接".into());
@@ -147,8 +162,13 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
         serde_json::from_str(include_str!("../../plugins/cn.xjtu.home-theme/plugin.json"))
             .map_err(|_| "内置主页主题插件损坏")?;
     theme.validate(true)?;
+    let capture: Plugin = serde_json::from_str(include_str!(
+        "../../plugins/cn.xjtu.ppt-capture/plugin.json"
+    ))
+    .map_err(|_| "内置回放截取插件损坏")?;
+    capture.validate(true)?;
     let mut result = PluginList {
-        plugins: vec![builtin, campus, agent, theme],
+        plugins: vec![builtin, campus, agent, theme, capture],
         sources: Default::default(),
         warnings: vec![],
         directory: directory.display().to_string(),
@@ -164,6 +184,7 @@ pub fn list(directory: &Path) -> Result<PluginList, String> {
         CAMPUS_ID.to_string(),
         AGENT_ID.to_string(),
         HOME_THEME_ID.to_string(),
+        PPT_CAPTURE_ID.to_string(),
     ]);
     for path in paths.into_iter().take(256) {
         if !path.is_dir()
@@ -238,7 +259,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         import(Path::new("../examples/campus-links"), directory.path()).unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 5);
+        assert_eq!(result.plugins.len(), 6);
         assert!(result.warnings.is_empty());
         assert!(import(Path::new("../examples/campus-links"), directory.path()).is_err());
     }
@@ -259,6 +280,30 @@ mod tests {
             serde_json::from_str(include_str!("../../plugins/cn.xjtu.timetable/plugin.json"))
                 .unwrap();
         assert!(plugin.validate(false).is_err());
+        let capture: Plugin = serde_json::from_str(
+            r#"{"schemaVersion":1,"id":"local.capture","name":"截取","version":"0.1.0",
+                "description":"","icon":"presentation","page":{"type":"pptCapture"},"widget":false}"#,
+        )
+        .unwrap();
+        assert!(capture.validate(false).is_err());
+    }
+
+    #[test]
+    fn sidebar_defaults_on_and_capture_entry_is_off() {
+        let plain: Plugin = serde_json::from_str(
+            r#"{"schemaVersion":1,"id":"local.links","name":"链接","version":"0.1.0",
+                "description":"","icon":"link","page":{"type":"links","links":[]},"widget":false}"#,
+        )
+        .unwrap();
+        assert!(plain.sidebar);
+        let directory = tempfile::tempdir().unwrap();
+        let result = list(directory.path()).unwrap();
+        let capture = result
+            .plugins
+            .iter()
+            .find(|plugin| plugin.id == PPT_CAPTURE_ID)
+            .unwrap();
+        assert!(!capture.sidebar);
     }
 
     #[test]
@@ -267,7 +312,7 @@ mod tests {
         fs::create_dir(directory.path().join("bad")).unwrap();
         fs::write(directory.path().join("bad/plugin.json"), "{}").unwrap();
         let result = list(directory.path()).unwrap();
-        assert_eq!(result.plugins.len(), 4);
+        assert_eq!(result.plugins.len(), 5);
         assert_eq!(result.warnings.len(), 1);
     }
 }
