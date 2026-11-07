@@ -31,7 +31,7 @@
 
 - 凭据按用户决定保存在 `~/.xjtu-launcher/auth.json`，包含账号、可选密码、会话与模型 API Key。日常读写**不用**系统钥匙串；旧凭据只用于一次性迁移，不恢复历史加密存储方案。保存密码是可选项，接口不回读已存密码。
 - 其余应用数据分两处，布局对齐 Codex 的 `~/.codex`：
-  - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`、`agent/` 与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
+  - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`、`agent/`、`resources/`（用户自备的入口图标等资源，见 [自定义入口图标](ICONS.md)）与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
   - `xjtu-launcher-file`（可见，默认 `~/Documents/xjtu-launcher-file`，可在「应用设置 → 存储」改位置）：`workspace/` 放资料库，`download/` 放下载；用户自己的文件只放在这里。
   - 文件位置记录在 `~/.xjtu-launcher/storage.json`，页面保存配置时无法把它改回去。迁移必须先复制并核对数量与字节、记录新位置，最后才删除旧文件；失败时保留旧数据并撤销副本。
   - 界面显示任何路径都写成 `~/...`，不得出现用户主目录中的账号名。`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不参与迁移。

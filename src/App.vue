@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   AlertCircle,
   ArrowLeft,
@@ -43,6 +43,7 @@ import type {
   CampusNoticeBoard,
   NetworkCheck,
   PetState,
+  Plugin,
   PluginList,
   Timetable,
 } from './types';
@@ -63,10 +64,12 @@ import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
 import { applyCached } from './cache';
+import { loadEntryIcons } from './icons';
 import CampusView from './components/CampusView.vue';
 import PptCaptureView from './components/PptCaptureView.vue';
 import type { CaptureTarget } from './capture/target';
 import EmptyState from './components/ui/EmptyState.vue';
+import EntryIcon from './components/ui/EntryIcon.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
 import UiIconButton from './components/ui/UiIconButton.vue';
@@ -101,7 +104,10 @@ function openCapture(target: CaptureTarget) {
 const navigation = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
 const navIndicator = useSlidingIndicator(navigation, () => route.value);
-// 主页 / Agent / 社区是固定入口；畅行校园跟随插件启用状态，工作台始终可用。
+// 组件画廊只在开发构建里存在；生产包不会导入它，也不显示入口。
+const KitGallery = import.meta.env.DEV
+  ? defineAsyncComponent(() => import('./components/dev/KitGallery.vue'))
+  : null;
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -112,12 +118,22 @@ function openSettings(
 ) {
   settingsSection.value = section;
   route.value = 'settings';
+  // The icon file is hand-edited; picking it up here means no restart.
+  if (native) void loadEntryIcons();
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
 const petVariant = computed(() => normalizePet(config.value.pet));
 // Accent tokens live on the document root so teleported dialogs inherit them too.
 watch(() => config.value.accent, applyAccent, { immediate: true });
+// Hiding the entry must not leave the app on a page with no way back.
+watch(
+  () => config.value.agentSidebarVisible,
+  (visible) => {
+    if (!visible && route.value === 'agent') route.value = 'home';
+  },
+  { immediate: true },
+);
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
@@ -163,6 +179,7 @@ const sidebarPlugins = computed(() =>
     (plugin) => plugin.page.type !== 'campus',
   ),
 );
+// 主页 / Agent / 社区是固定入口；畅行校园跟随插件启用状态，工作台始终可用。
 const primaryNav = computed(() => [
   { id: 'home', title: '主页', icon: Home },
   { id: 'agent', title: 'Agent', icon: Bot },
@@ -171,7 +188,29 @@ const primaryNav = computed(() => [
     ? [{ id: campusPlugin.value.id, title: '畅行校园', icon: MapPinned }]
     : []),
   { id: 'workbench', title: '工作台', icon: Briefcase },
+  ...(KitGallery ? [{ id: 'kit', title: '组件', icon: LayoutGrid }] : []),
 ]);
+// Agent is hidden by default; the switch lives in Agent settings.
+const visiblePrimaryNav = computed(() =>
+  primaryNav.value.filter((item) => item.id !== 'agent' || config.value.agentSidebarVisible),
+);
+/** Built-in glyph per page type; a plugin cannot ship its own icon file. */
+function pluginGlyph(plugin: Plugin) {
+  switch (plugin.page.type) {
+    case 'timetable':
+      return CalendarDays;
+    case 'campus':
+      return Route;
+    case 'homeTheme':
+      return Palette;
+    case 'pptCapture':
+      return Presentation;
+    case 'agentSettings':
+      return Settings2;
+    default:
+      return Compass;
+  }
+}
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
 // The campus workspace holds per-account data (including the local 资料库).
 // Remount it when the active account changes so a switch never leaves the
@@ -225,6 +264,7 @@ watch(enabledPlugins, () => {
       'community',
       'agent',
       'workbench',
+      'kit',
     ].includes(route.value) &&
     !activePlugin.value
   )
@@ -465,6 +505,7 @@ async function primeTimetable() {
 }
 onMounted(async () => {
   if (!native) return;
+  void loadEntryIcons();
   window.addEventListener('keydown', onKey);
   timer = setInterval(() => {
     now.value = new Date();
@@ -594,7 +635,7 @@ onBeforeUnmount(() => {
         ></span>
         <div class="nav-section">
           <button
-            v-for="item in primaryNav"
+            v-for="item in visiblePrimaryNav"
             :key="item.id"
             class="desktop-nav-item"
             :class="{ selected: route === item.id }"
@@ -604,7 +645,9 @@ onBeforeUnmount(() => {
             :aria-current="route === item.id ? 'page' : undefined"
             @click="route = item.id"
           >
-            <component :is="item.icon" :size="20" /><span>{{ item.title }}</span>
+            <EntryIcon :name="`nav.${item.id}`" :icon="item.icon" :size="20" /><span>{{
+              item.title
+            }}</span>
           </button>
         </div>
         <div v-if="sidebarPlugins.length" class="nav-section">
@@ -620,14 +663,9 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
-              v-else-if="plugin.page.type === 'campus'"
-              :size="20"
-            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Presentation
-              v-else-if="plugin.page.type === 'pptCapture'"
-              :size="20"
-            /><Settings2 v-else-if="plugin.page.type === 'agentSettings'" :size="20" /><Compass
-              v-else
+            <EntryIcon
+              :name="`plugin.${plugin.id}`"
+              :icon="pluginGlyph(plugin)"
               :size="20"
             /><span>{{ plugin.name }}</span>
           </button>
@@ -653,7 +691,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'market' ? 'page' : undefined"
             @click="route = 'market'"
           >
-            <LayoutGrid :size="20" /><span>插件市场</span>
+            <EntryIcon name="nav.market" :icon="LayoutGrid" :size="20" /><span>插件市场</span>
           </button>
           <button
             class="desktop-nav-item"
@@ -664,7 +702,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'settings' ? 'page' : undefined"
             @click="openSettings()"
           >
-            <Settings :size="20" /><span>应用设置</span>
+            <EntryIcon name="nav.settings" :icon="Settings" :size="20" /><span>应用设置</span>
           </button>
         </div>
       </nav>
@@ -830,7 +868,10 @@ onBeforeUnmount(() => {
               <AgentSettingsView
                 v-else-if="activePlugin?.page.type === 'agentSettings'"
                 :key="activePlugin.id"
+                :config="config"
+                :saving="saving || !configLoaded"
                 @agent="route = 'agent'"
+                @update="persist"
               />
               <HomeThemeView
                 v-else-if="activePlugin?.page.type === 'homeTheme'"
@@ -890,6 +931,7 @@ onBeforeUnmount(() => {
                 :links="activePlugin.page.links"
                 @open="openLink"
               />
+              <component v-else-if="KitGallery && route === 'kit'" :is="KitGallery" />
             </div>
           </Transition>
         </div>

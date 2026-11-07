@@ -2,6 +2,8 @@ export interface AppConfig {
   version: number;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
+  /** Show the Agent entry in the sidebar; on by default. */
+  agentSidebarVisible: boolean;
   nickname: string;
   avatar: string | null;
   wallpaper: string | null;
@@ -92,15 +94,25 @@ export interface PetDesktopView {
 export interface ExposeStatus {
   running: boolean;
   enabled: boolean;
+  /** The port actually serving; may differ from the saved one after a fallback. */
+  port: number;
   address: string;
   error: string | null;
 }
 
+/** How a tool touches data; the page badges each kind differently. */
+export type ExposeAccess = 'read' | 'write' | 'update' | 'delete';
+
 export interface ExposeTool {
   name: string;
   description: string;
-  /** Display group in the tool list. */
+  /** Short Chinese name shown instead of the raw tool name. */
+  title: string;
+  /** One line saying what the tool does. */
+  summary: string;
+  /** Section in the tool list. */
   category: string;
+  access: ExposeAccess[];
 }
 
 export interface Link {
@@ -1105,4 +1117,13 @@ export interface StorageReport {
   totalFiles: number;
   moved: string[];
   warnings: string[];
+}
+
+/**
+ * User icons from `~/.xjtu-launcher/resources/icons/icons.json`: entry id →
+ * squared PNG data URL. Entries without a mapping keep their built-in glyph.
+ */
+export interface EntryIconSet {
+  icons: Record<string, string>;
+  problems: string[];
 }

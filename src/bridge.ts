@@ -12,6 +12,7 @@ import type {
   AgentPresets,
   AgentSummary,
   AgentToolInfo,
+  EntryIconSet,
   ExposeStatus,
   ExposeTool,
   MarketCatalog,
@@ -65,6 +66,9 @@ export const bridge = {
     invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
+  // Entry icons under `~/.xjtu-launcher/resources/icons`; never an error, an
+  // empty set just means every entry keeps its built-in glyph.
+  entryIcons: () => invoke<EntryIconSet>('entry_icons'),
   // The backend stores the answer under the account that ran the query when a
   // cache name is given, so an answer that arrives after a switch stays put.
   // A stored answer younger than the query's TTL is returned without a request;

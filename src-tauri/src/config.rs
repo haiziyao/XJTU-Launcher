@@ -9,6 +9,10 @@ pub struct AppConfig {
     pub sidebar_collapsed: bool,
     #[serde(default = "default_sidebar_width")]
     pub sidebar_width: u32,
+    /// Whether the Agent entry shows in the sidebar. On by default; the
+    /// Agent settings page can turn it off without leaving the app.
+    #[serde(default = "default_true")]
+    pub agent_sidebar_visible: bool,
     #[serde(default)]
     pub nickname: String,
     #[serde(default)]
@@ -172,6 +176,7 @@ impl Default for AppConfig {
             version: 1,
             sidebar_collapsed: false,
             sidebar_width: default_sidebar_width(),
+            agent_sidebar_visible: true,
             nickname: String::new(),
             avatar: None,
             wallpaper: None,
