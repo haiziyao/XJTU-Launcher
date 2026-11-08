@@ -7,6 +7,7 @@ import EmptyState from '../ui/EmptyState.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
 import { directQuery } from '../../campusSession';
 import { applyCached, cacheName } from '../../cache';
+import { currentAcademicStart } from '../../domain';
 import type { FitnessScore, FitnessYears } from '../../types';
 
 const years = ref<FitnessYears | null>(null);
@@ -15,8 +16,16 @@ const year = ref('');
 const loading = ref(false);
 const error = ref('');
 
+// Future academic years cannot have a score yet; keeping them in the picker
+// only produces empty pages.
+const academicStart = currentAcademicStart();
+const availableYears = computed(() =>
+  (years.value?.rows ?? []).filter(
+    (item) => /^\d{4}$/.test(item.year) && Number(item.year) <= academicStart,
+  ),
+);
 const yearOptions = computed(() =>
-  (years.value?.rows ?? []).map((item) => ({ value: item.year, label: item.name || item.year })),
+  availableYears.value.map((item) => ({ value: item.year, label: item.name || item.year })),
 );
 
 async function loadYears() {
@@ -25,7 +34,7 @@ async function loadYears() {
   try {
     await applyCached<FitnessYears>('fitness', undefined, (value) => (years.value = value));
     years.value = await directQuery<FitnessYears>({ type: 'fitness' }, 'fitness');
-    const preferred = years.value.rows.find((item) => item.checked) ?? years.value.rows[0];
+    const preferred = availableYears.value.find((item) => item.checked) ?? availableYears.value[0];
     if (preferred) {
       year.value = preferred.year;
       await loadScore();
@@ -80,6 +89,12 @@ onMounted(loadYears);
     </SettingRow>
   </SettingGroup>
   <EmptyState v-if="loading && !score" compact :icon="Activity" title="正在读取体测成绩…" />
+  <EmptyState
+    v-else-if="years && !availableYears.length"
+    compact
+    :icon="Activity"
+    title="还没有可查询的体测学年"
+  />
   <SettingGroup v-if="score" title="成绩明细">
     <SettingRow
       :title="`总分 ${score.totalScore || '—'}`"

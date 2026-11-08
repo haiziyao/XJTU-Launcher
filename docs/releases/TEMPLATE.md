@@ -33,3 +33,5 @@
 ## 下载
 
 从 [Releases](https://github.com/haiziyao/XJTU-Launcher/releases) 下载对应平台的安装包。写清推荐版本与系统要求即可，不在多个文件里重复维护下载链接。
+
+> 自动发版会把本文件全文作为 GitHub Release 正文，跨文件引用请使用完整 URL；相对链接在 Release 页无法解析。

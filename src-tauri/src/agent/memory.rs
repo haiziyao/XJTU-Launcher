@@ -1,4 +1,4 @@
-//! Long-term memories in ~/.xjtu-launcher/agent/memory.json.
+//! Long-term memories in <数据文件夹>/agent/memory.json.
 //! Entries are plain text and are injected into the Agent's system prompt.
 use serde::{Deserialize, Serialize};
 use std::path::Path;

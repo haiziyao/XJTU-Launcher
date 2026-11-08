@@ -7,12 +7,16 @@ import {
   CalendarDays,
   ChevronLeft,
   Compass,
+  Contrast,
   Download,
   Home,
   LayoutGrid,
   LoaderCircle,
+  MapPinned,
   MessagesSquare,
+  Presentation,
   Route,
+  Briefcase,
   Settings,
   Palette,
   Settings2,
@@ -24,13 +28,22 @@ import { initializeMarket } from './market';
 import { initializeUpdates, updateStatus } from './updates';
 import { bridge, native } from './bridge';
 import { ensureDirectSession } from './campusSession';
-import { coursesForDay, defaultConfig, moveItem, orderedPlugins, visiblePlugins } from './domain';
+import { prefetchCampus } from './campusPrefetch';
+import { resetLmsOverview } from './campusOverview';
+import {
+  coursesForDay,
+  defaultConfig,
+  moveItem,
+  orderedPlugins,
+  sidebarPlugins as pluginsForSidebar,
+} from './domain';
 import type {
   AccountStatus,
   AppConfig,
   CampusNoticeBoard,
   NetworkCheck,
   PetState,
+  Plugin,
   PluginList,
   Timetable,
 } from './types';
@@ -41,6 +54,7 @@ import AccountsView from './components/AccountsView.vue';
 import PersonalView from './components/PersonalView.vue';
 import SettingsView from './components/SettingsView.vue';
 import CommunityView from './components/CommunityView.vue';
+import WorkbenchView from './components/WorkbenchView.vue';
 import AgentView from './components/AgentView.vue';
 import AgentSettingsView from './components/AgentSettingsView.vue';
 import HomeThemeView from './components/HomeThemeView.vue';
@@ -50,28 +64,46 @@ import PluginMarketView from './components/PluginMarketView.vue';
 import LinksView from './components/LinksView.vue';
 import TimetableView from './components/TimetableView.vue';
 import { applyCached } from './cache';
+import { loadEntryIcons } from './icons';
 import CampusView from './components/CampusView.vue';
+import PptCaptureView from './components/PptCaptureView.vue';
+import type { CaptureTarget } from './capture/target';
 import EmptyState from './components/ui/EmptyState.vue';
+import EntryIcon from './components/ui/EntryIcon.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
 import UiIconButton from './components/ui/UiIconButton.vue';
 import { useSlidingIndicator } from './useSlidingIndicator';
-import { applyAccent, normalizeAccent } from './theme';
+import {
+  WALLPAPER_MODES,
+  applyAccent,
+  normalizeAccent,
+  wallpaperMode,
+  wallpaperPanelOpacity,
+  wallpaperTokens,
+} from './theme';
 import './ui.css';
 import './pages.css';
+import './campus.css';
 import './desktop-shell.css';
 import './pet-toast.css';
 import './pet-art.css';
 
 const route = ref('home');
+/** Set when 思源学堂 hands a lesson to the capture page; that page reads it on mount. */
+const captureTarget = ref<CaptureTarget | null>(null);
+function openCapture(target: CaptureTarget) {
+  const plugin = enabledPlugins.value.find((p) => p.page.type === 'pptCapture');
+  if (!plugin) {
+    showToast('回放截取已停用，先在「设置 → 插件」里启用', 'neutral');
+    return;
+  }
+  captureTarget.value = target;
+  route.value = plugin.id;
+}
 const navigation = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
 const navIndicator = useSlidingIndicator(navigation, () => route.value);
-const primaryNav = [
-  { id: 'home', title: '主页', icon: Home },
-  { id: 'agent', title: 'Agent', icon: Bot },
-  { id: 'community', title: '社区', icon: MessagesSquare },
-];
 // Start each page at the top once the previous one has faded out.
 function resetScroll() {
   content.value?.scrollTo({ top: 0 });
@@ -82,12 +114,22 @@ function openSettings(
 ) {
   settingsSection.value = section;
   route.value = 'settings';
+  // The icon file is hand-edited; picking it up here means no restart.
+  if (native) void loadEntryIcons();
 }
 const config = ref(defaultConfig());
 const configLoaded = ref(false);
 const petVariant = computed(() => normalizePet(config.value.pet));
 // Accent tokens live on the document root so teleported dialogs inherit them too.
 watch(() => config.value.accent, applyAccent, { immediate: true });
+// Hiding the entry must not leave the app on a page with no way back.
+watch(
+  () => config.value.agentSidebarVisible,
+  (visible) => {
+    if (!visible && route.value === 'agent') route.value = 'home';
+  },
+  { immediate: true },
+);
 const pluginList = ref<PluginList>({ plugins: [], warnings: [], directory: '', sources: {} });
 const account = ref<AccountStatus>({ connected: false, degree: null, apiKeySet: false });
 const timetable = ref<Timetable | null>(null);
@@ -124,9 +166,74 @@ const sortedPlugins = computed(() => orderedPlugins(pluginList.value.plugins, co
 const enabledPlugins = computed(() =>
   sortedPlugins.value.filter((p) => !config.value.disabledPlugins.includes(p.id)),
 );
-const sidebarPlugins = computed(() => visiblePlugins(sortedPlugins.value, config.value));
+// 畅行校园固定在主导航里（社区下方）；其余插件仍归到「插件」分组。
+const campusPlugin = computed(() =>
+  enabledPlugins.value.find((plugin) => plugin.page.type === 'campus'),
+);
+const sidebarPlugins = computed(() =>
+  pluginsForSidebar(sortedPlugins.value, config.value).filter(
+    (plugin) => plugin.page.type !== 'campus',
+  ),
+);
+// 主页 / Agent / 社区是固定入口；畅行校园跟随插件启用状态，工作台始终可用。
+const primaryNav = computed(() => [
+  { id: 'home', title: '主页', icon: Home },
+  { id: 'agent', title: 'Agent', icon: Bot },
+  { id: 'community', title: '社区', icon: MessagesSquare },
+  ...(campusPlugin.value
+    ? [{ id: campusPlugin.value.id, title: '畅行校园', icon: MapPinned }]
+    : []),
+  { id: 'workbench', title: '工作台', icon: Briefcase },
+]);
+// Agent is hidden by default; the switch lives in Agent settings.
+const visiblePrimaryNav = computed(() =>
+  primaryNav.value.filter((item) => item.id !== 'agent' || config.value.agentSidebarVisible),
+);
+/** Built-in glyph per page type; a plugin cannot ship its own icon file. */
+function pluginGlyph(plugin: Plugin) {
+  switch (plugin.page.type) {
+    case 'timetable':
+      return CalendarDays;
+    case 'campus':
+      return Route;
+    case 'homeTheme':
+      return Palette;
+    case 'pptCapture':
+      return Presentation;
+    case 'agentSettings':
+      return Settings2;
+    default:
+      return Compass;
+  }
+}
 const activePlugin = computed(() => enabledPlugins.value.find((p) => p.id === route.value));
+// The campus workspace holds per-account data (including the local 资料库).
+// Remount it when the active account changes so a switch never leaves the
+// previous account's files or school rows on screen.
+const campusScope = computed(() =>
+  [
+    activePlugin.value?.id,
+    account.value.studentId ?? account.value.name ?? '',
+    account.value.degree ?? '',
+  ].join(':'),
+);
 const showWallpaper = computed(() => !!config.value.wallpaper);
+// A wallpaper preset moves the veil, panels and controls together; its text
+// tokens are derived from the panel's worst-case backdrop, not plain white.
+const wallpaperPreset = computed(() => wallpaperMode(config.value.wallpaperDisplay));
+const wallpaperPanel = computed(() =>
+  wallpaperPanelOpacity(config.value.wallpaperPanel, wallpaperPreset.value),
+);
+const wallpaperStyle = computed<Record<string, string>>(() =>
+  showWallpaper.value
+    ? wallpaperTokens(wallpaperPreset.value, wallpaperPanel.value, config.value.accent)
+    : {},
+);
+function cycleWallpaper() {
+  const index = WALLPAPER_MODES.findIndex((mode) => mode.id === wallpaperPreset.value.id);
+  const next = WALLPAPER_MODES[(index + 1) % WALLPAPER_MODES.length];
+  void persist({ ...config.value, wallpaperDisplay: next.id });
+}
 const updateReady = computed(() =>
   ['available', 'downloading', 'installing', 'installed'].includes(updateStatus.value?.phase ?? ''),
 );
@@ -143,9 +250,16 @@ watch(
 );
 watch(enabledPlugins, () => {
   if (
-    !['home', 'settings', 'market', 'personal', 'accounts', 'community', 'agent'].includes(
-      route.value,
-    ) &&
+    ![
+      'home',
+      'settings',
+      'market',
+      'personal',
+      'accounts',
+      'community',
+      'agent',
+      'workbench',
+    ].includes(route.value) &&
     !activePlugin.value
   )
     route.value = 'home';
@@ -174,6 +288,7 @@ async function reloadAccount() {
   const generation = ++accountGeneration;
   timetable.value = null;
   scheduleError.value = '';
+  resetLmsOverview();
   try {
     const next = await bridge.account();
     if (!disposed && generation === accountGeneration) account.value = next;
@@ -343,9 +458,6 @@ async function saveSource(source: string | null): Promise<boolean> {
   await persist({ ...config.value, pluginServer: source });
   return config.value.pluginServer === source;
 }
-async function setPinnedTools(ids: string[]) {
-  void persist({ ...config.value, campusPinned: ids });
-}
 async function togglePlugin(id: string) {
   const disabled = config.value.disabledPlugins.includes(id);
   await persist({
@@ -387,6 +499,7 @@ async function primeTimetable() {
 }
 onMounted(async () => {
   if (!native) return;
+  void loadEntryIcons();
   window.addEventListener('keydown', onKey);
   timer = setInterval(() => {
     now.value = new Date();
@@ -406,6 +519,7 @@ onMounted(async () => {
   if (results[2].status === 'fulfilled') {
     account.value = results[2].value;
     void warmDirectSession(results[2].value);
+    void prefetchCampus(results[2].value);
   } else error.value = errorText(results[2].reason);
   try {
     const stop = await bridge.onAuth(async (event) => {
@@ -414,6 +528,7 @@ onMounted(async () => {
         const generation = ++accountGeneration;
         timetable.value = null;
         scheduleError.value = '';
+        resetLmsOverview();
         let next: AccountStatus | undefined;
         try {
           next = await bridge.account();
@@ -422,7 +537,10 @@ onMounted(async () => {
           error.value = errorText(e);
         }
         if (!disposed && generation === accountGeneration) void primeTimetable();
-        if (next && !disposed && generation === accountGeneration) void warmDirectSession(next);
+        if (next && !disposed && generation === accountGeneration) {
+          void warmDirectSession(next);
+          void prefetchCampus(next, true);
+        }
       } else if (event.state === 'error') error.value = event.message;
     });
     if (disposed) stop();
@@ -483,6 +601,7 @@ onBeforeUnmount(() => {
     :style="{
       '--sidebar-width': sidebarWidth + 'px',
       '--sidebar-collapsed-width': collapsedWidth + 'px',
+      ...wallpaperStyle,
     }"
   >
     <!-- Spans the whole window so sidebar width changes never rescale the image.
@@ -510,7 +629,7 @@ onBeforeUnmount(() => {
         ></span>
         <div class="nav-section">
           <button
-            v-for="item in primaryNav"
+            v-for="item in visiblePrimaryNav"
             :key="item.id"
             class="desktop-nav-item"
             :class="{ selected: route === item.id }"
@@ -520,7 +639,9 @@ onBeforeUnmount(() => {
             :aria-current="route === item.id ? 'page' : undefined"
             @click="route = item.id"
           >
-            <component :is="item.icon" :size="20" /><span>{{ item.title }}</span>
+            <EntryIcon :name="`nav.${item.id}`" :icon="item.icon" :size="20" /><span>{{
+              item.title
+            }}</span>
           </button>
         </div>
         <div v-if="sidebarPlugins.length" class="nav-section">
@@ -536,13 +657,11 @@ onBeforeUnmount(() => {
             :aria-current="route === plugin.id ? 'page' : undefined"
             @click="route = plugin.id"
           >
-            <CalendarDays v-if="plugin.page.type === 'timetable'" :size="20" /><Route
-              v-else-if="plugin.page.type === 'campus'"
+            <EntryIcon
+              :name="`plugin.${plugin.id}`"
+              :icon="pluginGlyph(plugin)"
               :size="20"
-            /><Palette v-else-if="plugin.page.type === 'homeTheme'" :size="20" /><Settings2
-              v-else-if="plugin.page.type === 'agentSettings'"
-              :size="20"
-            /><Compass v-else :size="20" /><span>{{ plugin.name }}</span>
+            /><span>{{ plugin.name }}</span>
           </button>
         </div>
         <div class="nav-spacer"></div>
@@ -566,7 +685,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'market' ? 'page' : undefined"
             @click="route = 'market'"
           >
-            <LayoutGrid :size="20" /><span>插件市场</span>
+            <EntryIcon name="nav.market" :icon="LayoutGrid" :size="20" /><span>插件市场</span>
           </button>
           <button
             class="desktop-nav-item"
@@ -577,7 +696,7 @@ onBeforeUnmount(() => {
             :aria-current="route === 'settings' ? 'page' : undefined"
             @click="openSettings()"
           >
-            <Settings :size="20" /><span>应用设置</span>
+            <EntryIcon name="nav.settings" :icon="Settings" :size="20" /><span>应用设置</span>
           </button>
         </div>
       </nav>
@@ -655,8 +774,29 @@ onBeforeUnmount(() => {
       </Transition>
       <!-- The macOS title bar is embedded, so this strip keeps the window draggable. -->
       <div v-if="macNative" class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
+      <!-- Cycles the wallpaper presets. Icon only: the label lives in the tooltip
+           and in 设置 → 外观与交互, so this never competes with page actions. -->
+      <button
+        v-if="showWallpaper"
+        type="button"
+        class="wallpaper-switch"
+        :title="`显示样式：${wallpaperPreset.label} · 点击切换`"
+        :aria-label="`显示样式：${wallpaperPreset.label}，点击切换`"
+        @click="cycleWallpaper"
+      >
+        <Contrast :size="15" aria-hidden="true" />
+      </button>
       <div ref="content" class="desktop-content">
-        <div class="desktop-content-inner" :class="{ 'is-home': route === 'home' }">
+        <div
+          class="desktop-content-inner"
+          :class="{
+            'is-home': route === 'home',
+            'is-wide':
+              route === 'workbench' ||
+              activePlugin?.page.type === 'campus' ||
+              activePlugin?.page.type === 'pptCapture',
+          }"
+        >
           <Transition name="drop">
             <div v-if="error" class="notice desktop-error" role="alert">
               <AlertCircle :size="15" /><span>{{ error }}</span
@@ -714,6 +854,7 @@ onBeforeUnmount(() => {
                 @update="persist"
               />
               <CommunityView v-else-if="route === 'community'" />
+              <WorkbenchView v-else-if="route === 'workbench'" :key="campusScope" />
               <AgentView
                 v-else-if="route === 'agent'"
                 @settings="route = 'cn.xjtu.agent-settings'"
@@ -721,7 +862,10 @@ onBeforeUnmount(() => {
               <AgentSettingsView
                 v-else-if="activePlugin?.page.type === 'agentSettings'"
                 :key="activePlugin.id"
+                :config="config"
+                :saving="saving || !configLoaded"
                 @agent="route = 'agent'"
+                @update="persist"
               />
               <HomeThemeView
                 v-else-if="activePlugin?.page.type === 'homeTheme'"
@@ -761,13 +905,18 @@ onBeforeUnmount(() => {
               />
               <CampusView
                 v-else-if="activePlugin?.page.type === 'campus'"
-                :key="activePlugin.id"
+                :key="campusScope"
                 :name="activePlugin.name"
-                :pinned="config.campusPinned"
                 :access-mode="account.accessMode ?? null"
                 :direct-session="account.directSession ?? false"
-                @update-pinned="setPinnedTools"
                 @direct-session="refreshAccountStatus"
+                @capture="openCapture"
+              />
+              <PptCaptureView
+                v-else-if="activePlugin?.page.type === 'pptCapture'"
+                :key="activePlugin.id"
+                :target="captureTarget"
+                :scope="account.studentId ?? account.name ?? ''"
               />
               <LinksView
                 v-else-if="activePlugin?.page.type === 'links'"
@@ -775,8 +924,9 @@ onBeforeUnmount(() => {
                 :name="activePlugin.name"
                 :links="activePlugin.page.links"
                 @open="openLink"
-              /></div
-          ></Transition>
+              />
+            </div>
+          </Transition>
         </div>
       </div>
     </main>

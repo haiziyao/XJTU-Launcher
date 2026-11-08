@@ -326,11 +326,7 @@ fn enabled_source(app: &AppHandle, source: &str) -> bool {
 }
 
 fn seen_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位应用数据目录")?
-        .join("pet-seen.json"))
+    crate::storage::path(app, "state/pet-seen.json")
 }
 
 fn load_seen(app: &AppHandle) -> Option<Vec<String>> {

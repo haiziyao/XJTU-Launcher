@@ -1,38 +1,95 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { MapPin } from 'lucide-vue-next';
-import SettingGroup from '../ui/SettingGroup.vue';
-import SettingRow from '../ui/SettingRow.vue';
-import EmptyState from '../ui/EmptyState.vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { ChevronLeft, ChevronRight, MapPin } from 'lucide-vue-next';
+import SectionHeader from '../ui/SectionHeader.vue';
+import StatRow from '../ui/StatRow.vue';
+import StatTile from '../ui/StatTile.vue';
+import ListItem from '../ui/ListItem.vue';
+import MenuSelect from '../ui/MenuSelect.vue';
+import StatusBadge, { type StatusTone } from '../ui/StatusBadge.vue';
+import InlineAlert from '../ui/InlineAlert.vue';
+import Skeleton from '../ui/Skeleton.vue';
+import UiButton from '../ui/UiButton.vue';
+import SlotMatrix, { type SlotCell, type SlotCourt } from './SlotMatrix.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
-import { applyCached } from '../../cache';
+import { applyCached, cacheName } from '../../cache';
+import { campusDateKey, campusTimestamp, money } from '../../domain';
 import type { Venue, VenueList, VenueOrder, VenueOrders, VenueSlot, VenueSlots } from '../../types';
 
-import UiButton from '../ui/UiButton.vue';
+/**
+ * 场馆 (LAYOUT §9.9): my orders and the time × court matrix for one venue and
+ * day. Booking is not wired to the write protocol yet, so cells are read-only
+ * and the page says where to book.
+ */
 const venues = ref<Venue[]>([]);
 const orders = ref<VenueOrder[]>([]);
 const selected = ref<Venue | null>(null);
 const slots = ref<VenueSlot[]>([]);
-const date = ref(today());
+const date = ref(campusDateKey(Date.now()));
 const loading = ref(true);
+const loadedAt = ref<number | null>(null);
 const error = ref('');
 
-function today() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')}`;
-}
-
-const availableCount = computed(() => slots.value.filter((slot) => slot.available).length);
-const sortedSlots = computed(() =>
-  [...slots.value].sort(
-    (a, b) => a.time.localeCompare(b.time) || a.area.localeCompare(b.area, 'zh-CN'),
+const venueOptions = computed(() =>
+  venues.value.map((venue) => ({ value: String(venue.id), label: venue.name })),
+);
+const courts = computed<SlotCourt[]>(() => {
+  const names = [...new Set(slots.value.map((slot) => slot.area))].sort((a, b) =>
+    a.localeCompare(b, 'zh-Hans-CN', { numeric: true }),
+  );
+  return names.map((name) => ({ id: name, name }));
+});
+const times = computed(() =>
+  [...new Set(slots.value.map((slot) => slot.time))].sort((a, b) =>
+    a.localeCompare(b, 'zh-Hans-CN', { numeric: true }),
   ),
 );
+const cells = computed<SlotCell[]>(() => {
+  const map = new Map<string, SlotCell>();
+  for (const slot of slots.value) {
+    const key = `${slot.time}|${slot.area}`;
+    if (map.has(key)) continue;
+    const state = slot.available
+      ? 'available'
+      : slot.total > 0 && slot.using >= slot.total
+        ? 'full'
+        : 'closed';
+    map.set(key, {
+      time: slot.time,
+      court: slot.area,
+      stockId: slot.stockId,
+      price: slot.price,
+      state,
+    });
+  }
+  return [...map.values()];
+});
+const availableCount = computed(
+  () => cells.value.filter((cell) => cell.state === 'available').length,
+);
+const usedSeats = computed(() => slots.value.reduce((sum, slot) => sum + slot.using, 0));
+const totalSeats = computed(() => slots.value.reduce((sum, slot) => sum + slot.total, 0));
+const subtitle = computed(() => (selected.value ? selected.value.name : '场馆与时段'));
+const dateLabel = computed(() => {
+  const parts = campusTimestamp(`${date.value} 00:00`);
+  const parsed = new Date(parts + 8 * 3600000);
+  if (!Number.isFinite(parts)) return date.value;
+  return `${parsed.getUTCMonth() + 1}月${parsed.getUTCDate()}日`;
+});
+const orderLine = (order: VenueOrder) =>
+  order.details
+    .map((item) =>
+      [item.date, item.time, [item.venue, item.area].filter(Boolean).join(' ')]
+        .filter(Boolean)
+        .join(' '),
+    )
+    .filter(Boolean)
+    .join(' / ');
+const orderTone = (order: VenueOrder): StatusTone =>
+  order.status === 1 ? 'done' : order.status === 2 ? 'neutral' : 'active';
 
-async function load() {
+async function loadList(force = false) {
   loading.value = true;
   error.value = '';
   try {
@@ -46,16 +103,21 @@ async function load() {
         'venue',
         () => bridge.refreshVenueSession(),
         'venueList',
+        force,
       ),
       siteQuery<VenueOrders>(
         { type: 'venueOrders' },
         'venue',
         () => bridge.refreshVenueSession(),
         'venueOrders',
+        force,
       ),
     ]);
     venues.value = list.venues;
     orders.value = booked.orders;
+    if (!selected.value) selected.value = venues.value[0] ?? null;
+    if (selected.value) await loadSlots(force);
+    loadedAt.value = Date.now();
   } catch (e) {
     console.error('[campus] venues', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -64,17 +126,21 @@ async function load() {
   }
 }
 
-async function loadSlots() {
+async function loadSlots(force = false) {
   if (!selected.value) return;
+  const params = { venue: selected.value.id, date: date.value };
   loading.value = true;
   error.value = '';
   try {
     const result = await siteQuery<VenueSlots>(
-      { type: 'venueSlots', venue: selected.value.id, date: date.value },
+      { type: 'venueSlots', ...params },
       'venue',
       () => bridge.refreshVenueSession(),
+      cacheName('venueSlots', params),
+      force,
     );
     slots.value = result.slots;
+    loadedAt.value = Date.now();
   } catch (e) {
     console.error('[campus] venue slots', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -83,112 +149,157 @@ async function loadSlots() {
   }
 }
 
-function openVenue(venue: Venue) {
-  selected.value = venue;
-  slots.value = [];
-  date.value = today();
+function changeVenue(id: string) {
+  const next = venues.value.find((venue) => String(venue.id) === id);
+  if (!next) return;
+  selected.value = next;
   void loadSlots();
 }
 
-function back() {
-  selected.value = null;
-  slots.value = [];
-  error.value = '';
+function shiftDay(days: number) {
+  const stamp = campusTimestamp(`${date.value} 00:00`);
+  if (!Number.isFinite(stamp)) return;
+  date.value = campusDateKey(stamp + days * 86400000);
 }
 
-const detailLine = (order: VenueOrder) =>
-  order.details
-    .map((item) => [item.venue, item.area].filter(Boolean).join(' '))
-    .filter(Boolean)
-    .join(' / ');
+function refresh() {
+  void loadList(true);
+}
 
-onMounted(load);
+watch(date, () => void loadSlots());
+onMounted(() => void loadList());
 </script>
 
 <template>
-  <p v-if="error" class="notice" role="alert">{{ error }}</p>
-
-  <SettingGroup title="我的预订">
-    <EmptyState v-if="loading && !orders.length" compact title="正在读取预订…" />
-    <EmptyState v-else-if="!orders.length" compact :icon="MapPin" title="还没有场馆预订" />
-    <div v-for="order in orders" :key="order.id" class="campus-record three">
-      <span class="campus-record-main">
-        <strong>{{ detailLine(order) || '场馆预订' }}</strong>
-        <small>{{
-          order.details
-            .map((item) => [item.date, item.time].filter(Boolean).join(' '))
-            .join(' · ') || order.created
-        }}</small>
-      </span>
-      <span class="badge" :class="{ accent: order.status === 1 }">{{ order.statusText }}</span>
-      <span class="campus-record-meta">¥{{ order.price.toFixed(2) }}</span>
-    </div>
-  </SettingGroup>
-
-  <SettingGroup v-if="!selected" title="场馆">
-    <EmptyState v-if="loading && !venues.length" compact title="正在读取场馆…" />
-    <EmptyState v-else-if="!venues.length" compact :icon="MapPin" title="没有可查询的场馆" />
-    <SettingRow
-      v-for="venue in venues"
-      :key="venue.id"
-      clickable
-      :disabled="loading"
-      :title="venue.name"
-      :description="[venue.address, venue.category].filter(Boolean).join(' · ')"
-      @select="openVenue(venue)"
+  <section class="campus-section">
+    <SectionHeader
+      title="场馆"
+      :subtitle="subtitle"
+      :updated-at="loadedAt"
+      :refreshing="loading"
+      @refresh="refresh"
     >
-      <span class="campus-record-meta">{{ venue.advanceDays }} 天内可约</span>
-    </SettingRow>
-  </SettingGroup>
+      <template #filters>
+        <MenuSelect
+          :model-value="selected ? String(selected.id) : ''"
+          :options="venueOptions"
+          label="场馆"
+          placeholder="选择场馆"
+          fit
+          @update:model-value="changeVenue"
+        />
+      </template>
+    </SectionHeader>
 
-  <SettingGroup v-if="selected" :title="`场馆时段 · ${selected.name}`">
-    <template #actions>
-      <UiButton variant="ghost" size="sm" @click="back">返回场馆</UiButton>
-    </template>
-    <SettingRow title="日期">
-      <input
-        v-model="date"
-        class="text-field"
-        type="date"
-        aria-label="查询日期"
-        @change="loadSlots"
-      />
-    </SettingRow>
-    <div class="venue-summary">
-      <span
-        >共 {{ slots.length }} 个时段 · 可订 <strong>{{ availableCount }}</strong> 个</span
-      >
-      <UiButton size="sm" :disabled="loading" @click="loadSlots">刷新</UiButton>
-    </div>
-    <EmptyState v-if="loading && !slots.length" compact title="正在读取时段…" />
-    <EmptyState v-else-if="!slots.length" compact title="这一天没有开放时段" />
-    <div v-for="slot in sortedSlots" :key="slot.stockId" class="campus-record three">
-      <span class="campus-record-main">
-        <strong>{{ slot.area }}</strong>
-        <small>{{ slot.time || '时段未知' }}</small>
-      </span>
-      <span class="campus-record-meta"
-        >¥{{ slot.price.toFixed(2) }} · {{ slot.using }}/{{ slot.total }}</span
-      >
-      <span class="badge" :class="{ accent: slot.available }">{{
-        slot.available ? '可订' : '不可订'
-      }}</span>
-    </div>
-  </SettingGroup>
+    <InlineAlert v-if="error" tone="error" :title="error" />
+
+    <section class="venue-orders" aria-label="我的预订">
+      <h3 class="venue-subtitle">我的预订</h3>
+      <Skeleton v-if="loading && !orders.length" :lines="3" height="18px" label="正在读取预订" />
+      <p v-else-if="!orders.length" class="venue-empty">
+        <MapPin :size="18" aria-hidden="true" />还没有场馆预订
+      </p>
+      <div v-else class="venue-order-list">
+        <ListItem
+          v-for="order in orders"
+          :key="order.id"
+          :title="orderLine(order) || '场馆预订'"
+          :subtitle="order.created ? `下单于 ${order.created}` : ''"
+        >
+          <template #status>
+            <StatusBadge :status="orderTone(order)" :label="order.statusText" />
+          </template>
+          <template #meta>{{ money(order.price * 100) }}</template>
+        </ListItem>
+      </div>
+    </section>
+
+    <section class="venue-slots" aria-label="场馆时段">
+      <header class="venue-slot-head">
+        <h3 class="venue-subtitle">{{ selected?.name || '场馆时段' }} · {{ dateLabel }}</h3>
+        <div class="venue-date">
+          <UiButton size="sm" variant="ghost" aria-label="前一天" @click="shiftDay(-1)">
+            <ChevronLeft :size="14" />
+          </UiButton>
+          <input
+            v-model="date"
+            class="text-field venue-date-input"
+            type="date"
+            aria-label="查询日期"
+          />
+          <UiButton size="sm" variant="ghost" aria-label="后一天" @click="shiftDay(1)">
+            <ChevronRight :size="14" />
+          </UiButton>
+        </div>
+      </header>
+
+      <StatRow label="当日时段">
+        <StatTile label="可订时段" :value="availableCount" :loading="loading && !slots.length" />
+        <StatTile label="全部时段" :value="cells.length" :loading="loading && !slots.length" />
+        <StatTile
+          label="已订座位"
+          :value="totalSeats ? `${usedSeats} / ${totalSeats}` : null"
+          :loading="loading && !slots.length"
+        />
+        <StatTile label="我的订单" :value="orders.length" :loading="loading && !orders.length" />
+      </StatRow>
+
+      <InlineAlert tone="info" title="预订尚未接入">
+        应用内只能查看时段和我的订单；预订与取消请到场馆网站办理。
+      </InlineAlert>
+
+      <Skeleton v-if="loading && !slots.length" :lines="5" height="26px" label="正在读取时段" />
+      <p v-else-if="!selected" class="venue-empty">选择场馆后查看时段。</p>
+      <p v-else-if="!cells.length" class="venue-empty">这一天没有开放时段。</p>
+      <SlotMatrix v-else :times="times" :courts="courts" :cells="cells" label="场馆时段表" />
+    </section>
+  </section>
 </template>
 
 <style scoped>
-.venue-summary {
+.venue-orders,
+.venue-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.venue-subtitle {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.venue-order-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.venue-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.venue-slot-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
-  color: var(--text-secondary);
-  font-size: 12.5px;
 }
-.venue-summary strong {
-  color: var(--success);
-  font-variant-numeric: tabular-nums;
+.venue-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.venue-date-input {
+  width: 138px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 </style>

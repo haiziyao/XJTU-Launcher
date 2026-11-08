@@ -99,6 +99,21 @@
 .btn.danger {
   color: var(--danger);
 }
+/* Destructive confirmation (取消预订、撤回): filled with the danger colour so it
+   never reads as the safe primary action. */
+.btn.primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(194, 58, 47, 0.25);
+}
+.btn.primary.danger:hover:not(:disabled) {
+  background: #ad3228;
+  border-color: #ad3228;
+}
+.btn.primary.danger:active:not(:disabled) {
+  background: #992c23;
+}
 .btn.small {
   height: 26px;
   padding: 0 9px;
@@ -134,14 +149,6 @@
 .text-field::placeholder,
 .field-shell input::placeholder {
   color: var(--text-tertiary);
-}
-/* Drop the native macOS pill; every select gets the same arrow as MenuSelect. */
-select.text-field {
-  appearance: none;
-  padding-right: 28px;
-  background-image: var(--chevron-down);
-  background-repeat: no-repeat;
-  background-position: right 9px center;
 }
 .field-shell {
   display: flex;
@@ -183,6 +190,24 @@ select.text-field {
   position: relative;
   min-width: 0;
 }
+/* Bare variant: the trigger sits inside a grouped control (week stepper) and
+   draws no shell of its own. */
+.menu-field.bare .field-shell {
+  display: contents;
+}
+.menu-field.bare .menu-field-value {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-fast) ease;
+}
+.menu-field.bare .menu-field-value:hover,
+.menu-field.bare .menu-field-value[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+.menu-field.bare .menu-field-value:focus-visible {
+  background: var(--surface);
+  box-shadow: var(--focus-ring);
+}
 .menu-field-value {
   display: flex;
   flex: 1;
@@ -208,6 +233,23 @@ select.text-field {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* All labels share one grid cell, so the trigger is as wide as the widest
+   option instead of resizing with the current value. */
+.menu-field-value .menu-field-text {
+  display: grid;
+  min-width: 0;
+}
+.menu-field-text > span {
+  grid-area: 1 / 1;
+}
+.menu-field-sizer {
+  display: grid;
+  visibility: hidden;
+}
+.menu-field-sizer > span {
+  grid-area: 1 / 1;
+  white-space: nowrap;
 }
 .menu-field-value svg {
   flex-shrink: 0;
@@ -632,8 +674,8 @@ select.text-field {
   color: var(--success);
 }
 .notice.warning {
-  background: #fdf5e4;
-  color: #95600d;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .notice > svg {
   margin-top: 2px;

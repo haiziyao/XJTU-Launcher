@@ -57,9 +57,8 @@ pub struct Client {
 
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        if account.mode == AccessMode::Webvpn {
-            return Err("场馆预约仅支持校园网直连，请连接校园网后重试".into());
-        }
+        // The venue site is public plain HTTP with its own CAS login, so it is
+        // attempted directly in both network modes rather than through WebVPN.
         let site = account.sites.get("venue").ok_or("请先完成场馆系统登录")?;
         let cookies = site
             .cookies

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { LockKeyhole } from 'lucide-vue-next';
+import { IconLock } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
 import type { AppConfig } from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
@@ -67,7 +67,7 @@ async function save(value: string | null) {
     <SettingGroup title="插件服务端">
       <SettingRow title="服务端网址">
         <template v-if="!editing"
-          ><span class="source-address"><LockKeyhole :size="14" />{{ source || '尚未配置' }}</span
+          ><span class="source-address"><IconLock :size="14" />{{ source || '尚未配置' }}</span
           ><UiButton size="sm" :disabled="busy || saving" @click="unlock">
             确认更改
           </UiButton></template

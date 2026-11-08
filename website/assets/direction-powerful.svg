@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="功能方向示意图">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1edff"/>
+      <stop offset="1" stop-color="#e8e6fb"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f7f5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" fill="url(#bg)"/>
+  <g opacity=".5" stroke="#c9c1f2" stroke-width="1">
+    <path d="M0 96h640M0 200h640M0 304h640" opacity=".45"/>
+    <path d="M112 0v400M320 0v400M528 0v400" opacity=".35"/>
+  </g>
+  <g transform="translate(92 84)">
+    <rect x="0" y="34" width="300" height="196" rx="20" fill="#ddd5fb" opacity=".75"/>
+    <rect x="26" y="17" width="300" height="196" rx="20" fill="#e9e3fd"/>
+    <rect x="52" y="0" width="300" height="196" rx="20" fill="url(#card)" stroke="#d8d1f4"/>
+    <rect x="78" y="30" width="96" height="10" rx="5" fill="#7c5cff" opacity=".85"/>
+    <rect x="78" y="56" width="236" height="8" rx="4" fill="#e3defa"/>
+    <rect x="78" y="76" width="200" height="8" rx="4" fill="#e3defa"/>
+    <rect x="78" y="96" width="220" height="8" rx="4" fill="#ece8fd"/>
+    <rect x="78" y="128" width="88" height="40" rx="12" fill="#7c5cff" opacity=".12"/>
+    <rect x="178" y="128" width="88" height="40" rx="12" fill="#14a08a" opacity=".12"/>
+    <rect x="278" y="128" width="54" height="40" rx="12" fill="#e8503a" opacity=".1"/>
+  </g>
+  <g transform="translate(436 232)">
+    <circle r="58" fill="#7c5cff" opacity=".08"/>
+    <circle r="34" fill="#7c5cff" opacity=".16"/>
+    <path d="M-8-14l28 14-12 4-4 12z" fill="#7c5cff" opacity=".75"/>
+  </g>
+</svg>

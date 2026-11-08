@@ -1,0 +1,27 @@
+[Unit]
+Description=XJTU Launcher website stats and likes API
+After=network.target
+
+[Service]
+Type=simple
+# Alibaba Cloud Linux / 宝塔 的 nginx 用户是 www；Debian 系改成 www-data。
+User=www
+Group=www
+Environment=STATS_DIR=/srv/xjtu-launcher/stats
+Environment=SITE_API_PORT=8788
+ExecStart=/usr/bin/python3 /srv/xjtu-launcher/site-api/site-api.py
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=yes
+ReadWritePaths=/srv/xjtu-launcher/stats
+
+[Install]
+WantedBy=multi-user.target

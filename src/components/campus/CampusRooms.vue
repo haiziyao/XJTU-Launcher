@@ -58,7 +58,7 @@ async function loadOptions() {
   }
 }
 
-async function search() {
+async function search(force = true) {
   if (!campus.value || !building.value) return;
   const params = {
     campus: campus.value,
@@ -74,6 +74,7 @@ async function search() {
     rooms.value = (await bridge.schoolQuery(
       { type: 'rooms', ...params },
       cacheName('rooms', params),
+      force,
     )) as Rooms;
   } catch (e) {
     console.error('[campus] rooms', e);
@@ -83,7 +84,30 @@ async function search() {
   }
 }
 
-onMounted(loadOptions);
+function changeCampus(value: string) {
+  campus.value = value;
+  void search(false);
+}
+
+function changeBuilding(value: string) {
+  building.value = value;
+  void search(false);
+}
+
+function changeStart(value: string) {
+  start.value = value;
+  void search(false);
+}
+
+function changeEnd(value: string) {
+  end.value = value;
+  void search(false);
+}
+
+onMounted(async () => {
+  await loadOptions();
+  await search(false);
+});
 </script>
 
 <template>
@@ -95,7 +119,7 @@ onMounted(loadOptions);
         :options="campusOptions"
         label="校区"
         placeholder="选择校区"
-        @update:model-value="campus = $event"
+        @update:model-value="changeCampus"
       />
     </SettingRow>
     <SettingRow title="楼宇">
@@ -104,11 +128,17 @@ onMounted(loadOptions);
         :options="buildingOptions"
         label="楼宇"
         placeholder="选择楼宇"
-        @update:model-value="building = $event"
+        @update:model-value="changeBuilding"
       />
     </SettingRow>
     <SettingRow title="日期">
-      <input v-model="date" class="text-field" type="date" aria-label="查询日期" />
+      <input
+        v-model="date"
+        class="text-field"
+        type="date"
+        aria-label="查询日期"
+        @change="search(false)"
+      />
     </SettingRow>
     <SettingRow title="节次">
       <div class="campus-field-row">
@@ -116,19 +146,19 @@ onMounted(loadOptions);
           :model-value="start"
           :options="sectionOptions"
           label="开始节次"
-          @update:model-value="start = $event"
+          @update:model-value="changeStart"
         />
         <span class="campus-record-meta">至</span>
         <MenuSelect
           :model-value="end"
           :options="sectionOptions"
           label="结束节次"
-          @update:model-value="end = $event"
+          @update:model-value="changeEnd"
         />
       </div>
     </SettingRow>
     <div class="campus-form-actions">
-      <UiButton variant="primary" :disabled="loading || !campus || !building" @click="search">
+      <UiButton variant="primary" :disabled="loading || !campus || !building" @click="search(true)">
         {{ loading ? '查询中…' : '查询空闲教室' }}
       </UiButton>
     </div>

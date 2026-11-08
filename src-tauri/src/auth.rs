@@ -287,7 +287,30 @@ pub async fn direct_login(
     password: &str,
     visitor: &str,
 ) -> Result<String, String> {
-    let (transport, _) = direct_login_page(service, username, password, visitor).await?;
+    service_login(
+        service,
+        AccessMode::Direct,
+        None,
+        username,
+        password,
+        visitor,
+    )
+    .await
+}
+
+/// Signs in to a service through the mode the account already uses. In WebVPN
+/// mode `saved` seeds the transport with the portal session, so the mapped
+/// service page does not bounce to the VPN login screen.
+pub async fn service_login(
+    service: &str,
+    mode: AccessMode,
+    saved: Option<&str>,
+    username: &str,
+    password: &str,
+    visitor: &str,
+) -> Result<String, String> {
+    let (transport, _) =
+        direct_login_page(service, mode, saved, username, password, visitor).await?;
     transport.snapshot()
 }
 
@@ -295,6 +318,8 @@ pub async fn direct_login(
 /// service, so the caller needs the final page as well as the cookie jar.
 async fn direct_login_page(
     service: &str,
+    mode: AccessMode,
+    saved: Option<&str>,
     username: &str,
     password: &str,
     visitor: &str,
@@ -307,18 +332,23 @@ async fn direct_login_page(
         return Err("直连服务地址不受支持".into());
     }
     let degree = "undergraduate";
-    let transport = Transport::new(None)?;
-    let mut page = transport.page(&service, AccessMode::Direct, degree).await?;
+    let transport = Transport::new(saved)?;
+    let mut page = transport.page(&service, mode, degree).await?;
     if page.url.host_str() != Some("login.xjtu.edu.cn") {
+        // A seeded WebVPN jar may still hold a CAS session, in which case the
+        // service lands directly on its own page instead of the login form.
+        if page.url.host_str() == service.host_str() && page.status.is_success() {
+            return Ok((transport, page));
+        }
         // Without the CAS page there is nothing to submit; do not keep a
         // service session that cannot authenticate the user.
-        return Err("直连登录未能打开校园认证页面，请稍后重试".into());
+        return Err("无法自动登录该校园服务，请稍后重试".into());
     }
     let first = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请手动登录")?;
     let response = transport
         .get(
             &Url::parse(&format!("{CAS}/cas/jwt/publicKey")).unwrap(),
-            AccessMode::Direct,
+            mode,
         )
         .await?;
     if !response.status().is_success() {
@@ -334,7 +364,7 @@ async fn direct_login_page(
         let url = Url::parse(&format!("{CAS}/cas/mfa/detect")).unwrap();
         let response = transport
             .client
-            .post(Transport::address(&url, AccessMode::Direct)?)
+            .post(Transport::address(&url, mode)?)
             .header("Referer", page.url.as_str())
             .form(&[
                 ("username", username),
@@ -361,7 +391,7 @@ async fn direct_login_page(
         let form = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请手动登录")?;
         let response = transport
             .client
-            .post(Transport::address(&page.url, AccessMode::Direct)?)
+            .post(Transport::address(&page.url, mode)?)
             .form(&[
                 ("username", username.to_string()),
                 ("password", encrypted.to_string()),
@@ -381,9 +411,7 @@ async fn direct_login_page(
             .send()
             .await
             .map_err(|_| "校园登录提交失败，请检查网络")?;
-        page = transport
-            .follow(response, AccessMode::Direct, degree)
-            .await?;
+        page = transport.follow(response, mode, degree).await?;
         if page.url.host_str() != Some("login.xjtu.edu.cn") {
             return Ok((transport, page));
         }
@@ -391,7 +419,7 @@ async fn direct_login_page(
             return Err("校园账号或密码不正确，请重新登录校园账号".into());
         }
     }
-    Err("直连登录需要验证码，请稍后重试或手动登录".into())
+    Err("自动登录需要验证码，请稍后重试或手动登录".into())
 }
 
 const HELLO_LOGIN: &str = "https://org.xjtu.edu.cn/openplatform/oauth/authorize?appId=966&redirectUri=http%3A%2F%2Fhello.xjtu.edu.cn%2Fyingxin%2Flogin%2Fxjtu%2Foauth%2Fpc&responseType=code&scope=user_info&state=pc";
@@ -403,7 +431,15 @@ pub async fn hello_login(
     password: &str,
     visitor: &str,
 ) -> Result<(String, String, String), String> {
-    let (transport, mut page) = direct_login_page(HELLO_LOGIN, username, password, visitor).await?;
+    let (transport, mut page) = direct_login_page(
+        HELLO_LOGIN,
+        AccessMode::Direct,
+        None,
+        username,
+        password,
+        visitor,
+    )
+    .await?;
     if page.url.host_str() != Some("hello.xjtu.edu.cn") {
         // Some CAS responses land on the OAuth consent page first; ask once more.
         page = transport

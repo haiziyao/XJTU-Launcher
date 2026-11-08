@@ -1,23 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { BookMarked } from 'lucide-vue-next';
-import SettingGroup from '../ui/SettingGroup.vue';
-import SettingRow from '../ui/SettingRow.vue';
-import EmptyState from '../ui/EmptyState.vue';
+import SectionHeader from '../ui/SectionHeader.vue';
+import SplitView from '../ui/SplitView.vue';
+import ListItem from '../ui/ListItem.vue';
+import StatRow from '../ui/StatRow.vue';
+import StatTile from '../ui/StatTile.vue';
 import MenuSelect from '../ui/MenuSelect.vue';
+import Skeleton from '../ui/Skeleton.vue';
+import InlineAlert from '../ui/InlineAlert.vue';
+import SeatMap from './SeatMap.vue';
 import { bridge } from '../../bridge';
 import { siteQuery } from '../../campusSession';
 import { applyCached, cacheName } from '../../cache';
+import { percent } from '../../domain';
 import type { LibraryArea, LibraryAreas, LibraryFloor, LibrarySeats } from '../../types';
 
-import UiButton from '../ui/UiButton.vue';
+/**
+ * 图书馆 (LAYOUT §9.8): areas on the left with their live free/total counts,
+ * the seat map on the right. The seat service is plain HTTP; WebVPN reaches it
+ * through its port mapping, so both network modes can query it.
+ */
 const floors = ref<LibraryFloor[]>([]);
 const campus = ref('');
 const floor = ref('');
 const areas = ref<LibraryArea[]>([]);
 const area = ref('');
 const seats = ref<LibrarySeats | null>(null);
+const listWidth = ref(320);
 const loading = ref(false);
+const loadedAt = ref<number | null>(null);
 const error = ref('');
 
 const campuses = computed(() => [...new Set(floors.value.map((item) => item.campus))]);
@@ -27,10 +38,38 @@ const floorOptions = computed(() =>
     .filter((item) => item.campus === campus.value)
     .map((item) => ({ value: item.code, label: item.name })),
 );
+const floorName = computed(
+  () => floors.value.find((item) => item.code === floor.value)?.name ?? '',
+);
 const areaName = computed(() => areas.value.find((item) => item.code === area.value)?.name ?? '');
-const freeCount = computed(() => (seats.value?.seats ?? []).filter((seat) => seat.free).length);
+const areaRows = computed(() => {
+  const stats = new Map((seats.value?.stats ?? []).map((entry) => [entry.code, entry]));
+  return areas.value
+    .map((item) => {
+      const stat = stats.get(item.code);
+      const total = stat?.total ?? 0;
+      const free = stat?.free ?? 0;
+      return {
+        code: item.code,
+        name: item.name,
+        total,
+        free,
+        ratio: total ? free / total : 0,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.ratio - left.ratio || left.name.localeCompare(right.name, 'zh-Hans-CN'),
+    );
+});
+const current = computed(() => areaRows.value.find((row) => row.code === area.value) ?? null);
+const freeCount = computed(() =>
+  seats.value ? seats.value.seats.filter((seat) => seat.free).length : 0,
+);
+const totalSeats = computed(() => seats.value?.seats.length ?? 0);
+const subtitle = computed(() => [campus.value, floorName.value].filter(Boolean).join(' · '));
 
-async function loadFloors() {
+async function loadFloors(force = false) {
   loading.value = true;
   error.value = '';
   try {
@@ -39,19 +78,18 @@ async function loadFloors() {
       campus.value ||= value[0]?.campus ?? '';
       floor.value ||= value.find((item) => item.campus === campus.value)?.code ?? '';
     });
-    // Stored floors already let the rest of the page load from its own entries,
-    // so the fresh list only reloads areas when the floor actually changed.
-    if (stored && floor.value) void loadAreas();
+    if (stored && floor.value) void loadAreas(force);
     const fresh = (await bridge.schoolQuery(
       { type: 'libraryFloors' },
       'libraryFloors',
+      force,
     )) as LibraryFloor[];
     floors.value = fresh;
     campus.value ||= fresh[0]?.campus ?? '';
     const next = fresh.find((item) => item.campus === campus.value)?.code ?? '';
     if (next && next !== floor.value) {
       floor.value = next;
-      await loadAreas();
+      await loadAreas(force);
     }
   } catch (e) {
     console.error('[campus] library floors', e);
@@ -61,16 +99,16 @@ async function loadFloors() {
   }
 }
 
-async function loadAreas() {
+async function loadAreas(force = false) {
   if (!floor.value) return;
   const params = { floor: floor.value };
   areas.value = [];
-  seats.value = null;
   area.value = '';
+  seats.value = null;
   loading.value = true;
   error.value = '';
   try {
-    await applyCached<LibraryAreas>('libraryAreas', params, (result) => {
+    const cached = await applyCached<LibraryAreas>('libraryAreas', params, (result) => {
       areas.value = result.areas;
       area.value = result.areas[0]?.code ?? '';
     });
@@ -79,12 +117,12 @@ async function loadAreas() {
       'library',
       () => bridge.refreshLibrarySession(),
       cacheName('libraryAreas', params),
+      force,
     );
     areas.value = result.areas;
-    if (areas.value[0]) {
-      area.value = areas.value[0].code;
-      await loadSeats();
-    }
+    if (!area.value) area.value = result.areas[0]?.code ?? '';
+    if (result.areas.length) await loadSeats(force);
+    else if (cached) await loadSeats(force);
   } catch (e) {
     console.error('[campus] library areas', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -93,9 +131,8 @@ async function loadAreas() {
   }
 }
 
-async function loadSeats() {
+async function loadSeats(force = false) {
   if (!area.value) return;
-  seats.value = null;
   loading.value = true;
   error.value = '';
   try {
@@ -103,7 +140,10 @@ async function loadSeats() {
       { type: 'librarySeats', area: area.value },
       'library',
       () => bridge.refreshLibrarySession(),
+      cacheName('librarySeats', { area: area.value }),
+      force,
     );
+    loadedAt.value = Date.now();
   } catch (e) {
     console.error('[campus] library seats', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -132,106 +172,137 @@ onMounted(loadFloors);
 </script>
 
 <template>
-  <p v-if="error" class="notice" role="alert">{{ error }}</p>
-
-  <SettingGroup
-    title="图书馆座位"
-    footnote="座位状态来自图书馆实时系统，预约与签到请到原网站办理。"
-  >
-    <SettingRow title="校区">
-      <MenuSelect
-        :model-value="campus"
-        :options="campusOptions"
-        label="校区"
-        placeholder="选择校区"
-        @update:model-value="changeCampus"
-      />
-    </SettingRow>
-    <SettingRow title="楼层">
-      <MenuSelect
-        :model-value="floor"
-        :options="floorOptions"
-        label="楼层"
-        placeholder="选择楼层"
-        @update:model-value="changeFloor"
-      />
-    </SettingRow>
-  </SettingGroup>
-
-  <SettingGroup title="区域">
-    <EmptyState v-if="loading && !areas.length" compact title="正在读取区域…" />
-    <EmptyState
-      v-else-if="!areas.length"
-      compact
-      :icon="BookMarked"
-      title="这一层没有可查询的区域"
-    />
-    <SettingRow
-      v-for="item in areas"
-      :key="item.code"
-      clickable
-      :disabled="loading"
-      :title="item.name"
-      @select="openArea(item.code)"
+  <section class="campus-section">
+    <SectionHeader
+      title="图书馆"
+      :subtitle="subtitle"
+      :updated-at="loadedAt"
+      :refreshing="loading"
+      @refresh="loadSeats(true)"
     >
-      <span v-if="item.code === area" class="badge accent">查看中</span>
-    </SettingRow>
-  </SettingGroup>
+      <template #filters>
+        <MenuSelect
+          :model-value="campus"
+          :options="campusOptions"
+          label="校区"
+          placeholder="选择校区"
+          fit
+          @update:model-value="changeCampus"
+        />
+        <MenuSelect
+          :model-value="floor"
+          :options="floorOptions"
+          label="楼层"
+          placeholder="选择楼层"
+          fit
+          @update:model-value="changeFloor"
+        />
+      </template>
+    </SectionHeader>
 
-  <SettingGroup v-if="area" :title="areaName ? `座位 · ${areaName}` : '座位'">
-    <div class="library-summary">
-      <span
-        >共 {{ seats?.seats.length ?? 0 }} 个座位 · 空余 <strong>{{ freeCount }}</strong> 个</span
-      >
-      <UiButton size="sm" :disabled="loading" @click="loadSeats">刷新</UiButton>
-    </div>
-    <div v-if="loading && !seats" class="library-grid">
-      <span class="setting-value">正在读取座位…</span>
-    </div>
-    <div v-else-if="seats" class="library-grid">
-      <span
-        v-for="seat in seats.seats"
-        :key="seat.id"
-        class="library-seat"
-        :class="{ free: seat.free }"
-        :title="seat.free ? `${seat.id} 空余` : `${seat.id} 已占用`"
-        >{{ seat.id }}</span
-      >
-    </div>
-  </SettingGroup>
+    <InlineAlert v-if="error" tone="error" :title="error" />
+
+    <StatRow label="当前区域">
+      <StatTile label="空余座位" :value="area ? freeCount : null" :loading="loading && !seats" />
+      <StatTile label="座位总数" :value="area ? totalSeats : null" :loading="loading && !seats" />
+      <StatTile
+        label="空余率"
+        :value="totalSeats ? percent(freeCount / totalSeats) : null"
+        :loading="loading && !seats"
+      />
+      <StatTile label="区域" :value="areas.length" :loading="loading && !areas.length" />
+    </StatRow>
+
+    <SplitView
+      v-model:width="listWidth"
+      :detail-open="Boolean(area)"
+      list-label="阅览区域"
+      detail-label="座位图"
+      @back="area = ''"
+    >
+      <template #list>
+        <Skeleton v-if="loading && !areas.length" :lines="6" height="18px" label="正在读取区域" />
+        <p v-else-if="!areas.length" class="library-empty">这一层没有可查询的区域</p>
+        <div v-else class="library-areas" role="listbox" aria-label="阅览区域">
+          <ListItem
+            v-for="row in areaRows"
+            :key="row.code"
+            :title="row.name"
+            :selected="row.code === area"
+            @select="openArea(row.code)"
+          >
+            <template #subtitle>
+              <span class="library-free"> 空余 {{ row.free }} / {{ row.total }} </span>
+            </template>
+            <template #meta>{{ row.total ? percent(row.free / row.total) : '—' }}</template>
+          </ListItem>
+        </div>
+      </template>
+
+      <template #detail>
+        <div v-if="!area" class="library-placeholder">
+          <p>选择一个区域查看座位分布。</p>
+        </div>
+        <Skeleton v-else-if="loading && !seats" :lines="6" height="24px" label="正在读取座位" />
+        <div v-else-if="seats" class="library-detail">
+          <header class="library-detail-head">
+            <h3>{{ areaName || '座位' }}</h3>
+            <p>
+              空余 <strong>{{ current?.free ?? freeCount }}</strong> /
+              {{ current?.total ?? totalSeats }}
+            </p>
+          </header>
+          <SeatMap :seats="seats.seats" label="图书馆座位图" />
+        </div>
+        <div v-else class="library-placeholder">
+          <p>暂时无法读取这个区域的座位。</p>
+        </div>
+      </template>
+    </SplitView>
+  </section>
 </template>
 
 <style scoped>
-.library-summary {
+.library-empty,
+.library-placeholder {
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  text-align: center;
+}
+.library-areas {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.library-free {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.library-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.library-detail-head {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+}
+.library-detail-head h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.library-detail-head p {
   color: var(--text-secondary);
-  font-size: 12.5px;
-}
-.library-summary strong {
-  color: var(--success);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.library-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 12px 16px;
-}
-.library-seat {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-}
-.library-seat.free {
-  border-color: var(--success);
-  background: var(--success-soft);
-  color: var(--success);
+.library-detail-head strong {
+  color: var(--success-text);
 }
 </style>

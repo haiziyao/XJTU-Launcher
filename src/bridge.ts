@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
   ImageCrop,
   AgentConversation,
@@ -12,6 +12,7 @@ import type {
   AgentPresets,
   AgentSummary,
   AgentToolInfo,
+  EntryIconSet,
   ExposeStatus,
   ExposeTool,
   MarketCatalog,
@@ -44,6 +45,18 @@ import type {
   PluginList,
   Timetable,
   TimetableEdit,
+  WorkbenchBindingInput,
+  WorkbenchFile,
+  WorkbenchFolder,
+  WorkbenchImportOutcome,
+  WorkbenchOverview,
+  WorkbenchSyncResult,
+  LmsSubmitPreview,
+  LmsSubmitResult,
+  StorageStatus,
+  StoragePreview,
+  StorageReport,
+  LmsReplayVideos,
 } from './types';
 
 export const native = isTauri();
@@ -53,13 +66,108 @@ export const bridge = {
     invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
   pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
+  // Entry icons under `~/.xjtu-launcher/resources/icons`; never an error, an
+  // empty set just means every entry keeps its built-in glyph.
+  entryIcons: () => invoke<EntryIconSet>('entry_icons'),
   // The backend stores the answer under the account that ran the query when a
   // cache name is given, so an answer that arrives after a switch stays put.
-  schoolQuery: (query: SchoolQuery, cacheName?: string) =>
-    invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null }),
+  // A stored answer younger than the query's TTL is returned without a request;
+  // `force` is what a user-initiated refresh passes.
+  schoolQuery: (query: SchoolQuery, cacheName?: string, force = false) =>
+    invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null, force }),
   lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
+  /** Resolve direct replay videos; the result is presigned and not cached. */
+  lmsReplayVideos: (activity: number) => invoke<LmsReplayVideos>('lms_replay_videos', { activity }),
+  /** Save a capture export (base64) to the user-chosen absolute path. */
+  saveExport: (path: string, data: string) => invoke<number>('save_export', { path, data }),
   lmsSaveFile: (uploadId: number, path: string) =>
     invoke<number>('lms_save_file', { uploadId, path }),
+  // Save dialogs start inside the data folder's downloads directory. The
+  // backend builds the path so the page never invents one; if the folder
+  // cannot be created the dialog falls back to the bare file name.
+  async saveTarget(name: string): Promise<string> {
+    requireNative();
+    try {
+      return await invoke<string>('storage_download_path', { name });
+    } catch {
+      return name;
+    }
+  },
+  // Paths the interface shows use `~/...` so an account name never appears.
+  async displayPath(path: string): Promise<string> {
+    requireNative();
+    try {
+      return await invoke<string>('storage_display_path', { path });
+    } catch {
+      return path;
+    }
+  },
+  storageStatus: () => invoke<StorageStatus>('storage_status'),
+  storagePreview: (target: string) => invoke<StoragePreview>('storage_preview', { target }),
+  storageMigrate: (target: string) => invoke<StorageReport>('storage_migrate', { target }),
+  storageReveal: () => invoke<void>('storage_reveal'),
+  // 工作台 is a view of the user's own folders: the backend copies picked files
+  // in and keeps only the per-file extras, so Finder stays the source of truth.
+  async workbenchOverview(): Promise<WorkbenchOverview> {
+    requireNative();
+    return invoke('workbench_overview');
+  },
+  async workbenchFolder(folder: string): Promise<WorkbenchFile[]> {
+    requireNative();
+    return invoke('workbench_folder', { folder });
+  },
+  async workbenchCreateFolder(parent: string, name: string): Promise<WorkbenchFolder> {
+    requireNative();
+    return invoke('workbench_create_folder', { parent, name });
+  },
+  async workbenchAdd(folder: string): Promise<WorkbenchImportOutcome[]> {
+    requireNative();
+    const paths = await open({
+      multiple: true,
+      directory: false,
+      title: '添加到工作台',
+    });
+    if (!paths) return [];
+    return invoke('workbench_import', { folder, paths });
+  },
+  async workbenchUpdate(path: string, input: WorkbenchBindingInput): Promise<WorkbenchFile> {
+    requireNative();
+    return invoke('workbench_update', { path, input });
+  },
+  async workbenchDelete(path: string): Promise<void> {
+    requireNative();
+    return invoke('workbench_delete', { path });
+  },
+  async workbenchOpen(path: string): Promise<void> {
+    requireNative();
+    return invoke('workbench_open', { path });
+  },
+  async workbenchReveal(path: string): Promise<void> {
+    requireNative();
+    return invoke('workbench_reveal', { path });
+  },
+  async workbenchSync(): Promise<WorkbenchSyncResult> {
+    requireNative();
+    return invoke('workbench_sync');
+  },
+  /** Preview only: the backend reads the activity and local files, no upload. */
+  async workbenchSubmitPreview(
+    activity: number,
+    comment: string,
+    paths: string[],
+  ): Promise<LmsSubmitPreview> {
+    requireNative();
+    return invoke('workbench_submit_preview', { activity, comment, paths });
+  },
+  /** Only after the user saw the preview and explicitly confirmed. */
+  async workbenchSubmit(
+    activity: number,
+    comment: string,
+    paths: string[],
+  ): Promise<LmsSubmitResult> {
+    requireNative();
+    return invoke('workbench_submit', { activity, comment, paths });
+  },
   schoolPrepareEvaluations: (input: EvaluationPrepare) =>
     invoke<EvaluationPreview>('school_prepare_evaluations', { input }),
   schoolSubmitEvaluations: (previewId: string) =>

@@ -1,6 +1,6 @@
 # 按钮组件与用法
 
-更新于 2026-10-23。所有页面按钮统一使用 `src/components/ui/` 下的两个组件；页面里不再直接写 `class="btn ..."`，也不再为单个页面另造图标按钮。
+更新于 2026-10-31。所有页面按钮统一使用 `src/components/ui/` 下的两个组件；页面里不再直接写 `class="btn ..."`，也不再为单个页面另造图标按钮。
 
 ## UiButton
 
@@ -109,6 +109,78 @@
 - 通知条上的关闭按钮使用 `UiIconButton variant="inherit" size="xs"`，只保留 `notice-close` 作为外边距钩子。
 
 新增页面时先在这几个组件和控件里选，确实没有合适语义再提新组件，并在本文件补充用法。
+
+## v0.6 校园组件套件（2026-10-31）
+
+按 [LAYOUT §4.2](../docs/design/campus-v0.6/LAYOUT.md) 实现的组件，放在 `src/components/ui/`（通用）和 `src/components/campus/`（校园专用）。
+
+**当前状态**：2026-10-31 经用户明确授权“直接全量接入”，组件已接进 `CampusView` 的校园工作区（LAYOUT §2.1 / §3）。评教分区视觉仍未获准，`CampusEvaluations.vue` 外观未改。开发画廊仍保留：`npm run tauri dev` 后点侧栏「组件」；画廊由 `import.meta.env.DEV` 保护，生产包不导入、也不显示入口，其中的数据全部是示例。
+
+### 分区、标题与骨架
+
+| 组件                        | 用途                         | 关键 props / 事件                                                                                        |
+| --------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ui/SectionHeader`          | 分区标题一行：标题、更新时间 | `title`、`subtitle`、`updatedAt`、`refreshing`、`sticky`；插槽 `filters` / `actions` / `more`；`refresh` |
+| `campus/CampusRail`         | 校园分区侧栏                 | `v-model`（分区 id）、`items: RailItem[]`、`collapsed`；`select`。禁用项必须带 `reason`，保持可见        |
+| `ui/SplitView`              | 列表 + 详情分栏              | `v-model:width`、`detailOpen`、`listLabel` / `detailLabel`；插槽 `list` / `detail`；`back`               |
+| `ui/StatTile`、`ui/StatRow` | 指标块与指标行               | `label`、`value`、`note`、`loading`、`failed`、`clickable`、`size`；`select` / `retry`                   |
+| `ui/Skeleton`               | 首屏占位                     | `width`、`height`、`radius`、`lines`、`label`                                                            |
+| `ui/FilterBar`              | 搜索 + 页面自带筛选控件      | `v-model:query`、`active`、`placeholder`、`label`；插槽默认（筛选控件）与 `actions`；`clear`             |
+
+`SplitView` 按自身宽度切换布局：≥1000 双栏且分隔条可拖（键盘方向键 / Home / End），760–999 列表固定 280px，更窄时单栏并由 `back` 返回列表。它用 ResizeObserver 测量内容宽度，不要给外层再加固定宽度假设。
+
+`CampusRail` 的滑动指示器要求滚动的 `<nav>` 是按钮的 offsetParent；分组容器不得加 `position: relative`。
+
+### 列表、表格与文件
+
+| 组件              | 用途                | 关键 props / 事件                                                                                                                           |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/ListItem`     | 作业 / 通知列表行   | `title`、`subtitle`、`selected`、`disabled`、`unread`；插槽 `leading` / `meta` / `status` / `subtitle`；`select`                            |
+| `ui/DataTable`    | 成绩、考试等表格    | `columns`、`rows`、`rowKey`、`v-model:sort`、`v-model:selected`、`selectable`、`loading`、`stickyHeader`；插槽 `cell-<key>`；`select`       |
+| `campus/FileRow`  | 课程 / 通知附件一行 | `name`、`size`、`kind`、`downloaded`、`detail`、`previewable`、`downloadable`、`busy`；`preview` / `download`；批量模式的 `v-model:checked` |
+| `campus/DropZone` | 作业附件拖放区      | `maxFiles`（10）、`maxFileSize`、`maxTotal`、`accept`、`disabled`、`hint`；`files` / `reject`                                               |
+
+`DataTable` 的排序与选择由页面持有，组件只发 `update:*`；数字列传 `align: 'right'`，自动使用等宽数字。`DropZone` 依赖 Tauri 窗口的 `dragDropEnabled: false`，否则系统事件会盖住 HTML5 拖放。
+
+### 状态、期限与提示
+
+| 组件             | 用途                   | 关键 props / 事件                                                                              |
+| ---------------- | ---------------------- | ---------------------------------------------------------------------------------------------- |
+| `ui/StatusBadge` | 作业 / 考试 / 预约状态 | `status: done \| near \| urgent \| active \| neutral \| new`、`label`                          |
+| `ui/DueLabel`    | 截止时间 + 倒计时      | `at`、`now`、`done`、`countdown`；颜色和图标来自 `dueInfo`                                     |
+| `ui/InlineAlert` | 页面内提示条           | `tone: info \| warning \| error \| partial`、`title`、`dismissible`；插槽 `actions`；`dismiss` |
+| `ui/MoreMenu`    | 「⋯」次要操作菜单      | `items: MoreItem[]`、`align`、`label`；`select(id)`                                            |
+
+状态永远同时有图标和文字（`new` 是 6px 圆点加读屏文本），不能只靠颜色。`dueInfo` 的红色阈值是已过期或 ≤3 小时，黄色 ≤24 小时；超过 30 天不显示倒计时。
+
+### 详情、预览与写操作
+
+| 组件                       | 用途                       | 关键 props / 事件                                                                                                                                                |
+| -------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `campus/ReaderView`        | 通知正文阅读               | `html`、`title`、`source`、`date`、`attachments`、`truncated`、`loading`、`error`；`openLink` / `download`                                                       |
+| `campus/FilePreviewDialog` | 图片 / 文本 / PDF 预览弹窗 | `open`、`preview: FilePreview`、`loading`、`error`、`pdfSource`；`close` / `download`                                                                            |
+| `campus/WritePreviewPanel` | 所有学校写操作的预览与确认 | `preview: WritePreview`、`busy`、`result: WriteOutcome`、`context`、`cancelLabel`、`confirmLabel`、`now`；`cancel` / `confirm(captcha)` / `viewRecords` / `done` |
+| `campus/SlotMatrix`        | 场馆时间 × 场地网格        | `times`、`courts`、`cells`、`v-model`（stock id 列表）、`selectable`；插槽 `bar`；`select`                                                                       |
+| `campus/SeatMap`           | 图书馆座位图               | `seats: LibrarySeat[]`、`selected`、`selectable`；`select(seat)`                                                                                                 |
+
+`ReaderView` 会再清洗一次后端 HTML（禁止 `style`、表单、iframe 等），链接不导航应用窗口，而是发 `openLink` 交由页面打开校园网页。
+
+`WritePreviewPanel` **绝不自行提交**：没有预览就不渲染确认按钮，预览过期后确认按钮禁用，`unknown` 结果只提供「查看提交记录」且不重试。接入时必须保持“预览 → 用户明确确认 → `confirm=true`”的顺序，取消不能说成撤回。
+
+`FilePreviewDialog` 用 `pdfjs-dist` 的 legacy 构建，PDF 字节由调用方通过 `pdfSource` 提供（后端只给预览 id）。接入时还要：
+
+- 把 `pdfjs-dist` 的 `cmaps/`、`standard_fonts/`、`wasm/` 复制到 `public/` 并设置 `cMapUrl` / `standardFontDataUrl` / `wasmUrl`，否则中文 PDF 会缺字；
+- 在 Tauri CSP 增加 `worker-src 'self'`，评教视频另加 `media-src https://review-class.xjtu.edu.cn`。
+
+### 图表
+
+`ui/MiniBars`（`values: { label, value, highlight? }[]`）用于 7 天支出这类短序列，最多 24px 宽、2px 间隔、4px 圆角数据端；`ui/Sparkline`（`points: { label, value }[]`）用于绩点趋势，2px 折线、≤12 点时显示 4px 标记。两者都是手写 SVG、单一坐标轴、文字只用文字 token，并提供 hover / 键盘提示和「查看数据」表格。`Sparkline` 少于 2 个点显示“数据不足”，不画空图。
+
+### 纯函数与 token
+
+`src/domain.ts` 新增（均有单元测试）：`campusTimestamp` / `campusParts`（固定 UTC+8 校区时间）、`dueInfo`、`updatedInfo`、`money`、`fileSize`、`percent`、`gradeStats`、`todoBuckets`、`parseExamTime`、`sectionTime`、`attendanceStats`。
+
+`src/style.css` 新增三个 token：`--success-text: #246e44`（浅绿底上的小字）、`--warning: #a15c00`、`--warning-soft: #fdf3e6`。成功与警告色在色觉缺陷模拟下 ΔE 只有 7.2，所以状态必须同时有图标、文字和 ≥2px 间距。
 
 ## 检查
 

@@ -1,0 +1,32 @@
+{
+  "version": "0.5.2",
+  "date": "2026-10-29",
+  "releases_url": "https://github.com/haiziyao/XJTU-Launcher/releases",
+  "base_url": "/download/v0.5.2/",
+  "files": [
+    {
+      "platform": "macOS",
+      "arch": "arm64",
+      "arch_label": "Apple 芯片",
+      "name": "XJTU.Launcher_0.5.2_aarch64.dmg",
+      "size": 24236014,
+      "sha256": "4a5c8fe212837bd1036b3ebcda4fc5acc0894d702ce7a9cb8b9cf76aa8905af1"
+    },
+    {
+      "platform": "macOS",
+      "arch": "x64",
+      "arch_label": "Intel 芯片",
+      "name": "XJTU.Launcher_0.5.2_x64.dmg",
+      "size": 25047381,
+      "sha256": "896580b7777c66f7f1140f96b4afba3d1a20cf649e072b86155869f9c378b7c1"
+    },
+    {
+      "platform": "Windows",
+      "arch": "x64",
+      "arch_label": "64 位",
+      "name": "XJTU.Launcher_0.5.2_x64-setup.exe",
+      "size": 21820727,
+      "sha256": "91547b2d23fc57575227920c2285acc5f4a8bc847d946b0267fd1f47a2f74ed6"
+    }
+  ]
+}

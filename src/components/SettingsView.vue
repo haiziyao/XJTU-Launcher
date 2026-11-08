@@ -1,18 +1,36 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Cat, Check, Download, Home, Package, Pipette, SlidersHorizontal } from 'lucide-vue-next';
+import {
+  IconCat,
+  IconCheck,
+  IconDownload,
+  IconServer,
+  IconHome,
+  IconPackage,
+  IconColorPicker,
+  IconAdjustmentsHorizontal,
+} from '@tabler/icons-vue';
 import type { AppConfig } from '../types';
 import { DEFAULT_SIDEBAR_WIDTH } from '../domain';
-import { ACCENT_PRESETS, normalizeAccent } from '../theme';
+import {
+  ACCENT_PRESETS,
+  WALLPAPER_MODES,
+  normalizeAccent,
+  normalizeWallpaperDisplay,
+  wallpaperMode,
+  wallpaperPanelOpacity,
+} from '../theme';
 import { PETS, normalizePet, type PetId } from '../pets';
 import PetArt from './PetArt.vue';
 import PluginSourceSettings from './PluginSourceSettings.vue';
 import AppUpdateSettings from './AppUpdateSettings.vue';
+import StorageSettings from './StorageSettings.vue';
 import PageTabs from './ui/PageTabs.vue';
 import PageHeader from './ui/PageHeader.vue';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiSwitch from './ui/UiSwitch.vue';
+import SegmentedTabs from './ui/SegmentedTabs.vue';
 
 import UiButton from './ui/UiButton.vue';
 import { bridge } from '../bridge';
@@ -23,7 +41,7 @@ import claude from '../assets/pets/claude.webp';
 const props = defineProps<{
   config: AppConfig;
   saving: boolean;
-  initialSection?: 'appearance' | 'home' | 'pet' | 'plugins' | 'updates';
+  initialSection?: 'appearance' | 'home' | 'pet' | 'plugins' | 'updates' | 'storage';
   saveSource: (source: string | null) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ update: [config: AppConfig] }>();
@@ -37,6 +55,23 @@ watch(
 const accent = computed(() => normalizeAccent(props.config.accent));
 const customAccent = computed(() => !ACCENT_PRESETS.some((p) => p.value === accent.value));
 const currentPet = computed(() => normalizePet(props.config.pet));
+// The wallpaper preset also drives the top-right switch on the main window.
+const wallpaperDisplay = computed(() => normalizeWallpaperDisplay(props.config.wallpaperDisplay));
+const wallpaperTabs = WALLPAPER_MODES.map((mode) => ({ id: mode.id, title: mode.label }));
+const wallpaperPanel = computed(() =>
+  wallpaperPanelOpacity(props.config.wallpaperPanel, wallpaperMode(wallpaperDisplay.value)),
+);
+function setWallpaperDisplay(id: string) {
+  const next = normalizeWallpaperDisplay(id);
+  if (next !== wallpaperDisplay.value) emit('update', { ...props.config, wallpaperDisplay: next });
+}
+function setWallpaperPanel(value: number) {
+  if (!Number.isFinite(value)) return;
+  emit('update', {
+    ...props.config,
+    wallpaperPanel: { ...props.config.wallpaperPanel, [wallpaperDisplay.value]: value },
+  });
+}
 function setPet(id: PetId) {
   if (id !== currentPet.value) emit('update', { ...props.config, pet: id });
 }
@@ -45,11 +80,12 @@ function setAccent(value: string) {
   if (next !== accent.value) emit('update', { ...props.config, accent: next });
 }
 const sections = [
-  { id: 'appearance', title: '外观与交互', icon: SlidersHorizontal },
-  { id: 'home', title: '主页', icon: Home },
-  { id: 'pet', title: '桌面宠物', icon: Cat },
-  { id: 'plugins', title: '插件服务', icon: Package },
-  { id: 'updates', title: '软件更新', icon: Download },
+  { id: 'appearance', title: '外观与交互', icon: IconAdjustmentsHorizontal },
+  { id: 'home', title: '主页', icon: IconHome },
+  { id: 'pet', title: '桌面宠物', icon: IconCat },
+  { id: 'plugins', title: '插件服务', icon: IconPackage },
+  { id: 'storage', title: '存储', icon: IconServer },
+  { id: 'updates', title: '软件更新', icon: IconDownload },
 ] as const;
 
 const DESKTOP_PETS = [
@@ -122,7 +158,7 @@ function previewPet() {
                     :disabled="saving"
                     @click="setAccent(preset.value)"
                   >
-                    <Check v-if="accent === preset.value" :size="12" aria-hidden="true" />
+                    <IconCheck v-if="accent === preset.value" :size="12" aria-hidden="true" />
                   </button>
                   <label
                     class="accent-swatch custom"
@@ -137,8 +173,8 @@ function previewPet() {
                       aria-label="自定义主题色"
                       @change="setAccent(($event.target as HTMLInputElement).value)"
                     />
-                    <Check v-if="customAccent" :size="12" aria-hidden="true" />
-                    <Pipette v-else :size="12" aria-hidden="true" />
+                    <IconCheck v-if="customAccent" :size="12" aria-hidden="true" />
+                    <IconColorPicker v-else :size="12" aria-hidden="true" />
                   </label>
                 </div>
               </SettingRow>
@@ -172,6 +208,37 @@ function previewPet() {
                   :disabled="saving"
                   @toggle="emit('update', { ...config, pageTabSurfaces: !config.pageTabSurfaces })"
                 />
+              </SettingRow>
+            </SettingGroup>
+            <SettingGroup title="壁纸显示">
+              <SettingRow title="显示样式" description="右上角按钮会在这三档之间循环">
+                <SegmentedTabs
+                  :model-value="wallpaperDisplay"
+                  :tabs="wallpaperTabs"
+                  label="壁纸显示样式"
+                  compact
+                  @update:model-value="setWallpaperDisplay"
+                />
+              </SettingRow>
+              <SettingRow
+                title="面板不透明度"
+                :description="
+                  config.wallpaper ? '只影响壁纸下的蒙版、面板与控件' : '设置壁纸后生效'
+                "
+              >
+                <div class="wallpaper-opacity">
+                  <input
+                    type="range"
+                    min="40"
+                    max="100"
+                    step="2"
+                    :value="wallpaperPanel"
+                    :disabled="saving || !config.wallpaper"
+                    :aria-label="`面板不透明度 ${wallpaperPanel}%`"
+                    @input="setWallpaperPanel(Number(($event.target as HTMLInputElement).value))"
+                  />
+                  <span class="setting-value">{{ wallpaperPanel }}%</span>
+                </div>
               </SettingRow>
             </SettingGroup>
             <SettingGroup title="动态效果">
@@ -314,12 +381,13 @@ function previewPet() {
             @update="emit('update', $event)"
           />
           <AppUpdateSettings
-            v-else
+            v-else-if="tab === 'updates'"
             key="updates"
             :config="config"
             :saving="saving"
             @update="emit('update', $event)"
           />
+          <StorageSettings v-else key="storage" />
         </Transition>
       </div>
     </div>
@@ -462,6 +530,17 @@ function previewPet() {
   background: var(--accent-soft);
   border-color: transparent;
   color: var(--accent-text);
+}
+.wallpaper-opacity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+}
+.wallpaper-opacity input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
 }
 .settings-layout {
   display: block;

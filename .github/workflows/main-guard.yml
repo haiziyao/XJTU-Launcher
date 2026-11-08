@@ -1,0 +1,39 @@
+name: Main merge guard
+
+on:
+  pull_request:
+    branches: [main]
+    # Re-run when testers add or remove the tested label.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  dev-only:
+    name: dev-only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require dev as the source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::main only accepts pull requests from dev; '$HEAD_REF' is not allowed."
+            exit 1
+          fi
+          echo "Source branch is dev."
+
+  tested-label:
+    name: tested-label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the tested label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if ! grep -q '"tested"' <<<"$LABELS"; then
+            echo "::error::Testers must verify this branch on dev, then add the 'tested' label before main can merge."
+            exit 1
+          fi
+          echo "The tested label is present."

@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { LoaderCircle, Plus, Trash2 } from 'lucide-vue-next';
+import { IconLoader2, IconPlus, IconTrash } from '@tabler/icons-vue';
 import { bridge } from '../bridge';
-import type { AgentPresetInput, AgentPresetKind, AgentPresets } from '../types';
+import type {
+  AgentPresetInput,
+  AgentPresetKind,
+  AgentPresets,
+  AgentRole,
+  AgentTask,
+} from '../types';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import EmptyState from './ui/EmptyState.vue';
+import IconTile from './ui/IconTile.vue';
+import SettingsDialog from './ui/SettingsDialog.vue';
 
 import UiButton from './ui/UiButton.vue';
-import UiIconButton from './ui/UiIconButton.vue';
+import MenuSelect from './ui/MenuSelect.vue';
 const props = defineProps<{ kind: AgentPresetKind }>();
+
+type Preset = AgentRole | AgentTask;
 
 interface DraftBase {
   id: string | null;
@@ -26,37 +36,62 @@ const presets = ref<AgentPresets>({ version: 1, roles: [], skills: [], tasks: []
 const loading = ref(true);
 const busy = ref(false);
 const error = ref('');
-const status = ref('');
 const draft = ref<DraftBase | null>(null);
+const viewed = ref<Preset | null>(null);
+const roleOptions = computed(() => [
+  { value: '', label: '通用角色' },
+  ...presets.value.roles.map((role) => ({ value: role.id, label: role.name })),
+]);
+const skillNames = computed(() =>
+  Object.fromEntries(presets.value.skills.map((skill) => [skill.id, skill.name])),
+);
+const viewedRole = computed(() => {
+  const item = viewed.value;
+  if (!item || !('roleId' in item)) return '';
+  return roleOptions.value.find((option) => option.value === item.roleId)?.label || '通用角色';
+});
+const viewedSkills = computed(() => {
+  const item = viewed.value;
+  if (!item || !('skillIds' in item)) return '';
+  return (item.skillIds ?? [])
+    .map((id) => skillNames.value[id])
+    .filter(Boolean)
+    .join('、');
+});
+function setRole(value: string) {
+  if (draft.value) draft.value.roleId = value;
+}
 
 const titles = {
   role: {
     group: '角色',
-    add: '添加角色',
+    add: '新增角色',
     name: '角色名称',
     note: '角色会作为系统提示词附加到每段对话。',
-    foot: '角色在 Agent 页面选择，可随时切换。',
   },
   skill: {
     group: 'Skills',
-    add: '添加 Skill',
+    add: '新增 Skill',
     name: 'Skill 名称',
     note: 'Skill 由 Agent 按需调用，也可以在输入框用 / 手动指定。',
-    foot: 'Skill 指令会在模型调用时加载，不会常驻上下文。',
   },
   task: {
     group: '预设任务',
-    add: '添加预设任务',
+    add: '新增预设任务',
     name: '任务名称',
     note: '预设任务会填入输入框，发送前还可以修改。',
-    foot: '预设任务可以绑定角色与 Skills。',
   },
 } as const;
 const copy = computed(() => titles[props.kind]);
-const list = computed(() => {
+const list = computed<Preset[]>(() => {
   if (props.kind === 'role') return presets.value.roles;
   if (props.kind === 'skill') return presets.value.skills;
   return presets.value.tasks;
+});
+const dialogOpen = computed(() => viewed.value !== null || draft.value !== null);
+const dialogTitle = computed(() => {
+  if (draft.value) return draft.value.id ? `编辑${copy.value.group}` : copy.value.add;
+  return viewed.value?.name ?? '';
 });
 
 async function load() {
@@ -69,24 +104,58 @@ async function load() {
     loading.value = false;
   }
 }
-function edit(item?: { id: string; name: string; description: string } & Record<string, unknown>) {
-  draft.value = {
-    id: item?.id ?? null,
-    name: item?.name ?? '',
-    description: item?.description ?? '',
-    instructions: (item?.instructions as string) ?? '',
-    prompt: (item?.prompt as string) ?? '',
-    roleId: (item?.roleId as string) ?? '',
-    skillIds: [...((item?.skillIds as string[]) ?? [])],
-  };
-  status.value = '';
+function openView(item: Preset) {
   error.value = '';
+  viewed.value = item;
+  draft.value = null;
+}
+function openNew() {
+  error.value = '';
+  viewed.value = null;
+  draft.value = {
+    id: null,
+    name: '',
+    description: '',
+    instructions: '',
+    prompt: '',
+    roleId: '',
+    skillIds: [],
+  };
+}
+function openEdit(item: Preset) {
+  error.value = '';
+  viewed.value = null;
+  draft.value = {
+    id: item.id,
+    name: item.name,
+    description: item.description ?? '',
+    instructions: ('instructions' in item ? item.instructions : '') ?? '',
+    prompt: ('prompt' in item ? item.prompt : '') ?? '',
+    roleId: ('roleId' in item ? item.roleId : '') ?? '',
+    skillIds: [...('skillIds' in item ? (item.skillIds ?? []) : [])],
+  };
+}
+function close() {
+  viewed.value = null;
+  draft.value = null;
+  error.value = '';
+  // Roles and skills are edited by sibling sections that keep their own copy
+  // of the store; refresh so a newly added one shows up in this form.
+  if (props.kind === 'task') void load();
 }
 const valid = computed(() => {
   const value = draft.value;
   if (!value || !value.name.trim()) return false;
   if (props.kind === 'task') return !!value.prompt.trim();
   return !!value.instructions.trim();
+});
+/** Names the empty field so a disabled save button is not a silent dead end. */
+const missing = computed(() => {
+  const value = draft.value;
+  if (!value) return '';
+  if (!value.name.trim()) return copy.value.name;
+  if (props.kind === 'task') return value.prompt.trim() ? '' : '任务内容';
+  return value.instructions.trim() ? '' : '指令';
 });
 async function save() {
   const value = draft.value;
@@ -113,8 +182,7 @@ async function save() {
             instructions: value.instructions,
           };
     await bridge.agentSavePreset(input);
-    status.value = value.id ? '已更新' : '已添加';
-    draft.value = null;
+    close();
     await load();
   } catch (e) {
     error.value = String(e);
@@ -122,7 +190,7 @@ async function save() {
     busy.value = false;
   }
 }
-async function remove(item: { id: string; name: string }) {
+async function remove(item: Preset) {
   if (
     !(await ask(`删除“${item.name}”？`, {
       title: `删除${copy.value.group}`,
@@ -136,6 +204,7 @@ async function remove(item: { id: string; name: string }) {
   error.value = '';
   try {
     await bridge.agentRemovePreset(props.kind, item.id);
+    close();
     await load();
   } catch (e) {
     error.value = String(e);
@@ -153,49 +222,49 @@ function toggleSkill(id: string) {
 onMounted(() => void load());
 </script>
 <template>
-  <div class="preset-panel">
+  <Transition name="drop">
+    <p v-if="error && !dialogOpen" class="notice" role="alert">{{ error }}</p>
+  </Transition>
+  <SettingGroup :title="copy.group">
+    <EmptyState v-if="loading && !list.length" compact :icon="IconLoader2" busy title="正在读取…" />
+    <SettingRow
+      v-for="item in list"
+      :key="item.id"
+      clickable
+      :title="item.name"
+      :disabled="busy"
+      @select="openView(item)"
+    >
+    </SettingRow>
+    <SettingRow clickable :title="copy.add" :disabled="busy" @select="openNew">
+      <template #leading
+        ><IconTile :size="30"><IconPlus :size="16" /></IconTile
+      ></template>
+    </SettingRow>
+  </SettingGroup>
+
+  <SettingsDialog :open="dialogOpen" :title="dialogTitle" wide @close="close">
     <Transition name="drop">
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
     </Transition>
-    <Transition name="drop">
-      <p v-if="status" class="notice success" role="status">{{ status }}</p>
-    </Transition>
 
-    <SettingGroup v-if="!draft" :title="copy.group" :footnote="copy.foot">
-      <template #actions>
-        <UiButton size="sm" :disabled="busy" @click="edit()">
-          <Plus :size="14" />{{ copy.add }}
-        </UiButton>
-      </template>
-      <EmptyState
-        v-if="loading && !list.length"
-        compact
-        :icon="LoaderCircle"
-        busy
-        title="正在读取…"
-      />
-      <EmptyState
-        v-else-if="!list.length"
-        compact
-        :icon="Plus"
-        :title="`还没有${copy.group}`"
-        :description="copy.note"
-      />
-      <SettingRow
-        v-for="item in list"
-        :key="item.id"
-        :title="item.name"
-        :description="item.description || ('prompt' in item ? item.prompt : item.instructions)"
-      >
-        <UiButton size="sm" :disabled="busy" @click="edit(item)">编辑</UiButton>
-        <UiIconButton :label="'删除 ' + item.name" :disabled="busy" @click="remove(item)">
-          <Trash2 :size="15" />
-        </UiIconButton>
-      </SettingRow>
-    </SettingGroup>
+    <template v-if="viewed">
+      <div v-if="viewed.description" class="preset-detail">{{ viewed.description }}</div>
+      <div class="preset-detail">
+        <span>{{ 'prompt' in viewed ? '任务内容' : '指令' }}</span>
+        <pre>{{ 'prompt' in viewed ? viewed.prompt : viewed.instructions }}</pre>
+      </div>
+      <div v-if="'roleId' in viewed" class="preset-detail">
+        <span>绑定角色</span>
+        <p>{{ viewedRole }}</p>
+      </div>
+      <div v-if="'skillIds' in viewed && viewed.skillIds?.length" class="preset-detail">
+        <span>绑定 Skills</span>
+        <p>{{ viewedSkills }}</p>
+      </div>
+    </template>
 
-    <form v-else class="preset-form" @submit.prevent="save">
-      <h3>{{ draft.id ? '编辑' : copy.add }}</h3>
+    <form v-else-if="draft" class="preset-form" @submit.prevent="save">
       <label class="preset-field">
         <span>{{ copy.name }}</span>
         <input v-model="draft.name" maxlength="40" required />
@@ -217,15 +286,16 @@ onMounted(() => void load());
             placeholder="例如：整理本周课表和作业安排"
           ></textarea>
         </label>
-        <label class="preset-field">
+        <div class="preset-field">
           <span>绑定角色</span>
-          <select v-model="draft.roleId">
-            <option value="">通用角色</option>
-            <option v-for="role in presets.roles" :key="role.id" :value="role.id">
-              {{ role.name }}
-            </option>
-          </select>
-        </label>
+          <MenuSelect
+            class="preset-select"
+            :model-value="draft.roleId"
+            :options="roleOptions"
+            label="绑定角色"
+            @update:model-value="setRole"
+          />
+        </div>
         <div v-if="presets.skills.length" class="preset-field">
           <span>绑定 Skills</span>
           <div class="preset-skills">
@@ -240,29 +310,46 @@ onMounted(() => void load());
           </div>
         </div>
       </template>
-      <div class="preset-actions">
-        <UiButton variant="ghost" type="button" :disabled="busy" @click="draft = null"
-          >取消</UiButton
+      <p v-if="missing" class="preset-hint" aria-live="polite">请填写{{ missing }}后再保存。</p>
+    </form>
+
+    <template #footer>
+      <template v-if="viewed">
+        <UiButton variant="ghost" size="sm" danger :disabled="busy" @click="remove(viewed)">
+          <IconTrash :size="13" />删除
+        </UiButton>
+        <UiButton variant="primary" size="sm" :disabled="busy" @click="openEdit(viewed)"
+          >编辑</UiButton
         >
-        <UiButton variant="primary" type="submit" :disabled="!valid || busy">
+      </template>
+      <template v-else>
+        <UiButton variant="ghost" size="sm" :disabled="busy" @click="close">取消</UiButton>
+        <UiButton variant="primary" size="sm" :disabled="!valid || busy" @click="save">
           {{ busy ? '保存中…' : '保存' }}
         </UiButton>
-      </div>
-    </form>
-  </div>
+      </template>
+    </template>
+  </SettingsDialog>
 </template>
 <style scoped>
+.preset-detail {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.preset-detail p,
+.preset-detail pre {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .preset-form {
   display: grid;
   gap: 14px;
-  padding: 18px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  margin-bottom: 24px;
-}
-.preset-form h3 {
-  margin: 0;
-  font-size: 15px;
 }
 .preset-field {
   display: grid;
@@ -270,9 +357,13 @@ onMounted(() => void load());
   font-size: 12px;
   color: var(--text-tertiary);
 }
+.preset-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
 .preset-field input,
-.preset-field textarea,
-.preset-field select {
+.preset-field textarea {
   border: 1px solid var(--control-border);
   border-radius: var(--radius);
   background: var(--control-bg);
@@ -282,16 +373,17 @@ onMounted(() => void load());
   padding: 8px 10px;
   resize: vertical;
 }
-.preset-field select {
-  appearance: none;
-  padding-right: 30px;
-  background-image: var(--chevron-down);
-  background-repeat: no-repeat;
-  background-position: right 10px center;
+/* Match the textareas beside it; MenuSelect draws its own shell. */
+.preset-field .preset-select :deep(.field-shell) {
+  height: 36px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--radius);
+}
+.preset-field .preset-select :deep(.menu-field-value) {
+  font-size: 13px;
 }
 .preset-field input:focus,
-.preset-field textarea:focus,
-.preset-field select:focus {
+.preset-field textarea:focus {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
   outline: none;
@@ -308,10 +400,5 @@ onMounted(() => void load());
   gap: 6px;
   font-size: 13px;
   color: var(--text);
-}
-.preset-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 </style>

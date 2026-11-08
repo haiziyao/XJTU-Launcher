@@ -56,10 +56,23 @@ describe('ensureDirectSession', () => {
     expect(api.schoolQuery).toHaveBeenCalledTimes(2);
   });
 
-  it('passes unrelated errors through without a renewal', async () => {
+  it('retries a transient connection error without renewing the session', async () => {
+    vi.useFakeTimers();
     const card: SchoolQuery = { type: 'card' };
-    api.schoolQuery.mockRejectedValueOnce(new Error('无法连接校园卡服务'));
-    await expect(directQuery(card)).rejects.toThrow('无法连接校园卡服务');
+    api.schoolQuery.mockRejectedValue(new Error('无法连接校园卡服务'));
+    const result = directQuery(card);
+    const assertion = expect(result).rejects.toThrow('无法连接校园卡服务');
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(api.schoolQuery).toHaveBeenCalledTimes(3);
     expect(api.refreshDirectSession).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not retry errors that are not transient', async () => {
+    const card: SchoolQuery = { type: 'card' };
+    api.schoolQuery.mockRejectedValueOnce(new Error('校园卡服务暂未开放'));
+    await expect(directQuery(card)).rejects.toThrow('校园卡服务暂未开放');
+    expect(api.schoolQuery).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,6 @@
 //! Library seat adapter. The seat system is plain HTTP on the campus network
-//! and keeps its own CAS cookie session under `sites.library`.
+//! and keeps its own CAS cookie session under `sites.library`; WebVPN reaches
+//! it through the port-aware `http-8086` mapping.
 use crate::{
     accounts::Account,
     network::{AccessMode, Transport},
@@ -41,13 +42,11 @@ pub fn valid_area(code: &str) -> bool {
 
 pub struct Client {
     transport: Transport,
+    mode: AccessMode,
 }
 
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        if account.mode == AccessMode::Webvpn {
-            return Err("图书馆座位仅支持校园网直连，请连接校园网后重试".into());
-        }
         let site = account.sites.get("library").ok_or("请先完成图书馆登录")?;
         let cookies = site
             .cookies
@@ -56,6 +55,7 @@ impl Client {
             .ok_or("请先完成图书馆登录")?;
         Ok(Self {
             transport: Transport::new(Some(cookies))?,
+            mode: account.mode,
         })
     }
 
@@ -65,7 +65,7 @@ impl Client {
         }
         let url = Url::parse_with_params(&format!("{BASE}{path}"), params)
             .map_err(|_| "图书馆接口地址无效")?;
-        let address = Transport::address(&url, AccessMode::Direct)?;
+        let address = Transport::address(&url, self.mode)?;
         let response = self
             .transport
             .client

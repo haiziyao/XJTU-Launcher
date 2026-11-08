@@ -1,0 +1,5 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "XJTU Launcher 验收",
+  "identifier": "cn.haiziyao.xjtu-launcher-acceptance"
+}

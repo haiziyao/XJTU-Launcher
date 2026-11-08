@@ -1,7 +1,7 @@
 {
   "name": "xjtu-launcher",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.6.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -21,9 +21,12 @@
     "dompurify": "^3.4.17",
     "lucide-vue-next": "^0.468.0",
     "marked": "^18.1.1",
+    "pdfjs-dist": "6.4.299",
     "vue": "^3.5.44"
   },
   "devDependencies": {
+    "@phosphor-icons/vue": "^2.2.1",
+    "@tabler/icons-vue": "^3.50.0",
     "@tauri-apps/cli": "^2.10.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "jsdom": "^30.1.3",

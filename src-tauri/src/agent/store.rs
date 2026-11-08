@@ -1,4 +1,4 @@
-//! Agent conversations in ~/.xjtu-launcher/agent/conversations.json.
+//! Agent conversations in <数据文件夹>/agent/conversations.json.
 //! Messages are plain text plus tool calls; API keys never enter this file.
 use serde::{Deserialize, Serialize};
 use std::{

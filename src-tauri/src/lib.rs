@@ -2,8 +2,10 @@ mod agent;
 mod cache;
 mod campus;
 mod campus_browser;
+mod capture_store;
 mod config;
 mod expose;
+mod icons;
 mod market;
 mod mcp;
 mod personal_image;
@@ -14,11 +16,13 @@ mod timetable_custom;
 mod tool_names;
 mod updates;
 mod vault;
+mod workbench;
 
 mod accounts;
 mod auth;
 mod network;
 mod pet_desktop;
+mod storage;
 
 use serde::Serialize;
 use std::{
@@ -47,14 +51,15 @@ struct AppState {
     agent: agent::Manager,
     /// Serializes timetable customization reads and writes.
     timetable_lock: Mutex<()>,
+    /// Serializes writes to the local file library's index. Importing hashes
+    /// and copies outside this lock; only the commit needs it.
+    library_lock: std::sync::Arc<std::sync::Mutex<()>>,
+    /// One migration at a time; a second run would copy half-moved data.
+    storage_lock: tokio::sync::Mutex<()>,
 }
 
 pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位账号目录")?
-        .join("campus-accounts.enc"))
+    storage::path(app, "state/campus-accounts.enc")
 }
 
 /// Stable identifier for the campus login's device fingerprint. The school ties
@@ -62,11 +67,7 @@ pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// a failed write only means the device is never remembered, never a login
 /// failure. It holds no personal data.
 fn device_visitor(app: &tauri::AppHandle) -> Result<String, String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位应用数据目录")?
-        .join("device-id");
+    let path = storage::path(app, "state/device-id")?;
     if let Ok(text) = std::fs::read_to_string(&path) {
         let id = text.trim();
         if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -90,19 +91,11 @@ pub(crate) fn main_only(window: &WebviewWindow) -> Result<(), String> {
 }
 
 pub(crate) fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_config_dir()
-        .map_err(|_| "无法定位配置目录")?
-        .join("config.json"))
+    storage::config_path(app)
 }
 
 fn plugin_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位应用数据目录")?
-        .join("plugins"))
+    storage::path(app, "plugins")
 }
 
 #[tauri::command]
@@ -961,7 +954,7 @@ async fn refresh_lms_session(
 ) -> Result<bool, String> {
     main_only(&window)?;
     let path = accounts_path(&app)?;
-    let (account_id, username, password) = {
+    let (account_id, username, password, mode, portal) = {
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
@@ -973,11 +966,22 @@ async fn refresh_lms_session(
             record.id.clone(),
             record.username.clone(),
             zeroize::Zeroizing::new(saved.0.clone()),
+            record.mode,
+            record.cookies.clone(),
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
     let visitor = device_visitor(&app)?;
-    let cookies = auth::direct_login(school::LMS_LOGIN, &username, &password, &visitor).await?;
+    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
+    let cookies = auth::service_login(
+        school::LMS_LOGIN,
+        mode,
+        seed,
+        &username,
+        &password,
+        &visitor,
+    )
+    .await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -1000,8 +1004,8 @@ async fn refresh_lms_session(
     Ok(true)
 }
 
-/// The library seat system is plain HTTP on the campus network and cannot be
-/// reached through WebVPN, so this login only runs in direct mode.
+/// The library seat system is plain HTTP on the campus network; WebVPN reaches
+/// it through the port-aware `http-8086` mapping, so both modes can log in.
 #[tauri::command]
 async fn refresh_library_session(
     app: tauri::AppHandle,
@@ -1010,13 +1014,10 @@ async fn refresh_library_session(
 ) -> Result<bool, String> {
     main_only(&window)?;
     let path = accounts_path(&app)?;
-    let (account_id, username, password) = {
+    let (account_id, username, password, mode, portal) = {
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
-        if record.mode != network::AccessMode::Direct {
-            return Err("图书馆座位仅支持校园网直连，请连接校园网后重试".into());
-        }
         let saved = record
             .password
             .as_ref()
@@ -1025,11 +1026,22 @@ async fn refresh_library_session(
             record.id.clone(),
             record.username.clone(),
             zeroize::Zeroizing::new(saved.0.clone()),
+            record.mode,
+            record.cookies.clone(),
         )
     };
     let generation = state.generation.load(Ordering::SeqCst);
     let visitor = device_visitor(&app)?;
-    let cookies = auth::direct_login(school::LIBRARY_LOGIN, &username, &password, &visitor).await?;
+    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
+    let cookies = auth::service_login(
+        school::LIBRARY_LOGIN,
+        mode,
+        seed,
+        &username,
+        &password,
+        &visitor,
+    )
+    .await?;
     let _guard = state.auth_lock.lock().await;
     if generation != state.generation.load(Ordering::SeqCst) {
         return Err("账号已切换，请重新打开".into());
@@ -1052,8 +1064,8 @@ async fn refresh_library_session(
     Ok(true)
 }
 
-/// The venue system is plain HTTP on the campus network with its own OAuth
-/// login; it cannot run through WebVPN.
+/// The venue system is public plain HTTP with its own OAuth login. It has no
+/// WebVPN mapping, so the login and queries always use a direct connection.
 #[tauri::command]
 async fn refresh_venue_session(
     app: tauri::AppHandle,
@@ -1066,9 +1078,6 @@ async fn refresh_venue_session(
         let _guard = state.auth_lock.lock().await;
         let book = accounts::load(&path)?;
         let record = book.active().ok_or("请先登录校园账号")?;
-        if record.mode != network::AccessMode::Direct {
-            return Err("场馆预约仅支持校园网直连，请连接校园网后重试".into());
-        }
         let saved = record
             .password
             .as_ref()
@@ -1305,10 +1314,429 @@ async fn lms_save_file(
         .await
 }
 
+/// Resolve the direct replay videos for one lesson. The addresses are
+/// presigned and expire, so the result is never cached; the RMS bearer token
+/// stays in the backend.
+#[tauri::command]
+async fn lms_replay_videos(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    activity: u64,
+) -> Result<school::lms::ReplayVideos, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "lms")?;
+    let _service_guard = state.school_lock.lock().await;
+    let (account, _) = school_account(&app, &state).await?;
+    school::lms::Client::connect(&account)?
+        .replay_videos(activity)
+        .await
+}
+
+/// Write a capture export (PDF / ZIP) to the path the user chose in the save
+/// dialog. Bytes cross IPC as base64 because the webview has no fs permission.
+#[tauri::command]
+async fn save_export(window: WebviewWindow, path: String, data: String) -> Result<u64, String> {
+    const MAX_EXPORT: usize = 256 * 1024 * 1024;
+    main_only(&window)?;
+    if data.len() > MAX_EXPORT / 3 * 4 + 8 {
+        return Err("导出文件超过 256 MB，未保存".into());
+    }
+    let bytes = {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        STANDARD
+            .decode(data.as_bytes())
+            .map_err(|_| "导出数据无效")?
+    };
+    if bytes.len() > MAX_EXPORT {
+        return Err("导出文件超过 256 MB，未保存".into());
+    }
+    let target = std::path::PathBuf::from(path);
+    if !target.is_absolute() {
+        return Err("请选择有效的保存位置".into());
+    }
+    let written = bytes.len() as u64;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::config::write_atomic(&target, &bytes).map(|_| written)
+    })
+    .await
+    .map_err(|_| "导出任务失败".to_string())?
+}
+
+/// 工作台 roots are per campus account and live in the visible file folder.
+/// Requiring the active account keeps two people's folders apart.
+async fn workbench_root(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<(PathBuf, String), String> {
+    let (account, _) = school_account(app, state).await?;
+    let workspace = storage::file_path(app, "workspace")?;
+    Ok((workbench::root(&workspace, &account.id), account.id))
+}
+
+fn sync_state_path(app: &tauri::AppHandle, account_id: &str) -> Result<PathBuf, String> {
+    storage::path(
+        app,
+        &format!("state/workbench/{}.json", workbench::owner_key(account_id)),
+    )
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncCourse {
+    id: u64,
+    code: String,
+    subject_code: String,
+    name: String,
+    folder: String,
+    assignments: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncState {
+    version: u32,
+    term: String,
+    synced_at: i64,
+    courses: Vec<SyncCourse>,
+}
+
+impl Default for SyncState {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            term: String::new(),
+            synced_at: 0,
+            courses: Vec::new(),
+        }
+    }
+}
+
+fn load_sync(path: &PathBuf) -> Result<SyncState, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(SyncState::default())
+        }
+        Err(_) => return Err("无法读取工作台同步记录".into()),
+    };
+    let state: SyncState = serde_json::from_slice(&bytes).map_err(|_| "工作台同步记录损坏")?;
+    if state.version != 1 {
+        return Err("工作台同步记录版本不受支持".into());
+    }
+    Ok(state)
+}
+
+fn save_sync(path: &PathBuf, state: &SyncState) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| "无法创建工作台同步目录")?;
+    }
+    let bytes = serde_json::to_vec_pretty(state).map_err(|_| "无法编码工作台同步记录")?;
+    let temp = path.with_extension("json.tmp");
+    std::fs::write(&temp, bytes).map_err(|_| "无法写入工作台同步记录")?;
+    std::fs::rename(&temp, path).map_err(|_| "无法写入工作台同步记录")?;
+    Ok(())
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// File work (copying, index writes, folder scans) must not hold an async worker.
+async fn run_workbench<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|_| "工作台任务失败".to_string())?
+}
+
+#[tauri::command]
+async fn workbench_overview(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    let (root, account_id) = workbench_root(&app, &state).await?;
+    let store = load_sync(&sync_state_path(&app, &account_id)?)?;
+    let folders = run_workbench(move || workbench::tree(&root)).await?;
+    Ok(serde_json::json!({
+        "currentTerm": store.term,
+        "syncedAt": store.synced_at,
+        "folders": folders,
+        "courses": store.courses,
+    }))
+}
+
+#[tauri::command]
+async fn workbench_folder(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    folder: String,
+) -> Result<Vec<workbench::FileNode>, String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    run_workbench(move || workbench::files(&root, &folder)).await
+}
+
+#[tauri::command]
+async fn workbench_create_folder(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    parent: String,
+    name: String,
+) -> Result<workbench::FolderNode, String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    run_workbench(move || workbench::create_folder(&root, &parent, &name)).await
+}
+
+#[tauri::command]
+async fn workbench_import(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    folder: String,
+    paths: Vec<String>,
+) -> Result<Vec<workbench::ImportOutcome>, String> {
+    main_only(&window)?;
+    if paths.len() > 32 {
+        return Err("一次最多添加 32 个文件".into());
+    }
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let (root, _) = workbench_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_workbench(move || Ok(workbench::import_files(&root, &folder, &paths, &lock))).await
+}
+
+#[tauri::command]
+async fn workbench_update(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    path: String,
+    input: workbench::BindingInput,
+) -> Result<workbench::FileNode, String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_workbench(move || workbench::set_binding(&root, &path, input, &lock)).await
+}
+
+#[tauri::command]
+async fn workbench_delete(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let lock = state.library_lock.clone();
+    run_workbench(move || workbench::delete_file(&root, &path, &lock)).await
+}
+
+#[tauri::command]
+async fn workbench_open(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let path = run_workbench(move || workbench::absolute(&root, &path)).await?;
+    let path = path.to_str().ok_or("文件路径不是有效的 UTF-8")?;
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|_| "无法打开本地文件".into())
+}
+
+#[tauri::command]
+async fn workbench_reveal(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    let (root, _) = workbench_root(&app, &state).await?;
+    let path = run_workbench(move || {
+        workbench::absolute(&root, &path).or_else(|_| workbench::folder_absolute(&root, &path))
+    })
+    .await?;
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|_| "无法在文件管理器中显示".into())
+}
+
+/// One 工作台 submission, resolved from workspace paths. The active campus
+/// account is checked again just before the school call.
+async fn workbench_submit_inner(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+    state: &tauri::State<'_, AppState>,
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+    confirm: bool,
+) -> Result<serde_json::Value, String> {
+    main_only(window)?;
+    if paths.len() > school::lms::MAX_UPLOAD_FILES {
+        return Err(format!(
+            "一次最多上传 {} 个文件",
+            school::lms::MAX_UPLOAD_FILES
+        ));
+    }
+    let (account, _) = school_account(app, state).await?;
+    let workspace = storage::file_path(app, "workspace")?;
+    let root = workbench::root(&workspace, &account.id);
+    let files = run_workbench(move || {
+        paths
+            .iter()
+            .map(|path| -> Result<String, String> {
+                let path = workbench::absolute(&root, path)?;
+                path.to_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| "文件路径不是有效的 UTF-8".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()
+    })
+    .await?;
+    let request = school::lms::Homework {
+        activity,
+        comment,
+        files,
+        draft: false,
+    };
+    run_lms_homework_checked(app, request, confirm, Some(&account.id)).await
+}
+
+/// Preview only: reads the activity and the local files, never posts.
+#[tauri::command]
+async fn workbench_submit_preview(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    workbench_submit_inner(&app, &window, &state, activity, comment, paths, false).await
+}
+
+/// The caller must have shown the preview and asked the user first.
+#[tauri::command]
+async fn workbench_submit(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    activity: u64,
+    comment: String,
+    paths: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    workbench_submit_inner(&app, &window, &state, activity, comment, paths, true).await
+}
+
+/// Refresh the current semester from 思源学堂: create missing course folders and
+/// keep each course's assignment list in app state (never as files on disk).
+#[tauri::command]
+async fn workbench_sync(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    main_only(&window)?;
+    require_school_feature(&app, "lms")?;
+    let (root, account_id) = workbench_root(&app, &state).await?;
+    let (account, _) = school_account(&app, &state).await?;
+    let _service_guard = state.school_lock.lock().await;
+    let client = school::lms::Client::connect(&account)?;
+    let data = client.workbench().await?;
+    let term = data["term"].as_str().unwrap_or_default().trim().to_string();
+    if term.is_empty() {
+        return Err("思源学堂没有返回当前学期，暂时无法建立学期文件夹".into());
+    }
+    if term.chars().count() > 120 {
+        return Err("学期名称过长".into());
+    }
+    let courses = data["courses"].as_array().cloned().unwrap_or_default();
+    let course_count = courses.len();
+    let failed = data["failed"].as_u64().unwrap_or(0);
+    let synced = run_workbench(move || {
+        let mut state = SyncState {
+            version: 1,
+            term: term.clone(),
+            synced_at: now_millis(),
+            courses: Vec::new(),
+        };
+        for course in &courses {
+            let meta = workbench::CourseMeta {
+                id: course["id"].as_u64().unwrap_or(0),
+                code: course["code"].as_str().unwrap_or_default().to_string(),
+                subject_code: course["subjectCode"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                name: course["name"].as_str().unwrap_or_default().to_string(),
+                term: term.clone(),
+            };
+            let folder = workbench::ensure_course_folder(&root, &term, &meta)?;
+            state.courses.push(SyncCourse {
+                id: meta.id,
+                code: meta.code,
+                subject_code: meta.subject_code,
+                name: meta.name,
+                folder,
+                assignments: course["assignments"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default(),
+            });
+        }
+        Ok(state)
+    })
+    .await?;
+    save_sync(&sync_state_path(&app, &account_id)?, &synced)?;
+    let assignment_count: usize = synced
+        .courses
+        .iter()
+        .map(|course| course.assignments.len())
+        .sum();
+    Ok(serde_json::json!({
+        "term": synced.term,
+        "syncedAt": synced.synced_at,
+        "courses": course_count,
+        "assignments": assignment_count,
+        "failed": failed,
+    }))
+}
+
 #[tauri::command]
 fn school_catalog(window: WebviewWindow) -> Result<Vec<school::Feature>, String> {
     main_only(&window)?;
     Ok(school::catalog())
+}
+
+/// Entry icons the user dropped into `~/.xjtu-launcher/resources/icons`.
+/// Read-only and best effort: a broken file returns an empty set, never an
+/// error that would keep the sidebar from drawing its built-in glyphs.
+#[tauri::command]
+fn entry_icons(window: WebviewWindow, app: tauri::AppHandle) -> icons::IconSet {
+    if main_only(&window).is_err() {
+        return icons::IconSet::default();
+    }
+    icons::load(&app).unwrap_or_default()
 }
 
 fn require_school_feature(app: &tauri::AppHandle, feature: &str) -> Result<(), String> {
@@ -1363,6 +1791,7 @@ pub(crate) async fn run_school_query(
     app: &tauri::AppHandle,
     query: school::Query,
     cache_key: Option<&str>,
+    force: bool,
 ) -> Result<serde_json::Value, String> {
     require_school_feature(app, query.feature())?;
     query.validate()?;
@@ -1375,15 +1804,34 @@ pub(crate) async fn run_school_query(
             | school::Query::NoticeChannels
             | school::Query::Notices { .. }
     ) {
+        let scope = cache::active_scope(app);
+        if !force {
+            if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
+                if let Some(data) =
+                    cache::read_fresh(app, &scope, key, std::time::Duration::from_secs(ttl))
+                {
+                    return Ok(data);
+                }
+            }
+        }
         let data = school::query(None, query).await.map(|(data, _)| data)?;
         if let Some(key) = cache_key {
             // Public data still goes under the current account so reads line up.
-            cache::write_for(app, &cache::active_scope(app), key, &data);
+            cache::write_for(app, &scope, key, &data);
         }
         return Ok(data);
     }
     let (account, generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
+    if !force {
+        if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
+            if let Some(data) =
+                cache::read_fresh(app, &account_id, key, std::time::Duration::from_secs(ttl))
+            {
+                return Ok(data);
+            }
+        }
+    }
     let (data, cookies) = school::query(Some(account), query).await?;
     if let Some(cookies) = cookies {
         save_school_session(app, &state, &account_id, generation, cookies).await?;
@@ -1402,17 +1850,65 @@ pub(crate) async fn run_lms_homework(
     request: school::lms::Homework,
     confirm: bool,
 ) -> Result<serde_json::Value, String> {
+    run_lms_homework_checked(app, request, confirm, None).await
+}
+
+/// `expected_account` guards file uploads resolved under one campus account:
+/// if the active account changed in the meantime, the request is refused
+/// instead of sending the previous account's files through the new session.
+pub(crate) async fn run_lms_homework_checked(
+    app: &tauri::AppHandle,
+    request: school::lms::Homework,
+    confirm: bool,
+    expected_account: Option<&str>,
+) -> Result<serde_json::Value, String> {
     require_school_feature(app, "lms")?;
     request.validate()?;
     let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
     let (account, _) = school_account(app, &state).await?;
+    if let Some(expected) = expected_account {
+        if account.id != expected {
+            return Err("校园账号已切换，请重新选择文件".into());
+        }
+    }
     let client = school::lms::Client::connect(&account)?;
     if confirm {
         client.homework_submit(&request).await
     } else {
         client.homework_preview(&request).await
     }
+}
+
+/// Agent-facing 课程资料 download. The file lands in the visible download
+/// folder under a sanitized, unique name; the model cannot choose a path. The
+/// body comes from the public media host, so the school lock is not held while
+/// streaming.
+pub(crate) async fn download_lms_file(
+    app: &tauri::AppHandle,
+    upload_id: u64,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    require_school_feature(app, "lms")?;
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("请提供附件的文件名".into());
+    }
+    let state = app.state::<AppState>();
+    let (account, _) = school_account(app, &state).await?;
+    let path = storage::unique_download_target(app, name)?;
+    let size = school::lms::Client::connect(&account)?
+        .save_file(upload_id, &path)
+        .await?;
+    let display = path
+        .to_str()
+        .map(|value| storage::display_for(app, value))
+        .unwrap_or_default();
+    Ok(serde_json::json!({
+        "path": display,
+        "name": path.file_name().and_then(|value| value.to_str()).unwrap_or_default(),
+        "size": size,
+    }))
 }
 
 /// Build an evaluation preview for the Agent. It queries the school but never
@@ -1470,9 +1966,10 @@ async fn school_query(
     window: WebviewWindow,
     query: school::Query,
     cache_key: Option<String>,
+    force: bool,
 ) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    run_school_query(&app, query, cache_key.as_deref()).await
+    run_school_query(&app, query, cache_key.as_deref(), force).await
 }
 
 #[tauri::command]
@@ -1547,11 +2044,7 @@ fn school_cancel_evaluations(
 }
 
 pub(crate) fn providers_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_data_dir()
-        .map_err(|_| "无法定位模型配置目录")?
-        .join("model-profiles.enc"))
+    storage::path(app, "state/model-profiles.enc")
 }
 #[tauri::command]
 fn list_model_providers(
@@ -1770,12 +2263,7 @@ async fn provider_balance(
     providers::balance(&base_url, &key).await
 }
 fn mcp_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .home_dir()
-        .map_err(|_| "无法定位 MCP 配置目录")?
-        .join(".xjtu-launcher")
-        .join("mcp.json"))
+    storage::path(app, "state/mcp.json")
 }
 #[tauri::command]
 fn list_mcp_servers(
@@ -2207,6 +2695,19 @@ fn expose_tools(window: WebviewWindow) -> Result<Vec<expose::Tool>, String> {
     Ok(expose::tools())
 }
 
+/// A busy port makes the endpoint fall back to a free one; save that port so
+/// the next start tries it first instead of stumbling on the same conflict.
+fn remember_expose_port(app: &tauri::AppHandle, port: u16) {
+    let Ok(path) = config_path(app) else { return };
+    let Ok(mut config) = config::load(&path) else {
+        return;
+    };
+    if config.mcp_server_port != port {
+        config.mcp_server_port = port;
+        let _ = config::save(&path, &config);
+    }
+}
+
 #[tauri::command]
 fn expose_set_enabled(
     app: tauri::AppHandle,
@@ -2217,11 +2718,14 @@ fn expose_set_enabled(
     main_only(&window)?;
     let port = config::load(&config_path(&app)?)?.mcp_server_port;
     let state = state.inner();
-    if enabled {
-        expose::start(&app, state, port)?;
+    let port = if enabled {
+        let port = expose::start(&app, state, port)?;
+        remember_expose_port(&app, port);
+        port
     } else {
         expose::stop(state);
-    }
+        port
+    };
     Ok(state.status(enabled, port))
 }
 
@@ -2246,7 +2750,10 @@ fn expose_set_port(
     let previous = state.running_port();
     expose::stop(state);
     match expose::start(&app, state, port) {
-        Ok(()) => Ok(state.status(true, port)),
+        Ok(port) => {
+            remember_expose_port(&app, port);
+            Ok(state.status(true, port))
+        }
         Err(error) => {
             if let Some(previous) = previous {
                 let _ = expose::start(&app, state, previous);
@@ -2262,8 +2769,81 @@ fn expose_set_port(
 #[tauri::command]
 async fn expose_probe(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
     main_only(&window)?;
-    run_school_query(&app, school::Query::Terms, None).await?;
+    run_school_query(&app, school::Query::Terms, None, false).await?;
     Ok(())
+}
+
+/// Measuring, copying and removing files can take seconds on a large library,
+/// so every storage command runs off the UI thread.
+async fn run_storage<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|_| "存储任务失败".to_string())?
+}
+
+#[tauri::command]
+async fn storage_status(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+) -> Result<storage::Status, String> {
+    main_only(&window)?;
+    run_storage(move || storage::status(&app)).await
+}
+
+/// Validates a candidate folder and reports exactly what a migration would
+/// move, so the confirmation step can show sizes before anything is touched.
+#[tauri::command]
+async fn storage_preview(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    target: String,
+) -> Result<storage::Preview, String> {
+    main_only(&window)?;
+    run_storage(move || storage::preview(&app, &target)).await
+}
+
+#[tauri::command]
+async fn storage_migrate(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    state: tauri::State<'_, AppState>,
+    target: String,
+) -> Result<storage::Report, String> {
+    main_only(&window)?;
+    let _guard = state.storage_lock.lock().await;
+    run_storage(move || storage::migrate(&app, &target)).await
+}
+
+#[tauri::command]
+fn storage_reveal(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    main_only(&window)?;
+    app.opener()
+        .open_path(storage::file_root(&app)?.to_string_lossy(), None::<&str>)
+        .map_err(|_| "无法打开文件文件夹".into())
+}
+
+/// Turns a chosen path into the `~/...` form the interface shows, so a user
+/// name never appears on screen.
+#[tauri::command]
+fn storage_display_path(app: tauri::AppHandle, path: String) -> String {
+    storage::display_for(&app, &path)
+}
+
+/// Default location for a save dialog. The backend owns the folder so a page
+/// cannot invent a path outside the data folder.
+#[tauri::command]
+fn storage_download_path(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    name: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    Ok(storage::download_target(&app, &name)?
+        .to_string_lossy()
+        .into_owned())
 }
 
 pub fn run() {
@@ -2273,7 +2853,11 @@ pub fn run() {
         .manage(updates::State::default())
         .manage(expose::State::default())
         .setup(|app| {
-            vault::initialize(app.path().home_dir()?.join(".xjtu-launcher"))?;
+            vault::initialize(storage::home(app.handle())?)?;
+            // Moves the agent data and MCP config older builds wrote to
+            // ~/.xjtu-launcher into the single data folder; the credentials
+            // file next to them stays where the convention says it lives.
+            let _ = storage::adopt_legacy(app.handle());
             campus_browser::install_menu(app.handle())?;
             pet_desktop::initialize(app.handle())?;
             // Resume the endpoint only if the user left it on; a bind failure is
@@ -2281,7 +2865,11 @@ pub fn run() {
             if let Ok(config) = config_path(app.handle()).and_then(|path| config::load(&path)) {
                 if config.mcp_server_enabled {
                     let state = app.state::<expose::State>();
-                    let _ = expose::start(app.handle(), state.inner(), config.mcp_server_port);
+                    if let Ok(port) =
+                        expose::start(app.handle(), state.inner(), config.mcp_server_port)
+                    {
+                        remember_expose_port(app.handle(), port);
+                    }
                 }
             }
             Ok(())
@@ -2315,6 +2903,7 @@ pub fn run() {
             updates::install_app_update,
             updates::restart_after_update,
             school_catalog,
+            entry_icons,
             school_query,
             campus_notices,
             cache::cache_read,
@@ -2326,6 +2915,26 @@ pub fn run() {
             pet_desktop::pet_preview,
             lms_open_file,
             lms_save_file,
+            lms_replay_videos,
+            save_export,
+            capture_store::capture_session_load,
+            capture_store::capture_session_save,
+            capture_store::capture_page_add,
+            capture_store::capture_pages_read,
+            capture_store::capture_pages_delete,
+            capture_store::capture_pages_order,
+            capture_store::capture_session_clear,
+            workbench_overview,
+            workbench_folder,
+            workbench_create_folder,
+            workbench_import,
+            workbench_update,
+            workbench_delete,
+            workbench_open,
+            workbench_reveal,
+            workbench_sync,
+            workbench_submit_preview,
+            workbench_submit,
             school_prepare_evaluations,
             school_submit_evaluations,
             school_cancel_evaluations,
@@ -2400,7 +3009,13 @@ pub fn run() {
             refresh_library_session,
             refresh_venue_session,
             check_network,
-            open_external
+            open_external,
+            storage_status,
+            storage_preview,
+            storage_migrate,
+            storage_reveal,
+            storage_display_path,
+            storage_download_path
         ])
         .run(tauri::generate_context!())
         .expect("无法启动 XJTU Launcher");

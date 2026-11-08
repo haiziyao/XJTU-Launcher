@@ -202,25 +202,34 @@ pub fn builtin() -> Vec<ToolDef> {
         ),
         campus(
             "campus_lms",
-            "思源学堂（只读）。action=courses 列出课程；activities 列出某门课程的活动（需要 course）；activity 查看活动详情（需要 activity）；submissions 查看某次作业的我的提交记录（需要 activity）。",
+            "思源学堂（只读）。action=overview 返回本学期的待办作业与课程资料（含可下载附件的 upload 编号）；courses 列出课程；activities 列出某门课程的活动（需要 course）；activity 查看活动详情（需要 activity）；submissions 查看某次作业的我的提交记录（需要 activity）。",
             json!({
-                "action": choice(&["courses", "activities", "activity", "submissions"], "要查询的内容"),
+                "action": choice(&["overview", "courses", "activities", "activity", "submissions"], "要查询的内容"),
                 "course": { "type": "integer", "minimum": 1, "description": "activities 必填，课程编号，来自 action=courses" },
                 "activity": { "type": "integer", "minimum": 1, "description": "activity / submissions 必填，活动编号，来自 action=activities" }
             }),
             &["action"],
         ),
         campus(
+            "campus_lms_download",
+            "把思源学堂的课程资料附件下载到本机可见的下载文件夹（默认 `~/Documents/xjtu-launcher-file/download`，可在应用设置中改位置），重名时自动加序号，不会覆盖已有文件。upload 与 name 来自 campus_lms 的 action=overview 返回的 files[].file。只下载用户明确要求、且本人有权访问的附件；不要批量抓取课程内容。",
+            json!({
+                "upload": { "type": "integer", "minimum": 1, "description": "附件编号，来自 campus_lms 的 action=overview 中 files[].file.id" },
+                "name": { "type": "string", "description": "保存用的文件名，来自同一个 file.name；只取文件名，不带路径" }
+            }),
+            &["upload", "name"],
+        ),
+        campus(
             "campus_lms_submit",
-            "提交思源学堂作业（写操作）。默认只返回预览，不上传也不提交；预览中核对课程、作业和文件，并向用户复述确认后，用户明确要求提交时才带 confirm=true 再次调用。文件必须是用户明确指定的本地绝对路径，仅支持常见文档、代码和媒体类型，最大 100 MB/个、200 MB/次。不要重试结果不明的提交。",
+            "提交思源学堂作业（写操作）。默认只返回预览，不上传也不提交；预览中核对课程、作业、文件与截止状态，并向用户复述确认后，用户明确要求提交时才带 confirm=true 再次调用。可以不选文件、只提交 comment 文字；文件最多 10 个，单个 100 MB、合计 200 MB，仅支持常见文档、代码和媒体类型。文件必须是用户明确指定的本地绝对路径。已截止且不允许补交的作业会在上传前被拒绝。不要重试结果不明的提交。",
             json!({
                 "activity": { "type": "integer", "minimum": 1, "description": "作业活动编号，来自 campus_lms 的 action=activities" },
-                "comment": { "type": "string", "description": "文字答案或作业说明，可留空" },
+                "comment": { "type": "string", "description": "文字答案或作业说明；不传文件时必须提供" },
                 "files": {
                     "type": "array",
                     "maxItems": 10,
                     "items": { "type": "string" },
-                    "description": "要上传的本地文件绝对路径，只用用户明确指定且已核对的文件"
+                    "description": "要上传的本地文件绝对路径，只用用户明确指定且已核对的文件；可以留空只交文字"
                 },
                 "draft": { "type": "boolean", "description": "true 保存为草稿；false 正式提交，默认 false" },
                 "confirm": { "type": "boolean", "description": "默认 false，只预览；用户明确要求提交且预览无误时设为 true" }
@@ -486,6 +495,7 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
             other => return Err(invalid_action("campus_notices", other, "channels、list")),
         },
         "campus_lms" => match action_of(args, "").as_str() {
+            "overview" => school::Query::LmsOverview,
             "courses" => school::Query::LmsCourses,
             "activities" => school::Query::LmsActivities {
                 course: id(args, "course")?,
@@ -500,7 +510,7 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
                 return Err(invalid_action(
                     "campus_lms",
                     other,
-                    "courses、activities、activity、submissions",
+                    "overview、courses、activities、activity、submissions",
                 ))
             }
         },
@@ -620,7 +630,7 @@ impl ToolDef {
                     }
                     "list" => {
                         let query = query_for(name, &args)?;
-                        let data = crate::run_school_query(app, query, None).await?;
+                        let data = crate::run_school_query(app, query, None, true).await?;
                         Ok(truncate(
                             serde_json::to_string(&data).map_err(|_| "无法序列化查询结果")?,
                         ))
@@ -648,6 +658,14 @@ impl ToolDef {
                         serde_json::to_string_pretty(&data).map_err(|_| "无法序列化评教结果")?,
                     ))
                 }
+                "campus_lms_download" => {
+                    let upload = id(&args, "upload")?;
+                    let name = required(&args, "name")?;
+                    let data = crate::download_lms_file(app, upload, name).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化下载结果")?,
+                    ))
+                }
                 "campus_lms_submit" => {
                     let request = school::lms::Homework {
                         activity: id(&args, "activity")?,
@@ -666,7 +684,7 @@ impl ToolDef {
                 }
                 other => {
                     let query = query_for(other, &args)?;
-                    let data = crate::run_school_query(app, query, None).await?;
+                    let data = crate::run_school_query(app, query, None, true).await?;
                     Ok(truncate(
                         serde_json::to_string(&data).map_err(|_| "无法序列化查询结果")?,
                     ))
@@ -845,6 +863,10 @@ mod tests {
         ));
         assert!(query_for("campus_lms", &json!({"action": "activities", "course": 0})).is_err());
         assert!(matches!(
+            query_for("campus_lms", &json!({"action": "overview"})).unwrap(),
+            school::Query::LmsOverview
+        ));
+        assert!(matches!(
             query_for("campus_library", &json!({"action": "seats", "area": "A"})).unwrap(),
             school::Query::LibrarySeats { .. }
         ));
@@ -880,6 +902,7 @@ mod tests {
                 "campus_evaluations_submit",
                 "campus_notices",
                 "campus_lms",
+                "campus_lms_download",
                 "campus_lms_submit",
                 "campus_library",
                 "campus_venues",

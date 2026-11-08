@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="界面方向示意图">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff2ec"/>
+      <stop offset="1" stop-color="#fdeef4"/>
+    </linearGradient>
+    <linearGradient id="v" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity=".82"/>
+      <stop offset="1" stop-color="#a68bff" stop-opacity=".82"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" fill="url(#bg)"/>
+  <g transform="translate(320 200)">
+    <rect x="-168" y="-96" width="188" height="188" rx="26" fill="url(#v)"/>
+    <rect x="-44" y="-118" width="188" height="188" rx="26" fill="#14a08a" opacity=".72"/>
+    <rect x="36" y="6" width="150" height="150" rx="26" fill="#e8503a" opacity=".68"/>
+    <circle cx="-8" cy="-6" r="46" fill="#fff" opacity=".5"/>
+    <circle cx="-8" cy="-6" r="18" fill="#fff" opacity=".85"/>
+    <rect x="-160" y="118" width="96" height="10" rx="5" fill="#e8503a" opacity=".22"/>
+    <rect x="-160" y="136" width="58" height="10" rx="5" fill="#e8503a" opacity=".14"/>
+  </g>
+</svg>

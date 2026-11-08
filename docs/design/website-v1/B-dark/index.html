@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 B · 深色产品 · XJTU Launcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="#">
+      <img src="../../../../website/assets/icon.png" width="28" height="28" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav>
+      <a href="#features">功能</a>
+      <a href="#download">下载</a>
+      <a href="#install">安装</a>
+      <a class="ghost" href="#">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="aurora a1"></div>
+    <div class="aurora a2"></div>
+    <div class="aurora a3"></div>
+    <div class="gridlines"></div>
+    <div class="wrap hero-inner">
+      <span class="pill"><i></i>v0.5.2 · 开源 · MIT</span>
+      <h1>把校园系统<br><span class="grad">收进一个窗口</span></h1>
+      <p class="lede">课表、成绩、考勤、校园卡、思源学堂、评教和图书馆。Rust 直接对接校园协议，凭据只留在你的电脑上。</p>
+      <div class="actions">
+        <a class="btn gradient" href="#download">下载 macOS 版</a>
+        <a class="btn line" href="#download">其他平台</a>
+      </div>
+      <p class="meta">安装包约 23.1 MB · macOS 与 Windows</p>
+      <figure class="hero-shot">
+        <img src="../../../../website/assets/home.jpg" width="1280" height="870" alt="XJTU Launcher 主页">
+      </figure>
+    </div>
+  </section>
+
+  <section class="light" id="features">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">为什么是原生客户端</p>
+        <h2>不是网页套壳。<br>每一个请求都直接到校园系统。</h2>
+      </div>
+      <div class="cards">
+        <article>
+          <span class="icon" style="--tint:#e8eeff;--c:#2f5ce0"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>
+          <h3>一处登录</h3>
+          <p>密码、短信验证码、扫码三种方式；多账号保存，WebVPN 自动回退，凭据只存在本机。</p>
+        </article>
+        <article>
+          <span class="icon" style="--tint:#e7f7ef;--c:#1f9d63"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+          <h3>课表与成绩</h3>
+          <p>今日课程与完整学期课表，按周切换；成绩、考试、考勤、校园卡、空闲教室一页查完。</p>
+        </article>
+        <article>
+          <span class="icon" style="--tint:#fff1e6;--c:#e07a24"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/></svg></span>
+          <h3>思源学堂</h3>
+          <p>作业、学习资料、课程回放、讨论按类型切换；附件可另存，录播课直接取回放地址。</p>
+        </article>
+        <article>
+          <span class="icon" style="--tint:#f0eaff;--c:#7048d8"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.4"/></svg></span>
+          <h3>Agent</h3>
+          <p>用自然语言查询校园数据；改课表、交作业、评教都会先给出预览，你同意后才执行。</p>
+        </article>
+        <article>
+          <span class="icon" style="--tint:#e6f6fb;--c:#1b86ad"><svg viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg></span>
+          <h3>本机 MCP</h3>
+          <p>打开 MCP 模式后，Claude Code 等编程 Agent 可以在本机直接调用同一批校园工具。</p>
+        </article>
+        <article>
+          <span class="icon" style="--tint:#ffe9ec;--c:#d63a52"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></span>
+          <h3>插件与更新</h3>
+          <p>课表、畅行校园、主页主题以插件形式出现；应用更新带签名校验，可更换镜像源。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="showcase">
+    <div class="wrap showcase-grid">
+      <figure>
+        <img src="../../../../website/assets/campus.jpg" width="1280" height="870" alt="畅行校园">
+      </figure>
+      <div>
+        <p class="kicker">畅行校园</p>
+        <h2>今天上什么、<br>还有什么没交</h2>
+        <p>打开就知道今天几节课、哪个作业快截止、考勤有没有异常。切换账号时旧窗口立即关闭，缓存按账号隔离。</p>
+        <ul>
+          <li>原生 Rust 请求，不内嵌浏览器登录页</li>
+          <li>评教、作业提交前必须预览并确认</li>
+          <li>写操作结果不明时不自动重试</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="light" id="download">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">下载</p>
+        <h2>选择你的平台</h2>
+        <p class="sub">安装包同时发布在 GitHub Release。没有代码签名证书，首次打开需要手动允许一次。</p>
+      </div>
+      <div class="download-panel">
+        <div class="row">
+          <div class="plat"><strong>macOS</strong><span>Apple 芯片 · aarch64</span></div>
+          <code>XJTU.Launcher_0.5.2_aarch64.dmg</code>
+          <span class="size">23.1 MB</span>
+          <a class="btn mini" href="#">下载</a>
+        </div>
+        <div class="row">
+          <div class="plat"><strong>macOS</strong><span>Intel · x86_64</span></div>
+          <code>XJTU.Launcher_0.5.2_x64.dmg</code>
+          <span class="size">23.9 MB</span>
+          <a class="btn mini" href="#">下载</a>
+        </div>
+        <div class="row">
+          <div class="plat"><strong>Windows</strong><span>10 / 11 · x64</span></div>
+          <code>XJTU.Launcher_0.5.2_x64-setup.exe</code>
+          <span class="size">20.8 MB</span>
+          <a class="btn mini" href="#">下载</a>
+        </div>
+      </div>
+      <p class="fine">SHA256 与文件大小随版本更新；请只从本站或 GitHub Release 下载。</p>
+    </div>
+  </section>
+
+  <section class="light install-sec" id="install">
+    <div class="wrap">
+      <div class="head"><p class="kicker">安装</p><h2>第一次打开</h2></div>
+      <div class="install">
+        <div class="step-card">
+          <h3>macOS</h3>
+          <ol>
+            <li>打开 DMG，把 XJTU Launcher 拖进「应用程序」。</li>
+            <li>提示「无法验证开发者」时，去「系统设置 → 隐私与安全性」点「仍要打开」。</li>
+            <li>每个新版本确认一次。</li>
+          </ol>
+        </div>
+        <div class="step-card">
+          <h3>Windows</h3>
+          <ol>
+            <li>运行 setup.exe，按向导安装。</li>
+            <li>出现「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。</li>
+            <li>从开始菜单启动。</li>
+          </ol>
+        </div>
+      </div>
+      <p class="fine">系统提示不代表安装包损坏。可以用官网公布的 SHA256 核对文件后再打开。</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div class="fbrand">
+      <img src="../../../../website/assets/icon.png" width="32" height="32" alt="">
+      <span>XJTU Launcher</span>
+    </div>
+    <p>MIT License · GitHub<br>学生个人项目，与西安交通大学官方无关。凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<script>
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}, { threshold: 0.12 });
+document.querySelectorAll('.head, .cards article, .showcase-grid > *, .download-panel, .step-card').forEach((el) => {
+  el.classList.add('reveal'); io.observe(el);
+});
+</script>
+</body>
+</html>

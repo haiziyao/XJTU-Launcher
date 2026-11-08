@@ -1,6 +1,6 @@
 # 开发约定手册
 
-更新于 2026-10-28。本文件是项目规则的**唯一来源**；根目录 [AGENTS.md](../AGENTS.md) 只保留给 coding agent 的硬约束摘要。历史讨论在 [archive/](archive/)，不能用旧记录覆盖本文件。用户当次明确要求优先于历史文档；已授权的工作继续完成，不反复确认。
+更新于 2026-11-02。本文件是项目规则的**唯一来源**；根目录 [AGENTS.md](../AGENTS.md) 只保留给 coding agent 的硬约束摘要。历史讨论在 [archive/](archive/)，不能用旧记录覆盖本文件。用户当次明确要求优先于历史文档；已授权的工作继续完成，不反复确认。
 
 ## 1. 产品方向
 
@@ -18,6 +18,7 @@
    - `docs/design/plugin-market-v2/` 已获准并实施（市场三分区、服务端地址确认编辑、软件更新）。
    - `docs/design/campus-agent-v1/` 的 Agent 与评教页面**未获准**；旧稿只可借鉴骨架，视觉细节须重新确认。
    - 最小化桌宠的设计**未获准**，不得按设想直接实现。
+   - `docs/design/campus-v0.6/`：范围与信息架构已确认（2026-10-30，方案 A 工作区），**视觉未获准**；参考图获批前不改校园前端。
 4. 保持简约的桌面观感与简洁信息密度，使用系统原生标题栏。不要添加无关页脚、学校名、版本号、数量统计、状态灯、宣传卡片或占位演示对话。
 5. 侧栏开关位于分隔线垂直中部，使用正式图标。展开宽度可拖动，向内侧拖过最窄宽度自动收起；收起宽度 macOS 为 **76px**（刚好容纳左上角窗口按钮），其他平台为 **56px**。
 6. 默认以文字呈现资料，用户操作后再进入编辑态。
@@ -29,6 +30,11 @@
 ## 3. 数据、账号与安全
 
 - 凭据按用户决定保存在 `~/.xjtu-launcher/auth.json`，包含账号、可选密码、会话与模型 API Key。日常读写**不用**系统钥匙串；旧凭据只用于一次性迁移，不恢复历史加密存储方案。保存密码是可选项，接口不回读已存密码。
+- 其余应用数据分两处，布局对齐 Codex 的 `~/.codex`：
+  - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`、`agent/`、`resources/`（用户自备的入口图标等资源，见 [自定义入口图标](ICONS.md)）与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
+  - `xjtu-launcher-file`（可见，默认 `~/Documents/xjtu-launcher-file`，可在「应用设置 → 存储」改位置）：`workspace/` 放资料库，`download/` 放下载；用户自己的文件只放在这里。
+  - 文件位置记录在 `~/.xjtu-launcher/storage.json`，页面保存配置时无法把它改回去。迁移必须先复制并核对数量与字节、记录新位置，最后才删除旧文件；失败时保留旧数据并撤销副本。
+  - 界面显示任何路径都写成 `~/...`，不得出现用户主目录中的账号名。`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不参与迁移。
 - 配置及凭据原子写入。新字段必须提供默认值，保持既有用户偏好；读取失败时报告错误并保留原文件。
 - 切换 / 删除账号、重新认证及退出时，关闭旧校园窗口并隔离旧请求，保留账号代次（会话代次）检查。缓存与异步返回必须关联账号及会话代次。
 - **不把密码、Cookie、API Key、令牌或私钥写入日志、截图和仓库**。测试优先使用合成数据；截取 `cache/`、`auth.json` 相关内容时同样脱敏。
@@ -53,14 +59,14 @@
 - 当前远端包只支持**声明式导航**；任意执行代码的插件运行时需要独立设计，不能借下载清单宣称已实现。校园 Rust 适配随 App 更新。
 - 应用更新与插件更新来源独立；发布私钥只进入 GitHub Secret。安装前检查正在执行的校园、账号和插件任务，未来 Agent 任务也要接入。
 - 正式插件服务器、应用更新端点和发布公钥尚未部署。**不要**写入设计稿示例域名、假版本或伪造可用插件。
-- P0（2026-10-25）：应用更新镜像暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/xjtu-launcher/latest.json`，客户端不额外提示用户。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](P0.md)。
+- P0（2026-10-25，2026-11-08 更新地址）：应用更新源暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/latest.json`（经 OSS 下载网关读私有 Bucket），客户端不额外提示用户。0.5.x 的旧地址 `/xjtu-launcher/latest.json` 由 nginx 转发到同一网关。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](P0.md)。
 
 ## 6. 分支、提交与发布
 
-- `main` 为 GitHub 默认分支，随发布更新为已验证的代码、面向用户的 README 与开发文档；当前最新发布版为 **0.5.2**，`main` 应与它一致。
-- 日常开发在从发布提交拉出的 `codex/<主题>` 分支进行（当前 `codex/v0.5.2`），旧分支保留用于追溯。`dev` 停止作为独立主线，发布时与 `main` 一起快进。
+- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；`tested-label` 表示测试人员已在 `dev` 验证并给 PR 加了 `tested` 标签。当前最新发布版为 **0.6.0**，`main` 应与它一致。
+- `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），不再使用 `codex/*`。分支先合入 `dev`，由测试人员验证；验证通过后只能由 `dev` 创建 PR 合入 `main`。Git 不允许 `dev` 与 `dev/v0.6.0` 同时存在，所以版本分支用连字符。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
-- 推送分支、打标签与发布 Release **按用户当次明确要求执行**；2026-10-25 的用户要求已包含推送、发布与撤回 Release，同一发布周期内可继续操作，不擅自扩大到其他仓库或服务，也不变更远端分支保护。
+- 推送功能分支与合入 `dev` 可按当次任务执行；合入 `main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](RELEASING.md)。
 - GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`，本仓库提交身份为 `haiziyao <1754203003@qq.com>`。使用仓库级 `git config --local`，不改全局身份和 SSH 密钥，不要覆盖原密钥。
 - 升版本时同时修改 `package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` / `Cargo.lock`；发布流程见 [RELEASING.md](RELEASING.md)。
 - **每次发版都必须写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，写入新增、修复、变更、验证程度、已知限制与下载方式，并登记到 [版本记录索引](../docs/releases/README.md)。发布前先写，发布后补实际验证结果；撤回的版本保留记录并写明原因与替代版本。

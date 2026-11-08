@@ -122,3 +122,96 @@ export function applyAccent(value: unknown): void {
   const style = document.documentElement.style;
   for (const [name, token] of Object.entries(accentTokens(value))) style.setProperty(name, token);
 }
+
+/**
+ * Wallpaper display presets. A preset is a whole set of values, never a single
+ * number: the white veil over the picture, the panel fill and the frosted
+ * controls move together so every preset keeps its text readable. Only the
+ * panel opacity is user-editable; the veil stays inside the preset.
+ */
+export type WallpaperDisplay = 'clear' | 'balanced' | 'vivid';
+
+export interface WallpaperMode {
+  id: WallpaperDisplay;
+  label: string;
+  hint: string;
+  /** Default panel opacity, percent. */
+  panel: number;
+  /** White veil over the wallpaper: [top, bottom] of the gradient, percent. */
+  scrim: [number, number];
+}
+
+export const WALLPAPER_MODES: WallpaperMode[] = [
+  { id: 'clear', label: '清晰', hint: '壁纸更淡，文字最稳', panel: 92, scrim: [48, 62] },
+  { id: 'balanced', label: '均衡', hint: '默认，壁纸隐约可见', panel: 72, scrim: [20, 38] },
+  { id: 'vivid', label: '透亮', hint: '壁纸更明显，面板更透', panel: 52, scrim: [8, 16] },
+];
+
+export function normalizeWallpaperDisplay(value: unknown): WallpaperDisplay {
+  const id = typeof value === 'string' ? value : '';
+  return (WALLPAPER_MODES.find((mode) => mode.id === id)?.id ?? 'balanced') as WallpaperDisplay;
+}
+
+export function wallpaperMode(value: unknown): WallpaperMode {
+  const id = normalizeWallpaperDisplay(value);
+  return WALLPAPER_MODES.find((mode) => mode.id === id) as WallpaperMode;
+}
+
+/** The panel opacity to use for a preset, clamped to what the slider allows. */
+export function wallpaperPanelOpacity(
+  panels: Record<string, number> | undefined,
+  mode: WallpaperMode,
+): number {
+  const raw = panels?.[mode.id];
+  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : mode.panel;
+  return Math.min(100, Math.max(40, Math.round(value)));
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value));
+}
+
+/**
+ * CSS tokens for the wallpaper shell. Text tokens are re-derived against the
+ * worst case a panel can sit on — a black picture under the veil and the panel —
+ * so secondary text keeps its contrast even behind a dark wallpaper. The targets
+ * are the AA text floors, not the 7:1 used on plain white: past a certain panel
+ * transparency no darker grey exists, and pure black must still satisfy them.
+ */
+export function wallpaperTokens(
+  mode: WallpaperMode,
+  panelPercent: number,
+  accentValue: unknown,
+): Record<string, string> {
+  const accent = normalizeAccent(accentValue);
+  const panel = clamp(panelPercent, 40, 100) / 100;
+  const veil = (mode.scrim[0] + mode.scrim[1]) / 200;
+  const worst = panel + veil * (1 - panel);
+  const worstCase = `#${[worst, worst, worst]
+    .map((v) =>
+      Math.round(v * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+  return {
+    '--wp-scrim-top': rgba('#ffffff', mode.scrim[0] / 100),
+    '--wp-scrim-bottom': rgba('#ffffff', mode.scrim[1] / 100),
+    '--panel': rgba('#ffffff', panel),
+    '--control-bg': rgba('#ffffff', clamp(panel - 0.17, 0.35, 1)),
+    '--control-bg-subtle': rgba('#ffffff', clamp(panel - 0.32, 0.25, 1)),
+    '--sidebar-bg': rgba('#f1f2f4', clamp(panel - 0.12, 0.4, 1)),
+    // Never lighter than the plain-page token: first tune for white, then darken
+    // further if the translucent panel could sit on a dark picture.
+    '--text-secondary': ensureContrast(
+      ensureContrast(mix(MUTED_BASE, accent, 0.18), '#ffffff', 7),
+      worstCase,
+      4.5,
+    ),
+    '--text-tertiary': ensureContrast(
+      ensureContrast(mix(FAINT_BASE, accent, 0.2), '#ffffff', 5),
+      worstCase,
+      3.5,
+    ),
+  };
+}

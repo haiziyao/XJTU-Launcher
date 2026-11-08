@@ -57,6 +57,7 @@ const TOOL_LABELS: Record<string, string> = {
   campus_evaluations_submit: '提交评教',
   campus_notices: '校园通知',
   campus_lms: '思源学堂',
+  campus_lms_download: '下载课程资料',
   campus_lms_submit: '提交作业',
   campus_library: '图书馆',
   campus_venues: '场馆查询',
@@ -78,6 +79,7 @@ const ACTION_LABELS: Record<string, Record<string, string>> = {
   campus_evaluation: { list: '查询评教', preview: '生成评教预览' },
   campus_notices: { channels: '查询通知栏目', list: '读取校园通知' },
   campus_lms: {
+    overview: '查询待办与课程资料',
     courses: '查询思源学堂课程',
     activities: '查询课程活动',
     activity: '查看活动详情',

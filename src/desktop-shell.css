@@ -356,11 +356,16 @@
 .desktop-wallpaper img {
   object-fit: cover;
 }
+/* The veil is part of the wallpaper preset, which also sets the panel and
+   control opacities; see wallpaperTokens in theme.ts. */
 .desktop-wallpaper::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.38));
+  background: linear-gradient(
+    var(--wp-scrim-top, rgba(255, 255, 255, 0.2)),
+    var(--wp-scrim-bottom, rgba(255, 255, 255, 0.38))
+  );
 }
 .desktop-content {
   position: relative;
@@ -376,6 +381,9 @@
 }
 .desktop-content-inner.is-home {
   max-width: 1120px;
+}
+.desktop-content-inner.is-wide {
+  max-width: none;
 }
 .route-content {
   min-width: 0;
@@ -408,6 +416,40 @@
 .has-wallpaper .desktop-sidebar {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
+}
+
+/* 畅行校园 builds its own surfaces from --surface instead of --panel, so retint
+   the token for that subtree rather than restyling every campus page. Panels and
+   lists then match the rest of the app; the fills are light enough that campus
+   text keeps the contrast it has on white. */
+.has-wallpaper .campus-workspace {
+  --surface: var(--panel);
+  --surface-subtle: rgba(255, 255, 255, 0.52);
+  --surface-sunken: rgba(255, 255, 255, 0.4);
+  --border: rgba(15, 23, 42, 0.1);
+}
+/* The section rail has no backing on a plain page; over a picture it needs one,
+   or the section labels sit directly on the wallpaper. */
+.has-wallpaper .campus-rail {
+  padding: 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+/* The indicator is inset to match the rail's padding; item offsetTop already
+   includes it, so the slide stays aligned. */
+.has-wallpaper .campus-rail .rail-indicator {
+  left: 8px;
+  right: 8px;
+  background: var(--accent-tint);
+}
+.has-wallpaper .campus-rail .rail-badge {
+  background: var(--control-bg);
+}
+.has-wallpaper .campus-rail .rail-item.active .rail-badge {
+  background: var(--accent-tint);
 }
 /* No backdrop blur here: inside a fading page it only appears after the fade ends. */
 .has-wallpaper .ui-card,
@@ -482,6 +524,41 @@
 }
 .mac-native .desktop-content-inner {
   padding-top: 40px;
+}
+/* Wallpaper preset switch: top-right of the content area, inside the drag strip
+   so it never covers a page's own actions. Only rendered when a wallpaper is set. */
+.wallpaper-switch {
+  position: absolute;
+  z-index: 4;
+  top: 4px;
+  right: 18px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+.wallpaper-switch:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.wallpaper-switch:active {
+  transform: scale(0.96);
+}
+.wallpaper-switch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* WebView2 draws classic, always-visible scrollbars; match the slim macOS look. */

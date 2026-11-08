@@ -199,96 +199,41 @@
   color: var(--text-tertiary);
   font-size: 12px;
 }
-.tool-panel {
-  margin-top: 2px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius);
-  background: var(--control-bg-subtle);
-  overflow: hidden;
-}
-.tool-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 10px 6px 12px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-}
-.tool-probe {
-  margin: 0 12px 8px;
-  padding: 6px 9px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-}
-.tool-probe.ok {
-  color: var(--success);
-  background: var(--success-soft);
-}
-.tool-probe.error {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-.tool-group-title {
-  margin: 0;
-  padding: 6px 12px 4px;
-  border-top: 1px solid var(--divider);
-  background: var(--control-sunken);
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 500;
-}
-.tool-row {
-  display: flex;
+/* MCP ability list: one rounded square per kind of change a tool makes,
+   explained once in the first group's header like a chart legend. */
+.tool-legend {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 12px;
-  border-top: 1px solid var(--divider);
-  cursor: pointer;
-}
-.tool-row:hover {
-  background: var(--surface-hover);
-}
-.tool-row input[type='checkbox'] {
-  flex-shrink: 0;
-  margin: 0;
-  accent-color: var(--accent);
-}
-.tool-copy {
-  flex: 1;
-  min-width: 0;
-}
-.tool-copy code {
-  display: block;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-}
-.tool-copy small {
-  display: block;
-  margin-top: 1px;
   color: var(--text-tertiary);
   font-size: 11.5px;
-  line-height: 1.45;
 }
-.tool-state {
-  flex-shrink: 0;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  white-space: nowrap;
+.tool-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.tool-state.ok {
-  color: var(--success);
-  background: var(--success-soft);
+.tool-access {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.tool-state.warn {
-  color: #8f4c0c;
-  background: #fdf1e5;
+.tool-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
 }
-.tool-state.muted {
-  color: var(--text-tertiary);
-  background: var(--control-sunken);
+.tool-mark.read {
+  background: var(--text-tertiary);
+}
+.tool-mark.write {
+  background: #d9822b;
+}
+.tool-mark.update {
+  background: var(--accent);
+}
+.tool-mark.delete {
+  background: var(--danger);
 }
 
 /* Inline editable text */
@@ -534,44 +479,37 @@
 }
 
 /* Timetable */
+/* Week stepper: the same sunken group SegmentedTabs uses. It used to be a
+   bordered pill holding a bordered select, which read as a box inside a box next
+   to the borderless header buttons. */
 .week-control {
   display: flex;
   align-items: center;
   gap: 2px;
   height: 30px;
-  padding: 0 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-subtle);
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--control-sunken);
 }
-/* Week picker: the native select chrome is opaque and taller than the icon
-   buttons beside it, so draw it with the shared control tokens instead. */
-.week-select {
-  appearance: none;
-  height: 26px;
-  padding: 0 24px 0 9px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--control-bg);
-  background-image: var(--chevron-down);
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 500;
+/* Week picker: an in-page menu rather than a native select. The native popup
+   opens a separate system window and takes a noticeable moment to show and
+   dismiss, which read as lag; this list paints with the page. `min-width` keeps
+   the group from shifting when 9 becomes 10. */
+.week-control .week-picker {
+  display: flex;
+  height: 24px;
+}
+.week-control .menu-field-value {
+  min-width: 76px;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
   font-variant-numeric: tabular-nums;
-  outline: none;
-  box-shadow: var(--shadow-xs);
-  transition:
-    background-color var(--duration-fast) ease,
-    border-color var(--duration-fast) ease;
 }
-.week-select:hover {
-  background-color: var(--accent-wash);
-}
-.week-select:focus-visible {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
+.week-control .menu-field-menu {
+  left: auto;
+  right: 0;
+  min-width: 104px;
 }
 .schedule-scroll {
   overflow-x: auto;

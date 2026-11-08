@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::Path};
+use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -9,6 +9,10 @@ pub struct AppConfig {
     pub sidebar_collapsed: bool,
     #[serde(default = "default_sidebar_width")]
     pub sidebar_width: u32,
+    /// Whether the Agent entry shows in the sidebar. On by default; the
+    /// Agent settings page can turn it off without leaving the app.
+    #[serde(default = "default_true")]
+    pub agent_sidebar_visible: bool,
     #[serde(default)]
     pub nickname: String,
     #[serde(default)]
@@ -37,6 +41,9 @@ pub struct AppConfig {
     /// Tool ids pinned to the top of the 畅行校园 page, in display order.
     #[serde(default)]
     pub campus_pinned: Vec<String>,
+    /// 畅行校园 section rail collapsed to icons (LAYOUT §3.1).
+    #[serde(default)]
+    pub campus_rail_collapsed: bool,
     /// Clock style on the home page, managed by the 主页主题 plugin.
     #[serde(default = "default_home_clock")]
     pub home_clock: String,
@@ -76,6 +83,14 @@ pub struct AppConfig {
     /// Give each page-level tab its own rounded backing.
     #[serde(default)]
     pub page_tab_surfaces: bool,
+    /// Wallpaper display preset: clear | balanced | vivid. Only meaningful while
+    /// a wallpaper is set; the plain page ignores it.
+    #[serde(default = "default_wallpaper_display")]
+    pub wallpaper_display: String,
+    /// Panel opacity (percent) the user chose for each wallpaper preset. A
+    /// missing mode falls back to that mode's default on the frontend.
+    #[serde(default = "default_wallpaper_panel")]
+    pub wallpaper_panel: BTreeMap<String, u8>,
     /// Optional HTTP(S) mirror of the update manifest; empty uses the endpoint
     /// compiled into this build. Plain HTTP is a P0 stopgap until the mirror
     /// gets a domain and certificate; see dev-docs/P0.md.
@@ -85,6 +100,19 @@ pub struct AppConfig {
 
 fn default_home_clock() -> String {
     "plain".into()
+}
+
+pub const WALLPAPER_MODES: [&str; 3] = ["clear", "balanced", "vivid"];
+
+fn default_wallpaper_display() -> String {
+    "balanced".into()
+}
+
+fn default_wallpaper_panel() -> BTreeMap<String, u8> {
+    [("clear", 92), ("balanced", 72), ("vivid", 52)]
+        .into_iter()
+        .map(|(mode, value)| (mode.to_string(), value))
+        .collect()
 }
 
 pub const HOME_SECTIONS: [&str; 6] = [
@@ -148,6 +176,7 @@ impl Default for AppConfig {
             version: 1,
             sidebar_collapsed: false,
             sidebar_width: default_sidebar_width(),
+            agent_sidebar_visible: true,
             nickname: String::new(),
             avatar: None,
             wallpaper: None,
@@ -169,6 +198,7 @@ impl Default for AppConfig {
             check_plugin_updates: true,
             check_app_updates: true,
             campus_pinned: Vec::new(),
+            campus_rail_collapsed: false,
             home_clock: default_home_clock(),
             home_sections: default_home_sections(),
             mcp_server_enabled: false,
@@ -182,6 +212,8 @@ impl Default for AppConfig {
             pet_sources: default_pet_sources(),
             pet_position: None,
             page_tab_surfaces: false,
+            wallpaper_display: default_wallpaper_display(),
+            wallpaper_panel: default_wallpaper_panel(),
             update_endpoint: String::new(),
         }
     }
@@ -263,6 +295,10 @@ impl AppConfig {
                 unique.len() != self.mcp_server_disabled_tools.len()
             }
             || !["plain", "bold", "mono", "card"].contains(&self.home_clock.as_str())
+            || !WALLPAPER_MODES.contains(&self.wallpaper_display.as_str())
+            || self.wallpaper_panel.iter().any(|(mode, value)| {
+                !WALLPAPER_MODES.contains(&mode.as_str()) || !(40..=100).contains(value)
+            })
             || self.home_sections.len() > HOME_SECTIONS.len()
             || self
                 .home_sections
@@ -413,6 +449,29 @@ mod tests {
         assert!(bad.validate().is_err());
         let bad = AppConfig {
             pet_sources: vec!["campus".into(), "campus".into()],
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn wallpaper_display_settings_default_and_reject_bad_values() {
+        let config = AppConfig::default();
+        config.validate().unwrap();
+        assert_eq!(config.wallpaper_display, "balanced");
+        assert_eq!(config.wallpaper_panel.get("balanced"), Some(&72));
+        let bad = AppConfig {
+            wallpaper_display: "unknown".into(),
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
+        let bad = AppConfig {
+            wallpaper_panel: [("vivid".to_string(), 10)].into_iter().collect(),
+            ..AppConfig::default()
+        };
+        assert!(bad.validate().is_err());
+        let bad = AppConfig {
+            wallpaper_panel: [("neon".to_string(), 80)].into_iter().collect(),
             ..AppConfig::default()
         };
         assert!(bad.validate().is_err());
