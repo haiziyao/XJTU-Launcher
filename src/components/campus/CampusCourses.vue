@@ -130,6 +130,7 @@ onMounted(() => void loadCourses());
           :options="termOptions"
           label="学期"
           placeholder="选择学期"
+          fit
           @update:model-value="changeTerm"
         />
       </template>

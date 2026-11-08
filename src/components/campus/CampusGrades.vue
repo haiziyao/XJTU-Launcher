@@ -162,6 +162,7 @@ onMounted(async () => {
           :options="termOptions"
           label="学期"
           placeholder="全部学期"
+          fit
           @update:model-value="changeTerm"
         />
         <MenuSelect
@@ -169,6 +170,7 @@ onMounted(async () => {
           :options="categoryOptions"
           label="课程性质"
           placeholder="全部性质"
+          fit
           @update:model-value="changeCategory"
         />
       </template>

@@ -15,6 +15,12 @@ const props = defineProps<{
   /** Inside a grouped control (e.g. the week stepper): no field shell of its own. */
   bare?: boolean;
   disabled?: boolean;
+  /**
+   * Keep the field as wide as its widest option instead of following the
+   * current value, so switching values never resizes it and no option is
+   * clipped in the menu.
+   */
+  fit?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 
@@ -26,6 +32,11 @@ const current = computed(
     props.placeholder ??
     '',
 );
+// Every label is rendered hidden next to the current one; the grid keeps the
+// widest of them, so digits and CJK are measured by the browser, not estimated.
+const sizerLabels = computed(() => [
+  ...new Set([props.placeholder ?? '', ...props.options.map((option) => option.label)]),
+]);
 function choose(value: string) {
   emit('update:modelValue', value);
   open.value = false;
@@ -55,7 +66,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutside, tru
         :disabled="disabled"
         @click="toggle"
       >
-        <span>{{ current }}</span>
+        <span class="menu-field-text">
+          <span class="menu-field-current">{{ current }}</span>
+          <span v-if="fit" class="menu-field-sizer" aria-hidden="true">
+            <span v-for="label in sizerLabels" :key="label">{{ label }}</span>
+          </span>
+        </span>
         <ChevronDown :size="14" />
       </button>
     </div>

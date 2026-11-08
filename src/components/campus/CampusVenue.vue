@@ -185,6 +185,7 @@ onMounted(() => void loadList());
           :options="venueOptions"
           label="场馆"
           placeholder="选择场馆"
+          fit
           @update:model-value="changeVenue"
         />
       </template>

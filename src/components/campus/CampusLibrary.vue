@@ -186,6 +186,7 @@ onMounted(loadFloors);
           :options="campusOptions"
           label="校区"
           placeholder="选择校区"
+          fit
           @update:model-value="changeCampus"
         />
         <MenuSelect
@@ -193,6 +194,7 @@ onMounted(loadFloors);
           :options="floorOptions"
           label="楼层"
           placeholder="选择楼层"
+          fit
           @update:model-value="changeFloor"
         />
       </template>

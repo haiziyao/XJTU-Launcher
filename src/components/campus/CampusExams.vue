@@ -123,6 +123,7 @@ onBeforeUnmount(() => clearInterval(timer));
           :options="termOptions"
           label="学期"
           placeholder="当前学期"
+          fit
           @update:model-value="changeTerm"
         />
       </template>

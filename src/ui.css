@@ -234,6 +234,23 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* All labels share one grid cell, so the trigger is as wide as the widest
+   option instead of resizing with the current value. */
+.menu-field-value .menu-field-text {
+  display: grid;
+  min-width: 0;
+}
+.menu-field-text > span {
+  grid-area: 1 / 1;
+}
+.menu-field-sizer {
+  display: grid;
+  visibility: hidden;
+}
+.menu-field-sizer > span {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
 .menu-field-value svg {
   flex-shrink: 0;
   color: var(--text-tertiary);
