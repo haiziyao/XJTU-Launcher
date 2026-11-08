@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  # SignPath's GitHub action reads the workflow run that produced the artifact.
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -161,6 +163,52 @@ jobs:
           fi
           kill "$pid" || true
           echo "App stayed alive for 10s."
+
+      # Windows: free Authenticode signing through SignPath Foundation
+      # (https://signpath.org, open source projects). Every step is gated on
+      # SIGNPATH_PROJECT_SLUG so the release stays unsigned until the project
+      # is approved and the variables/secrets below are configured.
+      - name: Upload the unsigned Windows installer for signing
+        if: matrix.os == 'windows-latest' && vars.SIGNPATH_PROJECT_SLUG != ''
+        id: unsigned-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: xjtu-launcher-windows-installer
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 1
+      - name: Sign the Windows installer with SignPath Foundation
+        if: matrix.os == 'windows-latest' && vars.SIGNPATH_PROJECT_SLUG != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          output-artifact-directory: signed
+          wait-for-completion-timeout-in-seconds: 1200
+      # Signing changes the installer bytes, so Tauri's minisign signature has
+      # to be regenerated and latest.json rewritten before the draft is used.
+      - name: Publish the signed installer and refresh its updater signature
+        if: matrix.os == 'windows-latest' && vars.SIGNPATH_PROJECT_SLUG != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem 'src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          $zip = Get-ChildItem 'signed/*.zip' | Select-Object -First 1
+          Expand-Archive -Path $zip.FullName -DestinationPath 'signed/out' -Force
+          $signed = Get-ChildItem 'signed/out' -Filter '*-setup.exe' -Recurse | Select-Object -First 1
+          Copy-Item $signed.FullName $exe.FullName -Force
+          npx tauri signer sign --app-version $env:VERSION $exe.FullName
+          New-Item -ItemType Directory -Force -Path latest | Out-Null
+          gh release download "v$env:VERSION" --pattern latest.json --dir latest
+          node tools/patch-latest-signature.mjs 'latest/latest.json' "$($exe.FullName).sig"
+          gh release upload "v$env:VERSION" $exe.FullName "$($exe.FullName).sig" 'latest/latest.json' --clobber
 
   # Copy the draft's assets into the private OSS bucket and rewrite latest.json
   # to the download gateway before the release goes public. Skipped until the

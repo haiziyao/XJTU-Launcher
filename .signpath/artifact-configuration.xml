@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows NSIS installer.
+
+  The installer is uploaded with actions/upload-artifact, which always stores
+  a ZIP, so the root element is <zip-file>. Only the outer setup executable is
+  signed: NSIS packs the app binary inside the installer, and SignPath cannot
+  deep-sign that container.
+
+  Paste this into SignPath.io under Project > Artifact Configurations once the
+  Foundation application is approved, or upload the file there.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="*-setup.exe">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
