@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q&amp;A — XJTU Launcher</title>
+<meta name="description" content="XJTU Launcher 常见问题：账号与凭据保存位置、macOS 与 Windows 的安装提示、写操作如何确认、数据放在哪里、如何反馈问题。">
+<link rel="icon" href="../../assets/favicon.png" sizes="32x32">
+<link rel="apple-touch-icon" href="../../assets/icon.png">
+<link rel="stylesheet" href="../../styles.css">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="../../">
+      <img src="../../assets/icon.png" width="28" height="28" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="../../">首页</a>
+      <a href="../../#download">下载</a>
+      <a href="../../#direction">方向</a>
+      <a class="ghost" href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap doc-layout">
+    <aside class="doc-side">
+      <details class="side-box" open>
+        <summary>目录</summary>
+        <p class="side-title">Q&amp;A 目录</p>
+        <nav class="side-nav" aria-label="问答目录">
+          <div class="side-group">
+            <a class="side-cat" href="#cat-basic">常见问题</a>
+            <a class="side-link" href="#q-official">是不是官方应用</a>
+            <a class="side-link" href="#q-domain">官网打不开</a>
+          </div>
+          <div class="side-group">
+            <a class="side-cat" href="#cat-account">账号与安全</a>
+            <a class="side-link" href="#q-upload">账号密码会不会上传</a>
+            <a class="side-link" href="#q-files">文件和缓存位置</a>
+          </div>
+          <div class="side-group">
+            <a class="side-cat" href="#cat-install">安装与系统</a>
+            <a class="side-link" href="#q-macos">macOS 的安装提示</a>
+            <a class="side-link" href="#q-windows">Windows 的安装提示</a>
+            <a class="side-link" href="#q-systems">支持哪些系统</a>
+          </div>
+          <div class="side-group">
+            <a class="side-cat" href="#cat-usage">使用</a>
+            <a class="side-link" href="#q-offcampus">校外访问</a>
+            <a class="side-link" href="#q-writes">会不会自动改数据</a>
+            <a class="side-link" href="#q-update">应用更新</a>
+          </div>
+          <div class="side-group">
+            <a class="side-cat" href="#cat-feedback">反馈与社区</a>
+            <a class="side-link" href="#q-feedback">提建议与反馈 bug</a>
+          </div>
+        </nav>
+      </details>
+    </aside>
+
+    <div class="doc">
+      <h1>常见问题</h1>
+      <p class="doc-sub">关于账号安全、安装提示、写操作和数据位置。没覆盖到的，欢迎到 GitHub 提问。</p>
+
+      <section class="qa-group" id="cat-basic">
+        <h2>常见问题</h2>
+        <div class="qa">
+          <details id="q-official">
+            <summary>这是西安交通大学的官方应用吗？</summary>
+            <div class="a">
+              <p>不是。XJTU Launcher 是学生个人项目，与西安交通大学官方无关，也不代表学校立场。校园功能按公开的网页流程自行实现，接口变化或故障由项目自己跟进修复。</p>
+            </div>
+          </details>
+
+          <details id="q-domain">
+            <summary>官网打不开或很慢怎么办？</summary>
+            <div class="a">
+              <p>域名备案完成前，官网可能无法通过域名直接访问，可以继续使用 GitHub Release 下载安装包。备案通过后会切换为 HTTPS 域名访问。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="qa-group" id="cat-account">
+        <h2>账号与安全</h2>
+        <div class="qa">
+          <details id="q-upload">
+            <summary>我的账号和密码会被上传吗？</summary>
+            <div class="a">
+              <p>不会。凭据只写入本机的 <code>~/.xjtu-launcher/auth.json</code>，不经过任何服务器，也不会写进日志或截图。保存多个账号时，每个账号的凭据同样只留在本机。</p>
+              <p>切换或删除账号时会关闭旧的校园窗口、丢弃旧请求，缓存按账号隔离。</p>
+            </div>
+          </details>
+
+          <details id="q-files">
+            <summary>设置、缓存和我自己的文件放在哪里？</summary>
+            <div class="a">
+              <p>设置、凭据与缓存都在隐藏目录 <code>~/.xjtu-launcher</code>；你自己的文件放在可见的 <code>~/Documents/xjtu-launcher-file</code>，里面有 <code>workspace/</code> 与 <code>download/</code>，位置可以在「应用设置 → 存储」里修改。</p>
+              <p>界面上一律显示 <code>~/...</code> 路径，不显示账号名。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="qa-group" id="cat-install">
+        <h2>安装与系统</h2>
+        <div class="qa">
+          <details id="q-macos">
+            <summary>为什么 macOS 提示「无法验证开发者」？</summary>
+            <div class="a">
+              <p>安装包没有 Apple 开发者代码签名证书，所以 Gatekeeper 会拦截首次打开。到「系统设置 → 隐私与安全性」点「仍要打开」，每个新版本确认一次即可。</p>
+              <p>系统提示不代表安装包损坏。可以用官网公布的 SHA256 核对文件后再打开。</p>
+            </div>
+          </details>
+
+          <details id="q-windows">
+            <summary>Windows 提示「已保护你的电脑」怎么办？</summary>
+            <div class="a">
+              <p>原因相同：没有 Windows 代码签名证书。点「更多信息」→「仍要运行」即可；同样建议先用 SHA256 校验安装包。</p>
+            </div>
+          </details>
+
+          <details id="q-systems">
+            <summary>支持哪些系统？</summary>
+            <div class="a">
+              <p>目前提供 macOS（Apple 芯片与 Intel 芯片）和 Windows 10 / 11 x64 三个安装包，对应当前版本 v0.5.2。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="qa-group" id="cat-usage">
+        <h2>使用</h2>
+        <div class="qa">
+          <details id="q-offcampus">
+            <summary>不在校园网里还能用吗？</summary>
+            <div class="a">
+              <p>查询请求会自动尝试回退到 WebVPN。个别系统在校外可能仍然不可用，以实际返回的结果为准。</p>
+            </div>
+          </details>
+
+          <details id="q-writes">
+            <summary>会不会替我改课表、交作业或评教？</summary>
+            <div class="a">
+              <p>不会自动执行。所有会影响你数据的写操作都先给出预览，只有你明确要求并确认之后才提交；结果不明确时不会自动重试，取消也不声称「已撤回」。</p>
+            </div>
+          </details>
+
+          <details id="q-update">
+            <summary>应用怎么更新？</summary>
+            <div class="a">
+              <p>应用内置更新检查，更新包带签名校验。更新源地址默认只读，确认风险提示之后才能修改。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="qa-group" id="cat-feedback">
+        <h2>反馈与社区</h2>
+        <div class="qa">
+          <details id="q-feedback">
+            <summary>想提建议或反馈 bug？</summary>
+            <div class="a">
+              <p>去 GitHub 开 Issue，附上版本号、系统和复现步骤。想影响下一步做什么，也可以直接在三张方向卡片下面点赞——票数会作为优先级参考。</p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <div class="doc-actions">
+        <a class="doc-btn primary" href="../../#download">下载 XJTU Launcher</a>
+        <a class="doc-btn" href="https://github.com/haiziyao/XJTU-Launcher/issues" rel="noopener">在 GitHub 提问</a>
+      </div>
+
+      <p class="doc-note">最后更新 2026-11-08，对应 v0.5.2。功能和界面会随版本变化，以应用内实际显示为准。</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="fbrand">
+      <img src="../../assets/icon.png" width="32" height="32" alt="">
+      <span>XJTU Launcher</span>
+    </div>
+    <p>MIT License · <a href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a> · <a href="../../">官网首页</a><br>学生个人项目，与西安交通大学官方无关。凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<script src="qa.js" defer></script>
+</body>
+</html>

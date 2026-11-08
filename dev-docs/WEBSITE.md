@@ -4,27 +4,34 @@
 
 ## 现状
 
-- 域名：`xjtu-launcher.cn`，2026-11-08 在阿里云（万网）注册，用户已添加 A 记录指向 `8.152.100.169`。
-- 2026-11-08 04:00 `whois` 为 `clientHold`，04:06 已变为 `ok`；`223.5.5.5` 与 `8.8.8.8` 已解析到 `8.152.100.169`，`119.29.29.29` 当时仍未刷新。80 端口已到 nginx（默认站点返回「没有找到站点」），443 未监听。
-- ICP 备案：**2026-11-08 实测域名被阿里云拦截**，`http://xjtu-launcher.cn/` 返回 403，页面标题 `Non-compliance ICP Filing`（响应头 `Server: Beaver`）。新注册的域名需要单独在阿里云备案系统提交「新增网站」，已有的备案主体或旧域名不能直接覆盖它；服务器在阿里云北京，备案完成前 80/443 都不能对外提供网站服务。**备案是官网域名上线的唯一阻塞项。**
+- 域名：`xjtu-launcher.cn`，2026-11-08 在阿里云（万网）注册，`whois` 状态为 `ok`，到期 2027-11-08。
+- 2026-11-08 04:00 `whois` 曾为 `clientHold`，04:06 变为 `ok`，当时 `223.5.5.5` / `8.8.8.8` 短暂解析到 `8.152.100.169`。**备案期间阿里云不允许域名解析**：11 月 8 日晚复查，权威 NS（`dns23/dns24.hichina.com`）已无 A 记录，多个公共 DNS 均返回空，`www` 也从未添加。因此官网和下载暂时只走 `http://8.152.100.169/`（用户 2026-11-08 决定：备案期间先用 IP，不再尝试解析）。
+- ICP 备案：**2026-11-08 实测域名被阿里云拦截**，直接带 `Host: xjtu-launcher.cn` 请求服务器 IP 也返回 403，页面标题 `Non-compliance ICP Filing`（响应头 `Server: Beaver`）。新注册的域名需要单独在阿里云备案系统提交「新增网站」，已有的备案主体或旧域名不能直接覆盖它；服务器在阿里云北京，备案完成前 80/443 都不能对外提供网站服务。**备案是官网域名上线的唯一阻塞项。**
 - 服务器：2026-11-08 已用 root 密码登录并安装本机公钥（`~/.ssh/id_ed25519`），之后免密登录。系统是 Alibaba Cloud Linux 3（宝塔面板管理 nginx 1.24，`www` 用户），Python 3.6.8。
 - 官网源码：`website/`，纯静态 HTML/CSS/JS，没有构建步骤，没有外部字体、脚本或统计代码。
 - 部署：2026-11-08 已上传到 `/srv/xjtu-launcher/site`，nginx vhost 为 `/www/server/panel/vhost/nginx/xjtu-launcher.cn.conf`。备案完成前可用 `http://8.152.100.169/site/` 预览。
 - 2026-11-08 改版：按用户要求换成白底 + 轮播图 + 下载卡片的版式，已部署到 `/srv/xjtu-launcher/site`。第二轮按反馈改成居中 coverflow：中间一张完整、左右两张缩小倾斜并模糊内容（保留清晰窗口边框）、自动轮播 4.6s，首屏在 1280×720 / 1280×800 / 1366×768 / 1440×900 都能同时看到标题、轮播和三张下载卡。下载卡按当前设备高亮并排到最前（macOS 架构优先读 UA-CH，其次 WebGL renderer，取不到按 Apple 芯片处理）。
+- 2026-11-08 第三轮改版：去掉首屏淡淡的彩色底色；大标题改成逐字蹦出的打字效果（`prefers-reduced-motion` 时不播放，`aria-label` 保留完整句子）；原来「MIT 开源」的胶囊换成一排标签（版本号、发布阶段、Rust、Tauri 2、Vue 3、MIT）。发布阶段标签由 `downloads.json` 的主版本号决定：`0.x` 显示「预览版」，`1.x` 起显示「正式版」。用户决定不做校园照片背景。标签的发布阶段类名用 `tag-stage` 而不是 `stage`，因为 `.stage` 已被轮播容器占用（同名时会套上轮播的 `height` 与 `perspective`）。
+- 2026-11-08 第四轮改版（用户提出）：标签改成小圆角、每个标签一种颜色（含小圆点），不再用胶囊；下载区下面删掉原来的「功能」三卡，换成三栏「方向」——功能更强大 / 社区更丰富 / 页面更美观，各带占位示意图与一个点赞按钮，点赞数作为下一步优先级参考；三栏下面是「关于这个项目」（项目、团队、理念、畅想）；导航新增 Q&amp;A，指向 `doc/qa/`；页面右上角（导航栏）显示安装包下载次数。占位示意图是手画的 SVG，角上标注「示意图」，有真实配图后替换。
+- 2026-11-08 第五轮改版（用户反馈）：标签去掉小圆点，改成方角、加粗字号，版本标签深底白字、发布阶段标签琥珀色、技术标签用等宽字体；下载量从导航栏移到顶栏下方、首屏右上角；下载卡片改成玻璃质感（半透明 + `backdrop-filter`），推荐卡不透明度更高并保留紫色描边，不再用黑色卡片；Q&amp;A 页面改成左侧目录（分类 + 问题两级，默认高亮「常见问题」），点击目录打开对应问题并滚动定位，滚动时跟随高亮，窄屏下目录收成可展开的「目录」面板（`doc/qa/qa.js`）。顶栏导航的 `nav` 选择器改成 `.top nav`，避免侧边目录继承导航的 flex 布局。
 - `docs/design/website-v1/C-carousel/` 是上一版（非 coverflow）的参考稿，部署版本以 `website/` 为准。**尚未经过用户验收；域名仍被 ICP 拦截，正式上线未完成。**
-- 安装包目前指向 GitHub Release。OSS Bucket `xjtu-launcher` 已创建，但尚未上传安装包、尚未创建 RAM 用户；`downloads.json` 暂时指向 GitHub Release。
-- 下载网关：`tools/oss-gateway/` 已实现，签名结果与官方 `ali-oss` SDK 一致；2026-11-08 已安装到 `/srv/xjtu-launcher/gateway` 并注册 systemd 单元，**因缺少 AccessKey 仍未启动**。更新清单的自动上传见 `release.yml` 的 `oss` job 与 `tools/upload-oss.mjs`，需先配置 GitHub 变量与 Secret。
+- 安装包已切到 OSS：2026-11-08 把 v0.5.2 的 9 个发布资产上传到私有 Bucket `xjtu-launcher` 的 `v0.5.2/`，`latest.json` 上传到 Bucket 根目录；`downloads.json` 的 `base_url` 改为 `/download/v0.5.2/`，页面的三个下载按钮都经过下载网关。
+- 下载网关：`tools/oss-gateway/` 已安装到 `/srv/xjtu-launcher/gateway` 并已 `enable --now`，监听 `127.0.0.1:8787`。2026-11-08 创建了两个最小权限 RAM 用户：`xjtu-launcher-gateway` 只有 `oss:GetObject`（密钥在 `/etc/xjtu-launcher/oss.env`，`640 root:www`），`xjtu-launcher-ci` 有 `GetObject + PutObject`（只放在 GitHub Secrets 和本机 ossutil 配置里）。已验证：匿名直连 OSS 403、网关签名 302、跟随跳转 206、伪造 Referer 403、网关密钥 PutObject 403、同 IP 连发第 7 次起 429。
+- 备案前 IP 预览也能下载：`8.152.100.169_80.conf` 里临时加了 `/download/` 与 `= /latest.json` 反代，`oss.env` 的 `SITE_ORIGIN` 临时包含 `http://8.152.100.169`。域名上线后删掉这两处临时配置。
+- 自动上传：GitHub 变量 `OSS_BUCKET=xjtu-launcher`、`OSS_PUBLIC_BASE=https://xjtu-launcher.cn/download` 与 Secret `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` 已配置，`release.yml` 的 `oss` job 从下一版起会自动上传。
 
 ## 目录
 
 ```text
 website/
-├─ index.html        单页官网（白底、轮播、下载卡片）
+├─ index.html        首页（白底、轮播、下载卡片、三栏方向、项目介绍、安装）
 ├─ styles.css        样式（纯白、系统字体、无外部资源）
-├─ app.js            读取 downloads.json，填充下载卡片、版本行、SHA256 明细与当前设备提示
-├─ carousel.js       轮播：自动播放、进度点、键盘、触摸滑动、指针视差、`#slide-N` 深链
+├─ app.js            读取 downloads.json 与 /api/stats，填充下载卡片、版本行、发布阶段标签、下载量、点赞数、SHA256 明细与当前设备提示；大标题逐字打字
+├─ carousel.js       轮播：自动播放、进度点、左右箭头、键盘、触摸滑动、`#slide-N` 深链
 ├─ downloads.json    版本、日期、下载基址、文件名、大小、SHA256
-├─ assets/           图标与截图（由 docs/screenshots 和 src-tauri/icons 生成）
+├─ assets/           图标、截图，以及三张方向占位图 direction-*.svg
+├─ doc/qa/index.html Q&A 页面（左侧目录 + 分类问题，对应 /doc/qa/）
+├─ doc/qa/qa.js      Q&A 目录：默认高亮、点击打开并定位、滚动跟随、窄屏折叠
 ├─ robots.txt
 └─ sitemap.xml
 ```
@@ -34,12 +41,23 @@ website/
 每次发版后改 `website/downloads.json`：
 
 - `version`、`date`：与 `docs/releases/v<版本>.md` 一致。
-- `base_url`：安装包所在目录，末尾带 `/`。OSS 启用后改成 `https://<bucket>.oss-cn-beijing.aliyuncs.com/v<版本>/`。
+- `base_url`：安装包所在目录，末尾带 `/`。现在用站内绝对路径 `/download/v<版本>/`，由 nginx 转给下载网关，签名后 302 到私有 OSS；这样同一份配置在 IP 预览和正式域名下都能用。
 - `files[]`：只列 macOS arm64、macOS x64、Windows x64 三个安装包；`size` 用字节，`sha256` 从 GitHub Release 资产摘要或 `shasum -a 256` 取。
 
 页面的三张下载卡片按 `platform` + `arch` 匹配，自动填链接、大小与 SHA256；探测到当前设备时对应的卡片会高亮（macOS 架构靠 WebGL renderer 判断，取不到就不高亮）。`downloads.json` 读取失败时卡片回退到 GitHub Release。
 
 设计参考稿在 `docs/design/website-v1/C-carousel/`；正式页面以 `website/` 为准。
+
+## 点赞与下载量接口
+
+首页三张方向卡片的点赞数、首屏右上角（顶栏下方）的下载量来自 `tools/site-api/`（安装与隐私细节见该目录的 README）：
+
+- 服务：`site-api.py`，只依赖 Python 3.6 标准库，监听 `127.0.0.1:8788`；systemd 单元 `xjtu-site-api.service`，以 `www` 运行，状态目录 `/srv/xjtu-launcher/stats`。
+- 路由：正式域名的 `/api/`、备案前 IP 预览的 `/site/api/` 都反代到同一服务；nginx 每 IP 30 次/分钟，超出返回 429。
+- `GET /stats` 返回 `{"downloads": {"total": 46}, "likes": {...}}`；`POST /like` 的 body 是 `{"key": "powerful|community|design"}`。
+- 点赞存在 `likes.json`；同一地址对同一方向只记一票，访客地址只保存加盐 SHA256 摘要，不落盘原始 IP。
+- 下载量从 GitHub Releases API 按安装包后缀（`.dmg` `.exe` `.msi` `.AppImage` `.deb`）累加，不统计 `latest.json` 和签名文件；缓存 600 秒。GitHub 不可达时沿用上一次真实值；连缓存都没有时接口返回 `null`，页面隐藏下载量，不显示编造的数字。
+- 前端把投过的方向记在 localStorage；接口失败时按钮显示「暂时不可用」，不会假装成功。测试投票写进真实计数，验证后执行 `rm -f /srv/xjtu-launcher/stats/likes.json && systemctl restart xjtu-site-api` 清掉。
 
 ## 部署到服务器
 
@@ -137,14 +155,16 @@ Bucket `xjtu-launcher`（已创建），地域华北 2（北京）：
 - `xjtu-oss-gateway.service` 负责开机启动，以 `www` 运行，路径 `/srv/xjtu-launcher/gateway/oss-gateway.py`。
 - `nginx-download.conf` 声明限流 zone、`/download/` 与 `/latest.json` 反向代理。
 
-AccessKey 使用只有 `oss:GetObject` 权限的 RAM 用户，保存在 `/etc/xjtu-launcher/oss.env`（`600 root:root`），不进入网页、仓库或聊天记录。2026-11-08 已安装文件与服务，`oss.env` 里 AccessKey 仍是空值，服务处于 `disabled`，填入后执行：
+AccessKey 使用只有 `oss:GetObject` 权限的 RAM 用户，保存在 `/etc/xjtu-launcher/oss.env`（`640 root:www`，服务以 `www` 读取），不进入网页或仓库。2026-11-08 已填好密钥并执行：
 
 ```bash
 systemctl enable --now xjtu-oss-gateway
-curl -s http://127.0.0.1:8787/healthz
+curl -s http://127.0.0.1:8787/healthz   # 返回 ok
 ```
 
-安装包不再手动上传：`release.yml` 的 `oss` job 调用 `tools/upload-oss.mjs`，把草稿资产传到 `oss://xjtu-launcher/v<版本>/` 并把 `latest.json` 的六个平台地址改写成网关地址。需要先配置 GitHub 变量 `OSS_BUCKET`、`OSS_PUBLIC_BASE` 与 Secret `OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET`，见 [`tools/oss-gateway/README.md`](../tools/oss-gateway/README.md)。
+`SITE_ORIGIN` 支持逗号分隔的多个来源；备案前临时是 `https://xjtu-launcher.cn,http://8.152.100.169`，域名上线后删掉 IP 那一项。
+
+安装包不再手动上传：`release.yml` 的 `oss` job 调用 `tools/upload-oss.mjs`，把草稿资产传到 `oss://xjtu-launcher/v<版本>/` 并把 `latest.json` 的六个平台地址改写成网关地址。GitHub 变量 `OSS_BUCKET`、`OSS_PUBLIC_BASE` 与 Secret `OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` 已于 2026-11-08 配置，见 [`tools/oss-gateway/README.md`](../tools/oss-gateway/README.md)。
 
 ### nginx 限流
 
@@ -168,7 +188,7 @@ location ^~ /download/ {
 正常用户点三个下载按钮远低于 12 次/分钟；更新检查只发一次请求。签名服务所在目录与 `downloads.json` 的 `base_url` 要一起更新：
 
 ```json
-"base_url": "https://xjtu-launcher.cn/download/v0.5.2/"
+"base_url": "/download/v0.5.2/"
 ```
 
 ### 费用兜底
@@ -207,12 +227,16 @@ https://xjtu-launcher.cn/latest.json
 
 ## 验收状态
 
-- 官网页面：已实现，本机用 Chrome 在 1440 px 和 390 px 宽度下检查过布局，没有横向溢出。
-- 域名解析：whois 已恢复 `ok`，`223.5.5.5` / `8.8.8.8` 解析到 `8.152.100.169`；`www` 尚未添加记录。
-- 部署：2026-11-08 已完成。`http://8.152.100.169/site/` 返回 200，`styles.css` / `app.js` / `downloads.json` / 截图均 200；带 `Host: xjtu-launcher.cn` 访问也返回 200。
+- 官网页面：已实现，本机用 Chrome 在 1440 px 和 390 px 宽度下检查过布局，没有横向溢出；第三轮改动在 1280×720 / 1280×800 / 1440×900 与 500×900 下截图核对，首屏仍能同时看到标签、标题、轮播与下载卡。第四轮改动（标签配色、三栏方向、点赞、关于、Q&A、下载量）在 1440 px 与真实 390 px 视口（CDP `Emulation.setDeviceMetricsOverride`）截图核对，`body.scrollWidth` 等于视口宽度。第五轮改动（标签去圆点加粗、右上角下载量、玻璃下载卡、Q&amp;A 侧边目录）在 1440 px、1280×800 与 390 px 下核对：首屏下载卡底边 741 px < 800，无横向溢出；Q&amp;A 目录默认高亮「常见问题」，点击问题会展开并定位到 `scroll-margin-top`，侧边目录在 390 px 下收成「目录」面板。**尚未经过用户验收。**
+- 点赞与下载量接口：代码、systemd 服务与 nginx 路由已部署，`xjtu-site-api` 处于 active；`/site/api/stats` 与 `/api/stats`（带 `Host` 头）都返回真实数据（下载量 46 来自 GitHub Releases，点赞 0/0/0）。点赞写入在服务器本机经 nginx 验证过，浏览器点击（含去重与「已支持」状态）在本机代理环境验证过；**线上按 IP 的点赞链路未用公网地址实际点过**，以免写入测试票。
+- Q&A 页面：`/site/doc/qa/` 与 `qa.js` 返回 200；左侧目录在桌面与 390 px 下均已截图核对，点击问题链接会展开并定位（`top` 约 76 px，与 `scroll-margin-top` 一致）。内容按 v0.5.2 编写，**未逐条与用户确认**。
+- 域名解析：**当前不可用**。备案期间阿里云不允许解析，权威 NS 无 A 记录，公共 DNS 均为空；带 `Host: xjtu-launcher.cn` 访问 IP 仍被 `Server: Beaver` 以未备案拦截（403）。备案通过后再恢复解析并申请证书。
+- IP 预览：`http://8.152.100.169/site/` 已加 `X-Robots-Tag: noindex, nofollow`，备案期间不被搜索引擎收录；站点、Q&A、点赞接口、OSS 下载均已在该地址验证可用。
+- 部署：2026-11-08 已完成，第五轮改动已重新上传并核对线上页面。`http://8.152.100.169/site/` 返回 200，`styles.css` / `app.js` / `downloads.json` / `doc/qa/` / `doc/qa/qa.js` 均 200；带 `Host: xjtu-launcher.cn` 访问也返回 200。上线前在服务器上删掉了 `likes.json` 里的 1/1/1 测试票并重启服务，线上点赞计数为 0/0/0。
 - ICP 备案：**未完成**，域名被阿里云拦截（403 `Non-compliance ICP Filing`），这是域名上线的唯一阻塞项。
 - HTTPS：**未完成**，443 未监听；备案前无法完成 HTTP-01 验证。
-- OSS：Bucket `xjtu-launcher` 已创建，未上传安装包、未创建 RAM 用户；`downloads.json` 暂时指向 GitHub Release。
-- 下载网关：代码、本机测试与服务器安装已完成；**未启动**（缺 AccessKey），限流与 302 尚未在真实链路验证。
-- 自动上传：`tools/upload-oss.mjs` 与 `release.yml` 的 `oss` job 已就绪，用假 `ossutil` 做过一次全流程试跑（9 个文件、`latest.json` 六个平台 URL 改写正确），**未经真实 OSS 验证**。
+- OSS：Bucket `xjtu-launcher` 私有（匿名访问 403），RAM 用户与最小权限策略已建；v0.5.2 的 9 个资产与 `latest.json` 已真实上传。
+- 下载网关：服务 `active`，`/healthz` 返回 `ok`；签名 302、跟随跳转、Referer 拦截、限流 429 均在公网 IP 预览链路上实测通过。**未用真实旧版客户端验证更新器跟随 302**。
+- 自动上传：GitHub 变量与 Secrets 已配置，`release.yml` 的 `oss` job 会在下一版真实执行；**尚未跑过一次真实的发版工作流**。
+- 官网下载：`http://8.152.100.169/site/` 的三张卡片已指向 `/download/v0.5.2/...`，点击后 302 到 OSS；实际浏览器完整下载一个 23 MB 安装包**尚未验证**（只做了 1 字节 Range 跟随）。
 - 官网内容按 0.5.2 当前能力编写；0.6 功能发布前不要提前写进页面。

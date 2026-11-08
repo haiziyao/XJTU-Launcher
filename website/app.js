@@ -15,6 +15,11 @@
     return (bytes / 1024 / 1024).toFixed(1) + " MB";
   }
 
+  function formatCount(value) {
+    if (typeof value !== "number" || !isFinite(value)) return "—";
+    return value.toLocaleString("zh-CN");
+  }
+
   function webglArch() {
     try {
       var gl = document.createElement("canvas").getContext("webgl");
@@ -100,9 +105,61 @@
     });
   }
 
-  function applyPill(data) {
-    var pill = document.getElementById("pill-version");
-    if (pill) pill.textContent = "v" + data.version + " · 开源 · MIT";
+  function applyTags(data) {
+    var version = document.getElementById("pill-version");
+    if (version) version.textContent = "v" + data.version;
+
+    var stage = document.getElementById("release-stage");
+    if (!stage) return;
+    var major = parseInt(String(data.version), 10);
+    var stable = Number.isFinite(major) && major >= 1;
+    stage.textContent = stable ? "正式版" : "预览版";
+    stage.classList.toggle("is-stable", stable);
+  }
+
+  function initTitle() {
+    var title = document.getElementById("hero-title");
+    if (!title) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    var nodes = Array.prototype.slice.call(title.childNodes);
+    var frag = document.createDocumentFragment();
+    var index = 0;
+    var step = 55;
+
+    nodes.forEach(function (node) {
+      if (node.nodeType === 3) {
+        Array.prototype.forEach.call(node.textContent, function (ch) {
+          if (ch === " " || ch === "\n" || ch === "\t") {
+            frag.append(document.createTextNode(ch));
+            return;
+          }
+          var span = document.createElement("span");
+          span.className = "char";
+          span.textContent = ch;
+          span.style.setProperty("--d", index * step + "ms");
+          index += 1;
+          frag.append(span);
+        });
+      } else if (node.nodeName === "BR") {
+        frag.append(document.createElement("br"));
+      }
+    });
+
+    var caret = document.createElement("span");
+    caret.className = "caret";
+    caret.setAttribute("aria-hidden", "true");
+    frag.append(caret);
+
+    title.replaceChildren(frag);
+
+    var total = index * step + 420;
+    window.setTimeout(function () {
+      caret.classList.add("show");
+    }, total);
+    window.setTimeout(function () {
+      caret.classList.add("done");
+    }, total + 6000);
   }
 
   function applyMeta(data) {
@@ -176,6 +233,102 @@
     });
   }
 
+  var LIKE_STORE = "xjtu-launcher-likes";
+
+  function setLikeCount(button, value) {
+    if (typeof value !== "number" || !isFinite(value)) return;
+    var num = button.querySelector(".like-num");
+    if (num) num.textContent = formatCount(value);
+  }
+
+  function markVoted(button) {
+    button.classList.add("is-voted");
+    button.setAttribute("aria-pressed", "true");
+    var label = button.querySelector(".like-label");
+    if (label) label.textContent = "已支持";
+  }
+
+  function initLikes() {
+    var buttons = document.querySelectorAll(".like");
+    if (!buttons.length) return;
+
+    var voted = {};
+    try {
+      voted = JSON.parse(localStorage.getItem(LIKE_STORE) || "{}") || {};
+    } catch (error) {
+      voted = {};
+    }
+
+    Array.prototype.forEach.call(buttons, function (button) {
+      var key = button.getAttribute("data-key");
+      if (voted[key]) markVoted(button);
+
+      button.addEventListener("click", function () {
+        if (button.classList.contains("is-voted") || button.dataset.busy) return;
+        button.dataset.busy = "1";
+        button.classList.remove("is-error");
+
+        fetch("api/like", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key })
+        })
+          .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
+          })
+          .then(function (result) {
+            setLikeCount(button, result.count);
+            markVoted(button);
+            voted[key] = true;
+            try {
+              localStorage.setItem(LIKE_STORE, JSON.stringify(voted));
+            } catch (error) {
+              /* private mode: the vote still counted on the server */
+            }
+          })
+          .catch(function () {
+            button.classList.add("is-error");
+            var label = button.querySelector(".like-label");
+            if (!label) return;
+            label.textContent = "暂时不可用";
+            window.setTimeout(function () {
+              label.textContent = "支持";
+              button.classList.remove("is-error");
+            }, 2400);
+          })
+          .then(function () {
+            delete button.dataset.busy;
+          });
+      });
+    });
+  }
+
+  function loadStats() {
+    fetch("api/stats", { cache: "no-store" })
+      .then(function (response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        var chip = document.getElementById("download-stat");
+        var total = data && data.downloads ? data.downloads.total : null;
+        if (chip && typeof total === "number") {
+          var value = document.getElementById("download-total");
+          if (value) value.textContent = formatCount(total);
+          chip.hidden = false;
+        }
+
+        var likes = (data && data.likes) || {};
+        Array.prototype.forEach.call(document.querySelectorAll(".like"), function (button) {
+          setLikeCount(button, likes[button.getAttribute("data-key")]);
+        });
+      })
+      .catch(function () {
+        /* 接口不可用时隐藏下载量，不显示未经统计的数字 */
+      });
+  }
+
   function showFallback() {
     var cards = document.querySelectorAll(".dl");
     Array.prototype.forEach.call(cards, function (card) {
@@ -199,10 +352,14 @@
       return response.json();
     })
     .then(function (data) {
-      applyPill(data);
+      applyTags(data);
       applyMeta(data);
       renderChecksums(data);
       return applyCards(data);
     })
     .catch(showFallback);
+
+  initTitle();
+  initLikes();
+  loadStats();
 })();

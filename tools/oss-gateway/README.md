@@ -236,6 +236,6 @@ done
 
 - 不要把 AccessKey 写进 `downloads.json`、网页脚本或仓库；签名只在服务器上做。
 - 签名链接 60 秒过期；泄露的链接只能再用很短时间。
-- `SITE_ORIGIN` 的 Referer 检查只是减少外站盗链，允许空 Referer（桌面更新器不发 Referer），不能当作鉴权。
+- `SITE_ORIGIN` 的 Referer 检查只是减少外站盗链，允许空 Referer（桌面更新器不发 Referer），不能当作鉴权。备案前 IP 预览也要下载时，用逗号分隔临时加上 `http://8.152.100.169`，域名上线后删掉这一项。
 - 服务只监听 `127.0.0.1`，不要改成 `0.0.0.0`。
 - 更换 Bucket 或接入自定义下载域名时，同步改 `OSS_PUBLIC_HOST` 和 `downloads.json` 的 `base_url`。

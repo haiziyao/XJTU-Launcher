@@ -2,7 +2,7 @@
   "version": "0.5.2",
   "date": "2026-10-29",
   "releases_url": "https://github.com/haiziyao/XJTU-Launcher/releases",
-  "base_url": "https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.5.2/",
+  "base_url": "/download/v0.5.2/",
   "files": [
     {
       "platform": "macOS",

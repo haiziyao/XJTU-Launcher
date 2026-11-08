@@ -66,12 +66,15 @@ def allowed_referer(referer):
     """Allow direct requests (updater, curl) and the official site only.
 
     A missing Referer is allowed because the desktop updater does not send one.
-    This is a mild hotlink deterrent, not an authorization check.
+    SITE_ORIGIN accepts several comma-separated origins so the IP preview keeps
+    working before the domain is available; the preview entry is removed once
+    the domain is live. This is a mild hotlink deterrent, not an authorization
+    check.
     """
     if not referer:
         return True
-    origin = SITE_ORIGIN.rstrip("/") + "/"
-    return referer.startswith(origin)
+    origins = [o.strip().rstrip("/") + "/" for o in SITE_ORIGIN.split(",") if o.strip()]
+    return any(referer.startswith(origin) for origin in origins)
 
 
 class Handler(BaseHTTPRequestHandler):
