@@ -7,18 +7,18 @@ import InlineAlert from '../ui/InlineAlert.vue';
 import MoreMenu, { type MoreItem } from '../ui/MoreMenu.vue';
 import UiButton from '../ui/UiButton.vue';
 import { bridge } from '../../bridge';
-import { loadLmsOverview } from '../../campusOverview';
+import { loadLmsTodos } from '../../campusOverview';
 import { applyCached } from '../../cache';
 import { campusTimestamp, dueInfo, todoBuckets } from '../../domain';
-import type { EvaluationList, LmsOverview, LmsTodo } from '../../types';
+import type { EvaluationList, LmsTodoItem, LmsTodos } from '../../types';
 import { campusTodoCount } from '../../campusNav';
 
 /**
- * 待办 (LAYOUT §9.2, version B): homework that is still unsubmitted in the
- * current semester, grouped into one dense table. Submissions stay on the
+ * 待办 (LAYOUT §9.2, version B): the homework the school's official todo list
+ * still keeps open, grouped into one dense table. Submissions stay on the
  * campus website; this page only reads and groups what is due.
  */
-interface TodoRow extends LmsTodo {
+interface TodoRow extends LmsTodoItem {
   dueAt: number | null;
 }
 type Filter = 'all' | 'overdue' | 'today' | 'week';
@@ -123,7 +123,7 @@ const bandMeta = (group: { id: string; items: TodoRow[] }): string => {
   return `共 ${group.items.length} 项`;
 };
 
-function toRows(list: LmsTodo[]): TodoRow[] {
+function toRows(list: LmsTodoItem[]): TodoRow[] {
   return list.map((item) => {
     const at = campusTimestamp(item.end);
     return { ...item, dueAt: Number.isFinite(at) ? at : null };
@@ -150,18 +150,18 @@ async function load(force = false) {
   error.value = '';
   void loadEvaluations(force);
   try {
-    await applyCached<LmsOverview>('lmsOverview', undefined, (value) => {
-      if (!rows.value.length) rows.value = toRows(value.rows);
+    await applyCached<LmsTodos>('lmsTodos', undefined, (value) => {
+      if (!rows.value.length) rows.value = toRows(value.items);
       if (!semester.value) semester.value = value.semester;
-      failed.value = value.failed ?? 0;
-      campusTodoCount.value = value.rows.length;
+      failed.value = value.failures?.length ?? 0;
+      campusTodoCount.value = value.items.length;
     });
-    const fresh = await loadLmsOverview(force);
-    rows.value = toRows(fresh.rows);
+    const fresh = await loadLmsTodos(force);
+    rows.value = toRows(fresh.items);
     semester.value = fresh.semester;
-    failed.value = fresh.failed;
+    failed.value = fresh.failures?.length ?? 0;
     loadedAt.value = Date.now();
-    campusTodoCount.value = fresh.rows.length;
+    campusTodoCount.value = fresh.items.length;
   } catch (e) {
     console.error('[campus] lms todos', e);
     error.value = e instanceof Error ? e.message : String(e);
@@ -264,8 +264,8 @@ onUnmounted(() => window.clearInterval(clock));
       :icon="ClipboardCheck"
       compact
       busy
-      title="正在汇总本学期待办…"
-      description="第一次会扫描本学期全部课程，之后会先使用缓存。"
+      title="正在读取思源学堂待办…"
+      description="直接使用学校的官方待办列表，之后会先使用缓存。"
     />
     <EmptyState
       v-else-if="!rows.length && !error"
@@ -303,10 +303,7 @@ onUnmounted(() => window.clearInterval(clock));
         </div>
         <div v-for="item in group.items" :key="item.id" class="campus-row">
           <span><i class="campus-dot" :data-tone="tone(group.id)" aria-hidden="true"></i></span>
-          <span class="name">
-            {{ item.title }}
-            <small v-if="item.submitByGroup">小组</small>
-          </span>
+          <span class="name">{{ item.title }}</span>
           <span class="course">{{ item.course || '未标注课程' }}</span>
           <span class="num">{{ due(item).text }}</span>
           <span class="num muted remain">{{ due(item).countdown || '—' }}</span>

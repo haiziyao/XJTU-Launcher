@@ -10,8 +10,9 @@ import SettingRow from './ui/SettingRow.vue';
 import UiButton from './ui/UiButton.vue';
 
 /**
- * The one visible folder for the user's own files: `workspace` (资料库) and
- * `download`. Settings, caches and credentials stay in `~/.xjtu-launcher`.
+ * The one visible folder for the user's own files: `workspace` (资料库),
+ * `plugin` (插件资源) and `download`. Settings, caches and credentials stay in
+ * `~/.xjtu-launcher`.
  * Moving the folder copies first and only deletes the old files after the new
  * root has been recorded, so the dialog spells out what moves before asking,
  * and shows the leftover warnings afterwards.
@@ -95,7 +96,7 @@ async function reveal() {
 <template>
   <SettingGroup
     title="文件位置"
-    footnote="设置、缓存、插件与账号密码都在 ~/.xjtu-launcher；这里只放你自己的文件。"
+    footnote="设置、缓存与账号密码在 ~/.xjtu-launcher；这里放你自己的文件和插件资源。"
   >
     <div class="storage-folder">
       <IconUpload :size="16" aria-hidden="true" />
@@ -135,7 +136,9 @@ async function reveal() {
         <div class="storage-dialog" role="dialog" aria-modal="true" aria-labelledby="storage-title">
           <header class="storage-header">
             <h2 id="storage-title">更改文件位置</h2>
-            <p>工作台（资料库）与下载会一起搬到新位置，设置和缓存留在 ~/.xjtu-launcher。</p>
+            <p>
+              工作台（资料库）、插件资源与下载会一起搬到新位置，设置和缓存留在 ~/.xjtu-launcher。
+            </p>
           </header>
 
           <template v-if="step === 'running'">

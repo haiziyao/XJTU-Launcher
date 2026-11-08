@@ -116,6 +116,44 @@
 .desktop-nav-item.selected svg {
   animation: nav-select 320ms var(--ease-out);
 }
+/* Sidebar entries are drag-sortable inside their own group. The row stays as a
+   faded slot, a floating copy follows the pointer, and the others glide away. */
+.nav-section.nav-dragging {
+  user-select: none;
+}
+/* The old 插件 heading is gone; a quiet rule keeps the two-level split. */
+.nav-divider {
+  height: 1px;
+  margin: 7px 11px;
+  background: var(--sidebar-border);
+}
+.sidebar-collapsed .nav-divider {
+  width: 28px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.nav-swap-move {
+  transition: transform 180ms var(--ease-out);
+}
+.desktop-nav-item.dragging {
+  opacity: 0.3;
+  cursor: grabbing;
+}
+.desktop-nav-item.dragging:active {
+  transform: none;
+}
+.nav-drag-ghost {
+  position: fixed;
+  z-index: 2000;
+  margin: 0;
+  pointer-events: none;
+  background: var(--nav-active);
+  color: var(--nav-active-text);
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  transform: scale(1.02) rotate(0.4deg);
+  transition: none;
+}
 @keyframes nav-select {
   0% {
     transform: scale(0.88);
@@ -127,37 +165,6 @@
     transform: scale(1);
   }
 }
-.sidebar-group-label {
-  position: relative;
-  height: 36px;
-  padding: 8px 11px 0;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-}
-/* The label text and the collapsed divider share the same 16px centre, and the
-   block keeps one height in both states so plugin icons never shift vertically.
-   With the 6px section gap above and 2px item gap below, the divider ends up
-   equally far from both icon rows. */
-.sidebar-group-label::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 16px;
-  width: 28px;
-  margin-left: -14px;
-  border-top: 1px solid var(--border-strong);
-  opacity: 0;
-  transition: opacity var(--duration) ease;
-}
-.sidebar-collapsed .sidebar-group-label::after {
-  opacity: 1;
-  transition-delay: 120ms;
-}
-
 /* Profile entry */
 .sidebar-footer {
   flex-shrink: 0;
@@ -213,8 +220,7 @@
 
 /* Labels fade and slide while icons keep fixed anchors, so collapsing never reflows. */
 .desktop-nav-item > span,
-.desktop-identity-text,
-.sidebar-group-label span {
+.desktop-identity-text {
   display: inline-block;
   opacity: 1;
   transform: none;
@@ -223,8 +229,7 @@
     transform var(--sidebar-motion);
 }
 .sidebar-collapsed .desktop-nav-item > span,
-.sidebar-collapsed .desktop-identity-text,
-.sidebar-collapsed .sidebar-group-label span {
+.sidebar-collapsed .desktop-identity-text {
   opacity: 0;
   transform: translateX(-6px);
   pointer-events: none;

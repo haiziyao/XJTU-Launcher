@@ -68,6 +68,7 @@ pub enum Query {
         activity: u64,
     },
     LmsOverview,
+    LmsTodos,
     NoticeChannels,
     Notices {
         channel: String,
@@ -104,7 +105,8 @@ impl Query {
             | Self::LmsActivities { .. }
             | Self::LmsActivity { .. }
             | Self::LmsSubmissions { .. }
-            | Self::LmsOverview => "lms",
+            | Self::LmsOverview
+            | Self::LmsTodos => "lms",
             Self::NoticeChannels | Self::Notices { .. } => "notices",
             Self::LibraryFloors | Self::LibraryAreas { .. } | Self::LibrarySeats { .. } => {
                 "library"
@@ -134,6 +136,9 @@ impl Query {
             Self::LmsActivities { .. } | Self::LmsActivity { .. } => 300,
             Self::LmsSubmissions { .. } => 120,
             Self::LmsOverview => 300,
+            // 待办 is the page that must follow a fresh submission; keep it
+            // short even though the materials scan can stay cached.
+            Self::LmsTodos => 60,
             Self::NoticeChannels => 86_400,
             Self::Notices { .. } => 300,
             Self::LibraryFloors => 86_400,
@@ -355,6 +360,7 @@ pub async fn query(
             | Query::LmsActivity { .. }
             | Query::LmsSubmissions { .. }
             | Query::LmsOverview
+            | Query::LmsTodos
     ) {
         let account = account.ok_or("请先登录校园账号")?;
         let client = super::lms::Client::connect(&account)?;
@@ -364,6 +370,7 @@ pub async fn query(
             Query::LmsActivity { activity } => client.activity(activity).await?,
             Query::LmsSubmissions { activity } => client.submissions(activity).await?,
             Query::LmsOverview => client.overview().await?,
+            Query::LmsTodos => client.todos().await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -501,6 +508,7 @@ pub async fn query(
         | Query::LmsActivity { .. }
         | Query::LmsSubmissions { .. }
         | Query::LmsOverview
+        | Query::LmsTodos
         | Query::NoticeChannels
         | Query::Notices { .. }
         | Query::LibraryFloors

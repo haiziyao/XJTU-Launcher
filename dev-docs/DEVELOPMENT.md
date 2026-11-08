@@ -4,7 +4,7 @@
 
 ## 代码与分支
 
-`main` 已整合校园登录、原生校园窗口、本地 auth.json、校园后台适配，以及插件市场 / Updater 实现。README 面向使用者；工程资料集中在 `dev-docs/`，产品与设计资料在 `docs/`（分工见 [开发文档索引](README.md)）。
+`main` 已整合校园登录、原生校园窗口、本地 auth.json、校园后台适配、内置插件中心与 Updater 实现。README 面向使用者；工程资料集中在 `dev-docs/`，产品与设计资料在 `docs/`（分工见 [开发文档索引](README.md)）。
 
 `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（当前 `dev-v0.6.0`），先合入 `dev` 供测试人员验证；通过后只能由 `dev` 创建 PR 合入 `main`。`main` 更新后由 `release.yml` 自动发版。功能代码和开发资料尽量分别提交，保持面向使用者的目录结构。需求优先级与验收状态见 [需求时间线](need-do.md)。
 
@@ -41,16 +41,15 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 | `src/bridge.ts` / `src/types.ts`                               | 前端 IPC 边界与类型                                                                         |
 | `src/components/ui/`                                           | 通用行、分组、按钮、开关、标签、头像与空状态；按钮用法见 [按钮与通用控件](UI_COMPONENTS.md) |
 | `src/style.css` / `ui.css` / `pages.css` / `desktop-shell.css` | token、共用控件、页面与窗口布局                                                             |
-| `src/market.ts` / `updates.ts`                                 | 跨页面插件操作与更新状态                                                                    |
+| `src/updates.ts`                                               | 应用更新状态                                                                                |
 | `src-tauri/src/lib.rs`                                         | IPC 注册、主窗口限制、任务锁和账号代次                                                      |
 | `auth.rs` / `accounts.rs` / `network.rs`                       | 登录状态机、校园账号与直连 / WebVPN                                                         |
 | `vault.rs`                                                     | auth.json、迁移与原子持久化                                                                 |
 | `campus.rs` / `campus_browser.rs`                              | 课表与独立校园网页窗口                                                                      |
 | `school/`                                                      | 教务查询、评教与校园服务后端（学籍、思源学堂、图书馆、场馆）                                |
-| `plugins.rs` / `market.rs`                                     | 本地清单、远端目录、校验、安装及来源                                                        |
+| `plugins.rs` / `plugin_settings.rs`                            | 内置清单、分类校验与按插件的设置存储                                                        |
 | `updates.rs`                                                   | 官方 Updater 接线及任务互斥                                                                 |
-| `plugins/` / `examples/`                                       | 内置插件与声明式插件示例                                                                    |
-| `tools/plugin-server/`                                         | 可独立运行的目录服务与示例包                                                                |
+| `plugins/`                                                     | 编入二进制的内置插件清单                                                                    |
 | `.github/workflows/`                                           | 检查和手动触发的签名发布流程                                                                |
 
 ## 持久化与运行边界
@@ -77,7 +76,7 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 | 状态                        | 范围                                                                                                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 已有用户实测                | 校园账号登录、账号恢复和真实课表                                                                                                                          |
-| 已实现，待进一步验收        | 原生校园窗口逐站认证、插件市场操作、更新设置                                                                                                              |
+| 已实现，待进一步验收        | 原生校园窗口逐站认证、内置插件中心（含桌宠与字体美化页）、更新设置                                                                                                              |
 | 后台已适配，页面未完成      | 本科成绩、考试、空教室、全校课程、校历、评教、考勤、校园卡、体测、校园通知（已作为 Agent / MCP 工具，暂无页面）                                           |
 | 已用真实账号验证（部分）    | 思源学堂课程 / 分类活动 / 活动详情 / 附件下载 / 回放地址 / 回放视频直链；作业上传流程（临时 1 字节文件上传后已删除）。作业正式提交只实现了协议与预览，尚未用真实作业执行 |
 | 页面已实现，待联调          | 学籍档案、图书馆楼层 / 区域 / 座位、场馆清单 / 时段 / 订单                                                                                                |
@@ -85,7 +84,7 @@ open "src-tauri/target/release/bundle/macos/XJTU Launcher.app"
 | 已实现，待真机验证          | 自定义入口图标：`~/.xjtu-launcher/resources/icons/icons.json` 映射到主侧边栏、插件入口与畅行校园分区，见 [ICONS.md](ICONS.md)                             |
 | 待开发                      | 研究生教务、LMS 讨论 / 问卷正文、场馆与图书馆预订、通知页面、校园生活模块、社区同步                                                                       |
 | 已部署（P0）                | 应用更新镜像（HTTP 直连 IP，见 [P0.md](P0.md)）；签名更新随 0.5.2 发布                                                                                    |
-| 待部署                      | 正式插件服务、更新镜像的域名与 HTTPS 证书                                                                                                                 |
+| 待部署                      | 更新镜像的域名与 HTTPS 证书                                                                                                                 |
 
 Agent 已接入全部现有校园查询，并新增思源学堂作业提交与评教两条写路径；写操作统一采用“预览 → 用户确认 → confirm=true 提交”的两步式，结果不明不重试。模型配置完成不代表 Agent 已用真实模型完成端到端验证。现有 Agent 和评教页面新稿仍未获准，不能按旧稿直接改动视觉。
 
@@ -102,7 +101,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-插件真实 HTTP 联调：先运行 `npm run market:serve`，再执行 `cargo run --locked --manifest-path src-tauri/Cargo.toml --example market_smoke`。测试使用临时安装目录，不接触用户凭据。原生 Cookie 隔离示例为 `campus_browser_smoke`，仅在需要核验校园窗口改动时运行。
+原生 Cookie 隔离示例为 `cargo run --locked --manifest-path src-tauri/Cargo.toml --example campus_browser_smoke`，仅在需要核验校园窗口改动时运行。
 
 插件市场轮次结果（历史）：前端 9 项测试通过，Rust 44 项通过、2 项联网探测默认忽略，Clippy 和格式检查通过。真实 HTTP 联调覆盖目录、下载、摘要失败、安装、来源保存和移除。独立 macOS App 已构建并打开，确认原生窗口及插件市场入口；Windows、正式签名更新和完整页面交互仍待验收。
 
@@ -246,6 +245,10 @@ Rust 114 项测试（10 项默认忽略）、Clippy（`-D warnings`）与格式�
 
 2026-11-08 Windows 开源签名接入（按用户要求“先做 win 的开源 MIT 免费签名”）：选定 SignPath Foundation（公开仓库 + OSI 许可 + GitHub 托管 runner 构建，三项本项目都满足，免费）。工作流已接线但**尚未申请、未验证**：`release.yml` 的 Windows 任务在 `tauri-action` 之后上传未签名安装包、提交 SignPath 签名请求、下载签好的文件覆盖本地安装包，再用 `tauri signer sign` 重签更新包并调用 `tools/patch-latest-signature.mjs` 把 `latest.json` 两个 Windows 平台的 `signature` 换掉，最后 `gh release upload --clobber` 覆盖草稿资产；全部步骤以变量 `SIGNPATH_PROJECT_SLUG` 为开关，未设置时行为与 0.6.0 完全一致。新增 `.signpath/artifact-configuration.xml`（ZIP 里的 `*-setup.exe` 做 Authenticode）。只签外层安装包，NSIS 内部的应用 exe 不能被 SignPath 深入签名。申请与配置步骤写在 [SIGNING.md](SIGNING.md)，需要的 Variables 是 `SIGNPATH_ORGANIZATION_ID` / `SIGNPATH_PROJECT_SLUG` / `SIGNPATH_SIGNING_POLICY_SLUG` / `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`，Secret 是 `SIGNPATH_API_TOKEN`。脚本已用线上 `latest.json` 本地验证，签名链路本身要等 SignPath 批准后才能真实跑一次。
 
+2026-11-08 官网新增社区广场（按用户要求“在方向的左边加一个社区广场，进去之后就是类似软件图标的样式，三条杠竖着写更丰富、更便捷、更自由，XJTU 也要上去”）：首页与 Q&amp;A 导航在「方向」左侧新增「社区广场」，指向新页面 `website/community/`。视觉返工多次：用户先后否掉白底静态卡片、深色霓虹海报、纯直角首尾相接的深色块，最终明确“喜欢简洁、大方”，并安装了官方 `frontend-design` skill 辅助。定稿是白底、浅色、分离的三条胶囊式竖带：深紫 / 深青 / 深琥珀只作为文字色和极浅底色的提示，不再使用实心色块、渐变、阴影或发光；宋体竖排“更丰富 / 更便捷 / 更自由”作为标题，`h1` 只留给读屏；XJTU 是下方居中的黑色 Didot 斜体（Windows 回退 Bodoni MT / Georgia）。三条带之间有 20–56 px 留白，桌面单条约 327×600 px，窄屏约 110×490 px。动效：载入时逐条向上揭开、三条带不同相位上下浮动 8 px、悬停轻微放大并加深底色；`prefers-reduced-motion` 下全部关闭。第二屏是白底「建设中」卡片，说明之后对接应用内社区，不写尚未实现的功能。窄屏导航原先用 `.top nav a:nth-child(3)` 隐藏「方向」，加了新链接后会误伤「下载」，改为 `data-sm="hide"`。已部署到 `/srv/xjtu-launcher/site`，`/site/community/` 返回 200；1440 px 与 390 px 下 `body.scrollWidth` 均等于视口宽度。**页面内容与应用内社区组件尚未对接，最新视觉尚未经过用户验收。**
+
+2026-11-08 插件中心改为内置插件（按用户要求“插件市场都是狗屎……现在就做我们内部的插件”）：删除远端市场、插件服务设置、本地导入、下载安装 / 卸载与 MCP 远端目录，`market.rs`、`src/market.ts`、`PluginSourceSettings.vue`、`tools/plugin-server/`、`examples/campus-links/`、`market_smoke` 示例一并移除。插件清单新增 `category`（campus / invention / lab）、`author`、`details`、`enabledByDefault`，`plugins.rs` 只接受已登记的内置 id，列表不再扫描目录。`AppConfig` 新增 `pluginLayout` 迁移标记，旧的 `pluginServer` / `checkPluginUpdates` / 桌宠字段只读不写，并把桌面宠物设置一次性搬到 `~/.xjtu-launcher/plugins/settings/cn.xjtu.desktop-pet.json`。新增 `plugin_settings.rs`（按插件校验、原子写入、64 KiB 上限、读写共用锁）与命令 `plugin_settings` / `save_plugin_settings`；桌面宠物改读插件设置，`pet-config-changed` 的整份 config 监听已删除。前端插件页改为「校园广场 / 拓展发明 / 创新小港 / 已安装插件」四分区，行式布局（名称、右侧简述、开关，单击展开作者 / 版本 / 详情），设置里的桌面宠物与插件服务分类删除；桌面宠物与字体美化成为两个默认关闭的插件页面，字体可按界面 / 标题 / 正文 / 课表数字 / 代码五区设置字体、字号、字重、行高与字距，关闭插件立即还原自带字体。可见文件区新增 `plugin/` 并参与存储迁移。验证：`cargo test` 161 项、Clippy 全目标、`vue-tsc --noEmit`、Vitest 82 项与 Prettier 通过；未构建验收包，插件中心、两个新页面与迁移后的真实旧配置均待用户真机验收，Windows 未验证。
+
 ## 字体
 
 Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC（SIL OFL 1.1）子集化后内嵌进应用：`src/assets/fonts/noto-sans-sc.woff2`（约 5.7 MB，覆盖常用拉丁、标点和 U+4E00–U+9FFF 汉字，可变字重 100–900）。样式表用 `@font-face` 注册为 `XJTU Sans SC`，仅在 `.platform-windows` 下排在字体栈首位；macOS 继续使用系统 SF Pro + 苹方。许可证文本 `src/assets/fonts/OFL.txt` 通过 `bundle.resources` 随应用分发。重新生成子集可用 `python3 -m fontTools.subset`，参数见提交记录。
@@ -254,7 +257,7 @@ Windows 默认的微软雅黑在界面字号下偏粗，因此把 Noto Sans SC�
 
 完整清单、依赖与验收条件见 [需求时间线](need-do.md)。近期的优先顺序：
 
-1. 由用户验收插件市场与设置；部署正式插件服务与应用更新源时按 [发布指南](RELEASING.md) 配置，并优先关闭 [P0：更新镜像临时使用 HTTP](P0.md)。
+1. 由用户验收插件中心、字体美化与桌面宠物页；部署应用更新源时按 [发布指南](RELEASING.md) 配置，并优先关闭 [P0：更新镜像临时使用 HTTP](P0.md)。
 2. 调整并确认校园查询 / 评教页面，接入已存在的 Rust 服务，逐项做真实账号验收。
 3. 在校园网下用真实账号联调学籍档案、图书馆座位和场馆页面，随后按用户反馈调整。
 4. 由用户选择一个真实作业验收 `campus_lms_submit` 的预览、上传与正式提交，并验收评教的预览与（在用户明确要求下的）正式提交；在验收前不要把 `confirm=true` 用于真实作业或真实评教。随后再迁入讨论 / 问卷、图书馆与场馆预订等写能力。Agent、MCP、Skills 与记忆已实现，仍需真实模型验证与用户验收；前端仍先出参考图并获准。

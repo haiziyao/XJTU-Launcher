@@ -9,11 +9,10 @@
     "build": "vue-tsc --noEmit && vite build",
     "test": "vitest run",
     "tauri": "tauri",
-    "format": "prettier --write src plugins examples *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
-    "format:check": "prettier --check src plugins examples *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
+    "format": "prettier --write src plugins *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
+    "format:check": "prettier --check src plugins *.json *.ts index.html src-tauri/*.json src-tauri/capabilities/*.json",
     "dev:frontend": "vite --host 127.0.0.1",
-    "app:build": "tauri build",
-    "market:serve": "node tools/plugin-server/server.mjs"
+    "app:build": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

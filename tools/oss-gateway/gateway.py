@@ -10,11 +10,14 @@ No third-party packages: OSS V1 URL signing is HMAC-SHA1 over
 """
 
 import base64
+import datetime
 import hashlib
 import hmac
+import json
 import os
 import re
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
@@ -29,6 +32,84 @@ URL_TTL = int(os.environ.get("OSS_URL_TTL", "60"))
 BIND = os.environ.get("GATEWAY_BIND", "127.0.0.1")
 PORT = int(os.environ.get("GATEWAY_PORT", "8787"))
 SITE_ORIGIN = os.environ.get("SITE_ORIGIN", "https://xjtu-launcher.cn")
+# Optional download counter shared with site-api. Empty disables counting.
+DOWNLOAD_STATS_FILE = os.environ.get("DOWNLOAD_STATS_FILE", "")
+DOWNLOAD_LOG_FILE = os.environ.get("DOWNLOAD_LOG_FILE", "")
+if not DOWNLOAD_LOG_FILE and DOWNLOAD_STATS_FILE:
+    DOWNLOAD_LOG_FILE = os.path.join(
+        os.path.dirname(DOWNLOAD_STATS_FILE), "downloads.log"
+    )
+COUNT_EXTS = (".dmg", ".exe", ".msi", ".appimage", ".deb", ".tar.gz")
+# Per-browser quota. Campus and office NATs put many people behind one IP, so
+# the fair limit is a first-party cookie; nginx keeps a much looser per-IP cap.
+DOWNLOAD_COOKIE = "xl_dl"
+DOWNLOAD_QUOTA = int(os.environ.get("DOWNLOAD_QUOTA", "20"))
+DOWNLOAD_QUOTA_WINDOW = int(os.environ.get("DOWNLOAD_QUOTA_WINDOW", "600"))
+COOKIE_MAX_AGE = 365 * 24 * 3600
+COOKIE_RE = re.compile(r"^[0-9a-f]{32}$")
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUPS = 5
+count_lock = threading.Lock()
+log_lock = threading.Lock()
+quota_lock = threading.Lock()
+quota_hits = {}
+
+
+def is_installer(key):
+    return not key.endswith(".sig") and key.lower().endswith(COUNT_EXTS)
+
+
+def cookie_key(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def allow_download(value):
+    """Sliding-window quota per browser cookie; the cookie is never logged."""
+    key = cookie_key(value)
+    now = time.time()
+    with quota_lock:
+        hits = [stamp for stamp in quota_hits.get(key, []) if now - stamp < DOWNLOAD_QUOTA_WINDOW]
+        if len(hits) >= DOWNLOAD_QUOTA:
+            quota_hits[key] = hits
+            return False
+        hits.append(now)
+        quota_hits[key] = hits
+        if len(quota_hits) > 5000:
+            for other, stamps in list(quota_hits.items()):
+                if not stamps or now - stamps[-1] >= DOWNLOAD_QUOTA_WINDOW:
+                    quota_hits.pop(other, None)
+        return True
+
+
+def rotate_log(path):
+    try:
+        if os.path.getsize(path) < LOG_MAX_BYTES:
+            return
+    except OSError:
+        return
+    for index in range(LOG_BACKUPS - 1, 0, -1):
+        src = "%s.%d" % (path, index)
+        if os.path.exists(src):
+            os.replace(src, "%s.%d" % (path, index + 1))
+    os.replace(path, path + ".1")
+
+
+def log_event(event, **fields):
+    """Append one JSON line to the download audit log; never breaks a download."""
+    if not DOWNLOAD_LOG_FILE:
+        return
+    fields["t"] = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    fields["event"] = event
+    line = json.dumps(fields, ensure_ascii=False, sort_keys=True) + "\n"
+    with log_lock:
+        try:
+            os.makedirs(os.path.dirname(DOWNLOAD_LOG_FILE), exist_ok=True)
+            rotate_log(DOWNLOAD_LOG_FILE)
+            with open(DOWNLOAD_LOG_FILE, "a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+        except (IOError, OSError) as error:
+            sys.stderr.write("cannot write download log: %s\n" % error)
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -60,6 +141,55 @@ def signed_url(key):
         f"?OSSAccessKeyId={quote(ACCESS_KEY_ID, safe='')}"
         f"&Expires={expires}&Signature={signature}"
     )
+
+
+def count_download(key):
+    """Increment the persistent download counter for a release object.
+
+    Counts download starts (a fresh GET without a Range header), not resumed or
+    ranged requests. Signature files are ignored. Failures never break a
+    download; the counter is best effort and site-api treats a missing file as
+    zero.
+    """
+    if not DOWNLOAD_STATS_FILE or not is_installer(key):
+        return
+    try:
+        with count_lock:
+            counts = {"total": 0, "files": {}}
+            try:
+                with open(DOWNLOAD_STATS_FILE, encoding="utf-8") as handle:
+                    saved = json.load(handle)
+            except (IOError, ValueError):
+                saved = None
+            if isinstance(saved, dict):
+                total = saved.get("total")
+                if isinstance(total, int) and total >= 0:
+                    counts["total"] = total
+                files = saved.get("files")
+                if isinstance(files, dict):
+                    counts["files"] = {
+                        str(name): value
+                        for name, value in files.items()
+                        if isinstance(value, int) and value >= 0
+                    }
+            counts["total"] += 1
+            counts["files"][key] = counts["files"].get(key, 0) + 1
+            counts["updated_at"] = int(time.time())
+
+            directory = os.path.dirname(DOWNLOAD_STATS_FILE)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            tmp = DOWNLOAD_STATS_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(counts, handle, ensure_ascii=False, indent=1)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, DOWNLOAD_STATS_FILE)
+    except (IOError, OSError) as error:
+        sys.stderr.write("cannot record download: %s\n" % error)
+        log_event("download_count_failed", key=key, error=str(error))
+        return
+    log_event("download", key=key, total=counts["total"], file_total=counts["files"][key])
 
 
 def allowed_referer(referer):
@@ -103,27 +233,72 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if not allowed_key(key):
+            log_event("bad_key", key=key[:120])
             self.respond(404, b"not found\n", "text/plain; charset=utf-8", send_body)
             return
 
         if not allowed_referer(self.headers.get("Referer", "")):
+            # The Referer value itself is not logged: it is attacker-controlled
+            # and can be long or contain personal paths.
+            log_event("referer_rejected", key=key)
             self.respond(403, b"forbidden\n", "text/plain; charset=utf-8", send_body)
             return
+
+        # A fresh GET is one download start; ignore HEAD, manifests and Range
+        # requests (resume / partial reads).
+        set_cookie = None
+        if send_body and key != "latest.json" and not self.headers.get("Range") and is_installer(key):
+            value = self.cookie_value()
+            if not value:
+                value = os.urandom(16).hex()
+                set_cookie = "%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax" % (
+                    DOWNLOAD_COOKIE,
+                    value,
+                    COOKIE_MAX_AGE,
+                )
+            if not allow_download(value):
+                log_event("download_quota_exceeded", key=key)
+                self.respond(
+                    429,
+                    b"too many downloads, try again later\n",
+                    "text/plain; charset=utf-8",
+                    send_body,
+                    set_cookie=set_cookie,
+                    retry_after=DOWNLOAD_QUOTA_WINDOW,
+                )
+                return
+            count_download(key)
+        elif send_body and key == "latest.json":
+            log_event("manifest")
 
         location = signed_url(key)
         self.send_response(302)
         self.send_header("Location", location)
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", "0")
+        if set_cookie:
+            self.send_header("Set-Cookie", set_cookie)
         self.end_headers()
 
-    def respond(self, status, body, content_type, send_body):
+    def respond(self, status, body, content_type, send_body, set_cookie=None, retry_after=None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        if set_cookie:
+            self.send_header("Set-Cookie", set_cookie)
+        if retry_after:
+            self.send_header("Retry-After", str(retry_after))
         self.end_headers()
         if send_body:
             self.wfile.write(body)
+
+    def cookie_value(self):
+        header = self.headers.get("Cookie", "")
+        for part in header.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == DOWNLOAD_COOKIE and COOKIE_RE.match(value):
+                return value
+        return ""
 
     def log_message(self, fmt, *args):
         # Paths are public object names; never log headers or credentials.
@@ -134,6 +309,14 @@ def main():
     if not ACCESS_KEY_ID or not ACCESS_KEY_SECRET:
         sys.exit("OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET are required")
 
+    log_event(
+        "start",
+        bucket=BUCKET,
+        ttl=URL_TTL,
+        counter=bool(DOWNLOAD_STATS_FILE),
+        quota=DOWNLOAD_QUOTA,
+        quota_window=DOWNLOAD_QUOTA_WINDOW,
+    )
     server = ThreadingHTTPServer((BIND, PORT), Handler)
     sys.stderr.write(
         f"xjtu-oss-gateway listening on {BIND}:{PORT}, bucket={BUCKET}, ttl={URL_TTL}s\n"

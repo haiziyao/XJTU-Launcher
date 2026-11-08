@@ -85,7 +85,7 @@
 - 模型配置：沿用现有的加密文件与 `auth.json` 边界，不把 API Key 写入日志。
 - 对话记录：`~/.xjtu-launcher/agent/conversations.json`；角色、Skills 与预设任务在 `presets.json`；全局记忆在 `memory.json`。
 - 校园查询工具复用 `school_query` 的封闭枚举，不接受任意 URL；账号切换时旧请求必须按会话代次丢弃。
-- Agent 的写工具只有两个。`campus_lms_submit`：`confirm=false` 只预览；`confirm=true` 才上传附件并提交。可以不选文件、只交文字；文件只允许用户明确指定的绝对路径、常见文档 / 代码 / 媒体扩展名，拒绝凭据目录与符号链接，单文件 100 MB、单次 200 MB、最多 10 个。已截止且不允许补交的作业在上传前就被拒绝，避免留下孤立附件。提交结果不明（网络中断、5xx）时不重试、不清理可能已被引用的上传，并提示用户到思源学堂确认；明确 4xx 拒绝才清理本次上传。只读侧另有 `campus_lms` 的 `action=overview`（本学期待办与课程资料）与 `campus_lms_download`（把课程资料附件存到可见下载文件夹，文件名清洗并自动加序号，不接受任意路径）。`campus_evaluations_submit`：必须先由 `campus_evaluation` 的 `action=preview` 生成预览并拿到 `previewId`，再带 `confirm=true` 提交；预览 15 分钟过期，绑定账号与会话代次，结果不明时标记为未知且不自动重试。
+- Agent 的写工具只有两个。`campus_lms_submit`：`confirm=false` 只预览；`confirm=true` 才上传附件并提交。可以不选文件、只交文字；文件只允许用户明确指定的绝对路径、常见文档 / 代码 / 媒体扩展名，拒绝凭据目录与符号链接，单文件 100 MB、单次 200 MB、最多 10 个。已截止且不允许补交的作业在上传前就被拒绝，避免留下孤立附件。提交结果不明（网络中断、5xx）时不重试、不清理可能已被引用的上传，并提示用户到思源学堂确认；明确 4xx 拒绝才清理本次上传。只读侧另有 `campus_lms` 的 `action=todos`（学校官方待办，判断“是否已交”的唯一来源）、`action=overview`（课程资料与逐课程扫描的作业，不能用来判断是否已交）与 `campus_lms_download`（把课程资料附件存到可见下载文件夹，文件名清洗并自动加序号，不接受任意路径）。`campus_evaluations_submit`：必须先由 `campus_evaluation` 的 `action=preview` 生成预览并拿到 `previewId`，再带 `confirm=true` 提交；预览 15 分钟过期，绑定账号与会话代次，结果不明时标记为未知且不自动重试。
 - 本地 MCP 会启动子进程，安装或编辑时界面必须显示实际命令；不把市场目录里的命令当作可信输入静默执行。
 
 ## 尚未确定

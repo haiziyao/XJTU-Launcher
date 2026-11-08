@@ -3,7 +3,11 @@
   "id": "cn.xjtu.home-theme",
   "name": "主页主题",
   "version": "0.1.0",
+  "category": "invention",
+  "author": "haiziyao",
   "description": "时钟风格与主页元素开关",
+  "details": "调整主页时钟的显示风格，并决定问候语、时钟、课表、链接与通知哪些区块出现在主页上。",
+  "enabledByDefault": true,
   "icon": "palette",
   "page": { "type": "homeTheme" },
   "widget": false

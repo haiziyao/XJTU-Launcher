@@ -233,8 +233,6 @@
     });
   }
 
-  var LIKE_STORE = "xjtu-launcher-likes";
-
   function setLikeCount(button, value) {
     if (typeof value !== "number" || !isFinite(value)) return;
     var num = button.querySelector(".like-num");
@@ -245,26 +243,26 @@
     button.classList.add("is-voted");
     button.setAttribute("aria-pressed", "true");
     var label = button.querySelector(".like-label");
-    if (label) label.textContent = "已支持";
+    if (label) label.textContent = "人支持 · 你已投";
+  }
+
+  function markUnvoted(button) {
+    button.classList.remove("is-voted");
+    button.setAttribute("aria-pressed", "false");
+    var label = button.querySelector(".like-label");
+    if (label) label.textContent = "人支持";
   }
 
   function initLikes() {
     var buttons = document.querySelectorAll(".like");
     if (!buttons.length) return;
 
-    var voted = {};
-    try {
-      voted = JSON.parse(localStorage.getItem(LIKE_STORE) || "{}") || {};
-    } catch (error) {
-      voted = {};
-    }
-
     Array.prototype.forEach.call(buttons, function (button) {
       var key = button.getAttribute("data-key");
-      if (voted[key]) markVoted(button);
 
       button.addEventListener("click", function () {
-        if (button.classList.contains("is-voted") || button.dataset.busy) return;
+        // The server toggles: clicking a voted button cancels that vote.
+        if (button.dataset.busy) return;
         button.dataset.busy = "1";
         button.classList.remove("is-error");
 
@@ -279,12 +277,10 @@
           })
           .then(function (result) {
             setLikeCount(button, result.count);
-            markVoted(button);
-            voted[key] = true;
-            try {
-              localStorage.setItem(LIKE_STORE, JSON.stringify(voted));
-            } catch (error) {
-              /* private mode: the vote still counted on the server */
+            if (result.voted) {
+              markVoted(button);
+            } else {
+              markUnvoted(button);
             }
           })
           .catch(function () {
@@ -293,7 +289,9 @@
             if (!label) return;
             label.textContent = "暂时不可用";
             window.setTimeout(function () {
-              label.textContent = "支持";
+              label.textContent = button.classList.contains("is-voted")
+                ? "人支持 · 你已投"
+                : "人支持";
               button.classList.remove("is-error");
             }, 2400);
           })
@@ -320,8 +318,19 @@
         }
 
         var likes = (data && data.likes) || {};
+        var mine = data && data.voted;
         Array.prototype.forEach.call(document.querySelectorAll(".like"), function (button) {
-          setLikeCount(button, likes[button.getAttribute("data-key")]);
+          var key = button.getAttribute("data-key");
+          setLikeCount(button, likes[key]);
+          // The server knows which directions this browser voted for, so the
+          // button state survives counter resets and is independent of the
+          // total count.
+          if (!mine || typeof mine[key] !== "boolean") return;
+          if (mine[key]) {
+            markVoted(button);
+          } else {
+            markUnvoted(button);
+          }
         });
       })
       .catch(function () {

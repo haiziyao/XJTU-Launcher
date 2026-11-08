@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.desktop-pet",
+  "name": "桌面宠物",
+  "version": "0.1.0",
+  "category": "invention",
+  "author": "haiziyao",
+  "description": "主窗口最小化后显示浮动桌宠与通知横条",
+  "details": "关掉主窗口仍然是关闭；只有最小化时才出现桌宠。可选角色、横条材质、只保留桌宠、台词气泡，以及校园通知、Agent 任务和更新提示。",
+  "enabledByDefault": false,
+  "icon": "cat",
+  "page": { "type": "desktopPet" },
+  "widget": false
+}

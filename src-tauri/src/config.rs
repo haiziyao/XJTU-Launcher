@@ -9,6 +9,10 @@ pub struct AppConfig {
     pub sidebar_collapsed: bool,
     #[serde(default = "default_sidebar_width")]
     pub sidebar_width: u32,
+    /// User order of the sidebar entries. Unknown ids are ignored and new
+    /// entries are appended by the frontend.
+    #[serde(default)]
+    pub sidebar_order: Vec<String>,
     /// Whether the Agent entry shows in the sidebar. On by default; the
     /// Agent settings page can turn it off without leaving the app.
     #[serde(default = "default_true")]
@@ -32,10 +36,11 @@ pub struct AppConfig {
     pub disabled_plugins: Vec<String>,
     #[serde(default)]
     pub hidden_plugins: Vec<String>,
+    /// Internal plugin-centre revision. 0 marks a config written before the
+    /// internal plugin centre; `load` then applies the new plugins' defaults
+    /// once. The frontend carries the value through every save.
     #[serde(default)]
-    pub plugin_server: Option<String>,
-    #[serde(default = "default_show_seconds")]
-    pub check_plugin_updates: bool,
+    pub plugin_layout: u32,
     #[serde(default = "default_show_seconds")]
     pub check_app_updates: bool,
     /// Tool ids pinned to the top of the 畅行校园 page, in display order.
@@ -60,25 +65,30 @@ pub struct AppConfig {
     /// ignored so a config written by an older build still loads.
     #[serde(default)]
     pub mcp_server_disabled_tools: Vec<String>,
-    /// Show the desktop pet after the main window is minimized.
-    #[serde(default = "default_true")]
+    /// Legacy plugin-service setting. Kept only so a config written by an
+    /// older build still loads; the plugin centre is internal now, and this
+    /// field is never written back.
+    #[serde(default, skip_serializing)]
+    pub plugin_server: Option<String>,
+    /// Legacy automatic plugin-update switch. Never written back.
+    #[serde(default = "default_true", skip_serializing)]
+    pub check_plugin_updates: bool,
+    /// Legacy desktop-pet settings. They moved to
+    /// `~/.xjtu-launcher/plugins/settings/cn.xjtu.desktop-pet.json`; kept here
+    /// only to migrate old files, and never serialized again.
+    #[serde(default = "default_true", skip_serializing)]
     pub pet_desktop_enabled: bool,
-    /// Built-in pet id; unknown ids fall back to the first character.
-    #[serde(default = "default_pet_character")]
+    #[serde(default = "default_pet_character", skip_serializing)]
     pub pet_character: String,
-    /// Notification bar material: glass-light | glass-dark | solid.
-    #[serde(default = "default_pet_bar_style")]
+    #[serde(default = "default_pet_bar_style", skip_serializing)]
     pub pet_bar_style: String,
-    /// Keep only the pet, without the notification bar.
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub pet_bar_hidden: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", skip_serializing)]
     pub pet_bubble_enabled: bool,
-    /// Notification sources the bar may show.
-    #[serde(default = "default_pet_sources")]
+    #[serde(default = "default_pet_sources", skip_serializing)]
     pub pet_sources: Vec<String>,
-    /// Last floating-window position in physical pixels.
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub pet_position: Option<[i32; 2]>,
     /// Give each page-level tab its own rounded backing.
     #[serde(default)]
@@ -176,6 +186,7 @@ impl Default for AppConfig {
             version: 1,
             sidebar_collapsed: false,
             sidebar_width: default_sidebar_width(),
+            sidebar_order: vec![],
             agent_sidebar_visible: true,
             nickname: String::new(),
             avatar: None,
@@ -192,8 +203,14 @@ impl Default for AppConfig {
                 "plugins".into(),
             ],
             plugin_order: vec![],
-            disabled_plugins: vec![],
+            // The pet and the font tool are optional inventions; a fresh
+            // install turns them on only when the user asks.
+            disabled_plugins: vec![
+                crate::plugins::DESKTOP_PET_ID.into(),
+                crate::plugins::FONT_BEAUTIFY_ID.into(),
+            ],
             hidden_plugins: vec![],
+            plugin_layout: 1,
             plugin_server: None,
             check_plugin_updates: true,
             check_app_updates: true,
@@ -308,23 +325,6 @@ impl AppConfig {
                 let unique: std::collections::HashSet<_> = self.home_sections.iter().collect();
                 unique.len() != self.home_sections.len()
             }
-            || ![
-                "deepseek-girl",
-                "deepseek-whalechan",
-                "gpt-dragon-girl",
-                "claude",
-            ]
-            .contains(&self.pet_character.as_str())
-            || !["glass-light", "glass-dark", "solid"].contains(&self.pet_bar_style.as_str())
-            || self.pet_sources.len() > 4
-            || self
-                .pet_sources
-                .iter()
-                .any(|source| !["campus", "agent", "class", "update"].contains(&source.as_str()))
-            || {
-                let unique: std::collections::HashSet<_> = self.pet_sources.iter().collect();
-                unique.len() != self.pet_sources.len()
-            }
             || bad_update_endpoint(&self.update_endpoint)
             || self.greeting.chars().count() > 60
             || self.widgets.len() > 4
@@ -332,26 +332,32 @@ impl AppConfig {
                 .widgets
                 .iter()
                 .any(|w| !["timetable", "links", "plugins", "notices"].contains(&w.as_str()))
+            || self.plugin_layout > 1
+            || self.sidebar_order.len() > 256
             || self.plugin_order.len() > 256
             || self.disabled_plugins.len() > 256
             || self.hidden_plugins.len() > 256
             || self
-                .plugin_order
+                .sidebar_order
                 .iter()
+                .chain(&self.plugin_order)
                 .chain(&self.disabled_plugins)
                 .chain(&self.hidden_plugins)
                 .any(|id| !crate::plugins::valid_id(id))
         {
             return Err("配置格式不受支持，请检查版本和字段".into());
         }
-        if let Some(source) = &self.plugin_server {
-            crate::market::source_url(source)?;
-        }
         let mut unique = self.widgets.clone();
         unique.sort();
         unique.dedup();
         if unique.len() != self.widgets.len() {
             return Err("主页组件不能重复".into());
+        }
+        let mut sidebar = self.sidebar_order.clone();
+        sidebar.sort();
+        sidebar.dedup();
+        if sidebar.len() != self.sidebar_order.len() {
+            return Err("侧栏顺序不能重复".into());
         }
         Ok(())
     }
@@ -371,6 +377,36 @@ fn canonical_tool_names(names: &[String]) -> Vec<String> {
     canonical
 }
 
+/// One-time defaults for the internal plugin centre. Older configs know only
+/// the five original plugins, so the pet and font tool must be added to the
+/// disabled list unless the pet was already in use. The marker is stored in
+/// the config and carried through saves, so this runs exactly once.
+fn migrate_plugin_layout(config: &mut AppConfig) {
+    if config.plugin_layout >= 1 {
+        return;
+    }
+    if !config.pet_desktop_enabled
+        && !config
+            .disabled_plugins
+            .iter()
+            .any(|id| id == crate::plugins::DESKTOP_PET_ID)
+    {
+        config
+            .disabled_plugins
+            .push(crate::plugins::DESKTOP_PET_ID.into());
+    }
+    if !config
+        .disabled_plugins
+        .iter()
+        .any(|id| id == crate::plugins::FONT_BEAUTIFY_ID)
+    {
+        config
+            .disabled_plugins
+            .push(crate::plugins::FONT_BEAUTIFY_ID.into());
+    }
+    config.plugin_layout = 1;
+}
+
 pub fn load(path: &Path) -> Result<AppConfig, String> {
     if !path.exists() {
         return Ok(AppConfig::default());
@@ -379,6 +415,7 @@ pub fn load(path: &Path) -> Result<AppConfig, String> {
     let mut config: AppConfig = serde_json::from_slice(&bytes)
         .map_err(|_| "配置文件损坏，已保留原文件，请修复后重试".to_string())?;
     config.mcp_server_disabled_tools = canonical_tool_names(&config.mcp_server_disabled_tools);
+    migrate_plugin_layout(&mut config);
     config.validate()?;
     Ok(config)
 }
@@ -431,27 +468,77 @@ mod tests {
     }
 
     #[test]
-    fn desktop_pet_settings_default_and_reject_unknown_values() {
+    fn sidebar_order_round_trips_and_rejects_duplicates() {
+        let config = AppConfig {
+            sidebar_order: vec!["settings".into(), "home".into(), "cn.xjtu.timetable".into()],
+            ..AppConfig::default()
+        };
+        config.validate().unwrap();
+        let saved = serde_json::to_value(&config).unwrap();
+        assert_eq!(saved["sidebarOrder"][0], "settings");
+
+        let duplicate = AppConfig {
+            sidebar_order: vec!["home".into(), "home".into()],
+            ..AppConfig::default()
+        };
+        assert!(duplicate.validate().is_err());
+        let bad_case = AppConfig {
+            sidebar_order: vec!["Home".into()],
+            ..AppConfig::default()
+        };
+        assert!(bad_case.validate().is_err());
+    }
+
+    #[test]
+    fn fresh_config_keeps_new_invention_plugins_off() {
         let config = AppConfig::default();
         config.validate().unwrap();
+        assert_eq!(config.plugin_layout, 1);
+        assert!(config
+            .disabled_plugins
+            .contains(&crate::plugins::DESKTOP_PET_ID.to_string()));
+        assert!(config
+            .disabled_plugins
+            .contains(&crate::plugins::FONT_BEAUTIFY_ID.to_string()));
+    }
+
+    #[test]
+    fn old_config_migrates_pet_and_font_defaults_once() {
+        let old = r##"{"version":1,"accent":"#1f6fe5","greeting":"","widgets":["links"],"pluginOrder":[],"disabledPlugins":[],"petDesktopEnabled":false}"##;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.json");
+        fs::write(&path, old).unwrap();
+        let config = load(&path).unwrap();
+        assert_eq!(config.plugin_layout, 1);
+        assert!(config
+            .disabled_plugins
+            .contains(&crate::plugins::DESKTOP_PET_ID.to_string()));
+        assert!(config
+            .disabled_plugins
+            .contains(&crate::plugins::FONT_BEAUTIFY_ID.to_string()));
+        // The retired plugin-service fields are read once and never written.
+        let saved = serde_json::to_value(&config).unwrap();
+        assert!(saved.get("pluginServer").is_none());
+        assert!(saved.get("petDesktopEnabled").is_none());
+        assert_eq!(saved["pluginLayout"], 1);
+    }
+
+    #[test]
+    fn an_in_use_desktop_pet_stays_enabled_across_the_upgrade() {
+        let old = r##"{"version":1,"accent":"#1f6fe5","greeting":"","widgets":["links"],"pluginOrder":[],"disabledPlugins":[],"petDesktopEnabled":true,"petCharacter":"claude"}"##;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.json");
+        fs::write(&path, old).unwrap();
+        let config = load(&path).unwrap();
+        assert!(!config
+            .disabled_plugins
+            .contains(&crate::plugins::DESKTOP_PET_ID.to_string()));
+        assert!(config
+            .disabled_plugins
+            .contains(&crate::plugins::FONT_BEAUTIFY_ID.to_string()));
+        // Legacy values survive parsing so the pet-settings migration can read them.
         assert!(config.pet_desktop_enabled);
-        assert_eq!(config.pet_character, "deepseek-girl");
-        assert_eq!(config.pet_bar_style, "glass-light");
-        let bad = AppConfig {
-            pet_character: "unknown".into(),
-            ..AppConfig::default()
-        };
-        assert!(bad.validate().is_err());
-        let bad = AppConfig {
-            pet_bar_style: "unknown".into(),
-            ..AppConfig::default()
-        };
-        assert!(bad.validate().is_err());
-        let bad = AppConfig {
-            pet_sources: vec!["campus".into(), "campus".into()],
-            ..AppConfig::default()
-        };
-        assert!(bad.validate().is_err());
+        assert_eq!(config.pet_character, "claude");
     }
 
     #[test]

@@ -6,9 +6,9 @@ mod capture_store;
 mod config;
 mod expose;
 mod icons;
-mod market;
 mod mcp;
 mod personal_image;
+mod plugin_settings;
 mod plugins;
 mod providers;
 mod school;
@@ -37,7 +37,6 @@ use tauri::{Emitter, Manager, WebviewWindow};
 #[derive(Default)]
 struct AppState {
     config_lock: Mutex<()>,
-    market_lock: tokio::sync::Mutex<()>,
     providers_lock: Mutex<()>,
     mcp_lock: Mutex<()>,
     auth_lock: tokio::sync::Mutex<()>,
@@ -94,10 +93,6 @@ pub(crate) fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     storage::config_path(app)
 }
 
-fn plugin_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    storage::path(app, "plugins")
-}
-
 #[tauri::command]
 fn load_config(
     app: tauri::AppHandle,
@@ -125,103 +120,34 @@ fn save_config(
 }
 
 #[tauri::command]
-fn list_plugins(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-) -> Result<plugins::PluginList, String> {
+fn list_plugins(window: WebviewWindow) -> Result<plugins::PluginList, String> {
     main_only(&window)?;
-    plugins::list(&plugin_directory(&app)?)
+    plugins::list()
 }
 
 #[tauri::command]
-fn import_plugin(
+fn plugin_settings(
     app: tauri::AppHandle,
     window: WebviewWindow,
-    state: tauri::State<AppState>,
-    directory: String,
-) -> Result<(), String> {
-    main_only(&window)?;
-    let _guard = state.config_lock.lock().map_err(|_| "插件服务繁忙")?;
-    plugins::import(std::path::Path::new(&directory), &plugin_directory(&app)?)
-}
-
-#[tauri::command]
-fn plugin_source(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
+    id: String,
 ) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    let config = config::load(&config_path(&app)?)?;
-    Ok(
-        serde_json::json!({"source": market::source(&config)?, "defaultSource": market::default_server()}),
-    )
+    plugin_settings::load(&app, &id)
 }
 
 #[tauri::command]
-async fn plugin_catalog(
+fn save_plugin_settings(
     app: tauri::AppHandle,
     window: WebviewWindow,
-) -> Result<market::RemoteCatalog, String> {
-    main_only(&window)?;
-    let mut catalog = market::catalog(&config::load(&config_path(&app)?)?).await?;
-    catalog.updates =
-        market::available_updates(&catalog, &plugins::list(&plugin_directory(&app)?)?);
-    Ok(catalog)
-}
-
-#[tauri::command]
-async fn install_market_plugin(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
     id: String,
-    version: String,
-) -> Result<(), String> {
+    settings: serde_json::Value,
+) -> Result<serde_json::Value, String> {
     main_only(&window)?;
-    let _operation = state
-        .market_lock
-        .try_lock()
-        .map_err(|_| "另一个插件正在安装")?;
-    let config = config::load(&config_path(&app)?)?;
-    let catalog = market::catalog(&config).await?;
-    let source = catalog.source.ok_or("尚未配置插件服务器")?;
-    let entry = catalog
-        .plugins
-        .iter()
-        .find(|p| p.id == id && p.version == version)
-        .ok_or("目录版本已改变，请刷新后再试")?;
-    let package = market::download(&source, entry, |received, total| {
-        let _ = window.emit(
-            "plugin-download",
-            serde_json::json!({"id": id, "received": received, "total": total}),
-        );
-    })
-    .await?;
-    let _guard = state.config_lock.lock().map_err(|_| "插件服务繁忙")?;
-    if market::source(&config::load(&config_path(&app)?)?)?.as_deref() != Some(&source) {
-        return Err("插件源已更改，请重新安装".into());
+    let saved = plugin_settings::save(&app, &id, &settings)?;
+    if id == plugin_settings::PET_ID {
+        pet_desktop::sync_settings(&app);
     }
-    market::install(&plugin_directory(&app)?, package)?;
-    let _ = window.emit("plugins-changed", ());
-    Ok(())
-}
-
-#[tauri::command]
-fn remove_plugin(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<AppState>,
-    id: String,
-) -> Result<(), String> {
-    main_only(&window)?;
-    let _operation = state
-        .market_lock
-        .try_lock()
-        .map_err(|_| "请等待插件安装完成")?;
-    let _guard = state.config_lock.lock().map_err(|_| "插件服务繁忙")?;
-    market::remove(&plugin_directory(&app)?, &id)?;
-    let _ = window.emit("plugins-changed", ());
-    Ok(())
+    Ok(saved)
 }
 
 #[derive(Serialize)]
@@ -2351,39 +2277,6 @@ async fn probe_mcp_server(
     };
     mcp::probe(&server).await
 }
-#[tauri::command]
-async fn mcp_catalog(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-) -> Result<mcp::RemoteCatalog, String> {
-    main_only(&window)?;
-    mcp::catalog(&config::load(&config_path(&app)?)?).await
-}
-#[tauri::command]
-async fn install_mcp_entry(
-    app: tauri::AppHandle,
-    window: WebviewWindow,
-    state: tauri::State<'_, AppState>,
-    entry_id: String,
-    values: std::collections::BTreeMap<String, String>,
-) -> Result<String, String> {
-    main_only(&window)?;
-    let catalog = mcp::catalog(&config::load(&config_path(&app)?)?).await?;
-    let entry = catalog
-        .servers
-        .into_iter()
-        .find(|entry| entry.id == entry_id)
-        .ok_or("目录中没有这个 MCP 服务")?;
-    let server = mcp::from_entry(&entry, &values)?;
-    let _guard = state.mcp_lock.lock().map_err(|_| "MCP 配置服务繁忙")?;
-    let path = mcp_path(&app)?;
-    let mut book = mcp::load(&path)?;
-    book.servers.retain(|existing| existing.id != server.id);
-    book.servers.push(server.clone());
-    mcp::save(&path, &book)?;
-    agent::invalidate_for_mcp(&app);
-    Ok(server.id)
-}
 // Image work runs off the main thread so the window stays responsive.
 // The source goes back as raw bytes; the webview decodes the crop preview natively.
 #[tauri::command]
@@ -2858,6 +2751,11 @@ pub fn run() {
             // ~/.xjtu-launcher into the single data folder; the credentials
             // file next to them stays where the convention says it lives.
             let _ = storage::adopt_legacy(app.handle());
+            // The plugin resource folder is part of the visible file area, so
+            // it exists even before a plugin asks for a file.
+            if let Ok(dir) = storage::file_path(app.handle(), "plugin") {
+                let _ = std::fs::create_dir_all(dir);
+            }
             campus_browser::install_menu(app.handle())?;
             pet_desktop::initialize(app.handle())?;
             // Resume the endpoint only if the user left it on; a bind failure is
@@ -2894,10 +2792,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            plugin_source,
-            plugin_catalog,
-            install_market_plugin,
-            remove_plugin,
+            plugin_settings,
+            save_plugin_settings,
             updates::update_status,
             updates::check_app_update,
             updates::install_app_update,
@@ -2953,8 +2849,6 @@ pub fn run() {
             remove_mcp_server,
             set_mcp_server_enabled,
             probe_mcp_server,
-            mcp_catalog,
-            install_mcp_entry,
             agent_list,
             agent_workspaces,
             agent_create_workspace,
@@ -2986,7 +2880,6 @@ pub fn run() {
             load_config,
             save_config,
             list_plugins,
-            import_plugin,
             account_status,
             account_login_state,
             forget_account_password,

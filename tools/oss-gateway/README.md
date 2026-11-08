@@ -1,6 +1,6 @@
 # OSS 下载网关
 
-安装包放在私有 OSS Bucket 里，服务器只负责签发 60 秒有效的下载地址，并按 IP 限流。这样即使链接被爬走，也不能无限刷流量。
+安装包放在私有 OSS Bucket 里，服务器只负责签发 60 秒有效的下载地址，并按浏览器 Cookie 限制每人下载次数；nginx 的按 IP 限流只做宽松兜底。这样即使链接被爬走，也不能无限刷流量。
 
 ## 为什么不直接公共读
 
@@ -11,8 +11,8 @@
 ```text
 浏览器 / 应用
   → https://xjtu-launcher.cn/download/v0.5.2/XJTU.Launcher_0.5.2_aarch64.dmg
-  → nginx：每个 IP 12 次/分钟、最多 4 个并发，超出返回 429
-  → 127.0.0.1:8787 校验路径，签发 60 秒有效的 OSS 地址
+  → nginx：每个 IP 120 次/分钟、最多 50 个并发（只挡明显脚本）
+  → 127.0.0.1:8787 校验路径与浏览器 Cookie 配额（默认 20 次/10 分钟），签发 60 秒有效的 OSS 地址
   → 302 到 https://xjtu-launcher.oss-cn-beijing.aliyuncs.com/...
   → OSS 直接把安装包发给用户，不经过服务器
 ```
@@ -75,6 +75,9 @@ OSS_URL_TTL=60
 GATEWAY_BIND=127.0.0.1
 GATEWAY_PORT=8787
 SITE_ORIGIN=https://xjtu-launcher.cn
+DOWNLOAD_STATS_FILE=/srv/xjtu-launcher/stats/gateway-downloads.json
+# 留空则与 DOWNLOAD_STATS_FILE 同目录的 downloads.log
+DOWNLOAD_LOG_FILE=
 EOF
 
 sudo chown root:www /etc/xjtu-launcher/oss.env   # Debian/Ubuntu 用 root:www-data
@@ -97,16 +100,16 @@ sudo setsebool -P httpd_can_network_connect 1
 把 `nginx-download.conf` 里的 zone 放进 `http` 上下文（`/etc/nginx/conf.d/` 下的文件已经在 `http` 里）：
 
 ```nginx
-limit_req_zone $binary_remote_addr zone=xjtu_download:10m rate=12r/m;
+limit_req_zone $binary_remote_addr zone=xjtu_download:10m rate=120r/m;
 limit_conn_zone $binary_remote_addr zone=xjtu_download_conn:10m;
 ```
 
-在官网的 `server` 块里加（`/latest.json` 也放在私有 Bucket，更新器同样经过网关）：
+按 IP 的限制只是兜底：校园网和办公室 NAT 下几百个人共用一个出口 IP，真正公平的配额由网关按浏览器 Cookie 计算（见下文「按浏览器的下载配额」）。在官网的 `server` 块里加：
 
 ```nginx
 location ^~ /download/ {
-    limit_req zone=xjtu_download burst=6 nodelay;
-    limit_conn xjtu_download_conn 4;
+    limit_req zone=xjtu_download burst=60 nodelay;
+    limit_conn xjtu_download_conn 50;
     limit_req_status 429;
     limit_conn_status 429;
 
@@ -117,10 +120,9 @@ location ^~ /download/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 
+# 更新清单每台客户端启动都会请求，不按 IP 限流；它只有几 KB，
+# 一个 NAT 出口同时开机也不会互相挤掉。
 location = /latest.json {
-    limit_req zone=xjtu_download burst=6 nodelay;
-    limit_req_status 429;
-
     proxy_pass http://127.0.0.1:8787;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -133,9 +135,18 @@ location = /latest.json {
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-`rate=12r/m` 表示每个 IP 每分钟 12 次，`burst=6` 允许短时突发。正常用户点三个下载按钮远低于这个值；更新检查也只发一次请求。
+`rate=120r/m` 表示每个 IP 每分钟 120 次，`burst=60` 允许短时突发；`limit_conn 50` 允许同一个出口最多 50 个并发的网关请求。这个值故意放得很宽，只用来挡住明显的脚本：校园 NAT 下一个出口可能同时有几十上百人点击下载，收紧就会误伤。真正的每人配额在网关里按 Cookie 算。
 
-如果校园 NAT 下多人同时下载被误伤，把 `rate` 调到 `30r/m`、`burst` 调到 `10`。`limit_conn` 统计的是网关请求，不是 OSS 文件传输；真正限制单个下载速度的是 OSS 的「单链接限速」。
+`limit_conn` 统计的是网关请求，不是 OSS 文件传输；真正限制单个下载速度的是 OSS 的「单链接限速」。
+
+### 按浏览器的下载配额
+
+网关给第一次下载的浏览器发 `xl_dl` Cookie（随机值，`HttpOnly; SameSite=Lax`，一年有效），之后按这个 Cookie 做滑动窗口配额：默认 10 分钟内 20 次安装包下载。超出返回 `429` 和 `Retry-After`，不影响 `latest.json`、`Range` 续传和 `HEAD`。
+
+- 环境变量：`DOWNLOAD_QUOTA`（次数，默认 20）、`DOWNLOAD_QUOTA_WINDOW`（秒，默认 600）。
+- 配额在进程内存里，重启网关会清空；不需要持久化。
+- 换浏览器或清 Cookie 会被当成新访客；不带 Cookie 直接请求也会各发一个新 Cookie。所以它是「让同 IP 下的正常人互不影响」的公平性措施，不是防作弊。费用兜底仍然是 OSS 单链接限速、预算告警和日志。
+- 日志里记 `download_quota_exceeded`，不记 Cookie 值。
 
 ### 5. 自动上传安装包
 
@@ -190,6 +201,24 @@ VERSION=0.5.2 OSS_BUCKET=xjtu-launcher OSS_CONFIG_FILE=~/.ossutilconfig \
 ```
 
 重新部署 `website/`。确认页面的下载按钮指向 `/download/...`，不是 `aliyuncs.com`。
+
+## 下载计数
+
+设置 `DOWNLOAD_STATS_FILE`（要与 site-api 的 `STATS_DIR` 同一个目录）后，网关会把每次**不带 `Range` 的安装包 GET** 记成一次下载开始，写入该 JSON：`{"total": n, "files": {"v0.5.2/xxx.dmg": n}, "updated_at": 时间戳}`。`.sig` 与 `latest.json` 不计；Range / 续传不重复计。写入失败只记日志，不影响下载。
+
+site-api 读取这个文件的 `total`，加到 GitHub Releases API 的历史下载量上；安装包迁到 OSS 后 GitHub 的计数不再增长，页面上的数字靠这部分继续增加。它是「下载开始」的次数，不是完成数。
+
+### 日志
+
+网关每次计数都往 `downloads.log` 追加一行 JSON（默认与计数文件同目录，可用 `DOWNLOAD_LOG_FILE` 改）：
+
+```json
+{"t":"2026-11-08T00:35:19Z","event":"download","key":"v0.5.2/xxx.dmg","total":12,"file_total":7}
+```
+
+还记录 `manifest`（每次 `latest.json` 请求）、`referer_rejected`、`bad_key`、`download_count_failed` 和服务启动。日志不含 Referer 原文、请求头或 AccessKey；Referer 可能被伪造且可能带个人路径，只记拒绝事实。超过 5 MB 轮转成 `.1`，保留 5 个旧文件。计数本身每次下载立即原子写入，日志只是审计，写日志失败不影响下载。
+
+site-api 的定时快照会把 `gateway-downloads.json` 一起复制到 `/srv/xjtu-launcher/stats/backups/`，见 `tools/site-api/README.md`。
 
 ## 验证
 

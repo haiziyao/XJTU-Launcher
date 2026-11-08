@@ -202,9 +202,9 @@ pub fn builtin() -> Vec<ToolDef> {
         ),
         campus(
             "campus_lms",
-            "思源学堂（只读）。action=overview 返回本学期的待办作业与课程资料（含可下载附件的 upload 编号）；courses 列出课程；activities 列出某门课程的活动（需要 course）；activity 查看活动详情（需要 activity）；submissions 查看某次作业的我的提交记录（需要 activity）。",
+            "思源学堂（只读）。action=todos 返回学校官方待办（仍未提交、未截止的作业），是判断“是否已交”的唯一来源；overview 返回本学期课程资料（含可下载附件的 upload 编号）与逐课程扫描的作业，后者不能用来判断是否已交；courses 列出课程；activities 列出某门课程的活动（需要 course）；activity 查看活动详情（需要 activity）；submissions 查看某次作业的我的提交记录（需要 activity）。",
             json!({
-                "action": choice(&["overview", "courses", "activities", "activity", "submissions"], "要查询的内容"),
+                "action": choice(&["todos", "overview", "courses", "activities", "activity", "submissions"], "要查询的内容"),
                 "course": { "type": "integer", "minimum": 1, "description": "activities 必填，课程编号，来自 action=courses" },
                 "activity": { "type": "integer", "minimum": 1, "description": "activity / submissions 必填，活动编号，来自 action=activities" }
             }),
@@ -495,6 +495,7 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
             other => return Err(invalid_action("campus_notices", other, "channels、list")),
         },
         "campus_lms" => match action_of(args, "").as_str() {
+            "todos" => school::Query::LmsTodos,
             "overview" => school::Query::LmsOverview,
             "courses" => school::Query::LmsCourses,
             "activities" => school::Query::LmsActivities {
@@ -510,7 +511,7 @@ fn query_for(name: &str, args: &Value) -> Result<school::Query, String> {
                 return Err(invalid_action(
                     "campus_lms",
                     other,
-                    "overview、courses、activities、activity、submissions",
+                    "todos、overview、courses、activities、activity、submissions",
                 ))
             }
         },

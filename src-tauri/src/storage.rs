@@ -10,6 +10,7 @@
 //!
 //! ~/Documents/xjtu-launcher-file/   the user's own files
 //! ├── workspace/                    资料库
+//! ├── plugin/                       插件资源
 //! └── download/                     下载
 //! ```
 //!
@@ -57,10 +58,15 @@ struct Item {
 
 /// Only the user's own files move between folders; app data stays in the
 /// hidden home and is never touched by a migration.
-const FILE_ITEMS: [Item; 2] = [
+const FILE_ITEMS: [Item; 3] = [
     Item {
         name: "workspace",
         label: "工作台（资料库）",
+        directory: true,
+    },
+    Item {
+        name: "plugin",
+        label: "插件资源",
         directory: true,
     },
     Item {

@@ -15,8 +15,6 @@ import type {
   EntryIconSet,
   ExposeStatus,
   ExposeTool,
-  MarketCatalog,
-  McpCatalog,
   McpServer,
   McpTool,
   McpTransport,
@@ -62,9 +60,6 @@ import type {
 export const native = isTauri();
 
 export const bridge = {
-  pluginSource: () =>
-    invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
-  pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
   // Entry icons under `~/.xjtu-launcher/resources/icons`; never an error, an
   // empty set just means every entry keeps its built-in glyph.
@@ -174,9 +169,6 @@ export const bridge = {
     invoke<EvaluationOutcome[]>('school_submit_evaluations', { previewId }),
   schoolCancelEvaluations: (previewId: string) =>
     invoke<void>('school_cancel_evaluations', { previewId }),
-  installPlugin: (id: string, version: string) =>
-    invoke<void>('install_market_plugin', { id, version }),
-  removePlugin: (id: string) => invoke<void>('remove_plugin', { id }),
   updateStatus: () => invoke<UpdateStatus>('update_status'),
   checkUpdate: () => invoke<UpdateStatus>('check_app_update'),
   installUpdate: () => invoke<void>('install_app_update'),
@@ -255,16 +247,13 @@ export const bridge = {
     requireNative();
     return invoke('list_plugins');
   },
-  async importPlugin(): Promise<boolean> {
+  async pluginSettings<T>(id: string): Promise<T> {
     requireNative();
-    const directory = await open({
-      directory: true,
-      multiple: false,
-      title: '选择包含 plugin.json 的插件目录',
-    });
-    if (!directory) return false;
-    await invoke('import_plugin', { directory });
-    return true;
+    return invoke<T>('plugin_settings', { id });
+  },
+  async savePluginSettings<T>(id: string, settings: T): Promise<T> {
+    requireNative();
+    return invoke<T>('save_plugin_settings', { id, settings });
   },
   async account(): Promise<AccountStatus> {
     requireNative();
@@ -395,14 +384,6 @@ export const bridge = {
   async probeMcpServer(id: string): Promise<McpTool[]> {
     requireNative();
     return invoke('probe_mcp_server', { id });
-  },
-  async mcpCatalog(): Promise<McpCatalog> {
-    requireNative();
-    return invoke('mcp_catalog');
-  },
-  async installMcpEntry(id: string, values: Record<string, string>): Promise<string> {
-    requireNative();
-    return invoke('install_mcp_entry', { entryId: id, values });
   },
   async onAuth(callback: (event: AuthEvent) => void): Promise<() => void> {
     requireNative();
@@ -562,10 +543,6 @@ export const bridge = {
   async onPetOpenSettings(callback: () => void): Promise<() => void> {
     requireNative();
     return listen('pet-open-settings', () => callback());
-  },
-  async onPetConfigChanged(callback: (config: AppConfig) => void): Promise<() => void> {
-    requireNative();
-    return listen<AppConfig>('pet-config-changed', (e) => callback(e.payload));
   },
 };
 

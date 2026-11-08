@@ -16,6 +16,7 @@ export const defaultConfig = (): AppConfig => ({
   version: 1,
   sidebarCollapsed: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  sidebarOrder: [],
   agentSidebarVisible: true,
   nickname: '',
   avatar: null,
@@ -27,10 +28,9 @@ export const defaultConfig = (): AppConfig => ({
   greeting: '把校园，放在手边。',
   widgets: ['timetable', 'links', 'notices', 'plugins'],
   pluginOrder: [],
-  disabledPlugins: [],
+  disabledPlugins: ['cn.xjtu.desktop-pet', 'cn.xjtu.font-beautify'],
   hiddenPlugins: [],
-  pluginServer: null,
-  checkPluginUpdates: true,
+  pluginLayout: 1,
   checkAppUpdates: true,
   campusPinned: [],
   campusRailCollapsed: false,
@@ -39,13 +39,6 @@ export const defaultConfig = (): AppConfig => ({
   mcpServerEnabled: false,
   mcpServerPort: 39217,
   mcpServerDisabledTools: [],
-  petDesktopEnabled: true,
-  petCharacter: 'deepseek-girl',
-  petBarStyle: 'glass-light',
-  petBarHidden: false,
-  petBubbleEnabled: true,
-  petSources: ['campus', 'agent', 'update'],
-  petPosition: null,
   pageTabSurfaces: false,
   wallpaperDisplay: 'balanced',
   wallpaperPanel: { clear: 92, balanced: 72, vivid: 52 },
@@ -66,6 +59,36 @@ export function orderedPlugins(plugins: Plugin[], config: AppConfig): Plugin[] {
       (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
         (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id),
   );
+}
+
+/**
+ * Sort sidebar entries by the stored order. Unknown ids (new plugins, new
+ * fixed entries) stay after the listed ones, in their built-in order.
+ */
+export function orderSidebarEntries<T extends { id: string }>(entries: T[], order: string[]): T[] {
+  if (!order.length) return entries;
+  const rank = new Map(order.map((id, index) => [id, index]));
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const left = rank.get(a.entry.id);
+      const right = rank.get(b.entry.id);
+      if (left === undefined && right === undefined) return a.index - b.index;
+      if (left === undefined) return 1;
+      if (right === undefined) return -1;
+      return left - right;
+    })
+    .map(({ entry }) => entry);
+}
+
+/**
+ * Put a reordered visible list back into the full entry list. Hidden entries
+ * keep their slots, so re-enabling a plugin restores where it used to sit.
+ */
+export function mergeSidebarOrder(allIds: string[], visible: string[]): string[] {
+  const visibleSet = new Set(visible);
+  let cursor = 0;
+  return allIds.map((id) => (visibleSet.has(id) ? visible[cursor++] : id));
 }
 
 // Use local dates, so a UTC offset does not move a course to the previous day.
