@@ -174,7 +174,6 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       OSS_BUCKET: ${{ vars.OSS_BUCKET }}
       OSS_PUBLIC_BASE: ${{ vars.OSS_PUBLIC_BASE }}
-      OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
     steps:
       - uses: actions/checkout@v4
         with:
@@ -189,6 +188,8 @@ jobs:
           ossutil --version
       - name: Write the ossutil config
         env:
+          # `runner` is only available to steps, not to job-level env.
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
         run: |
@@ -216,6 +217,8 @@ jobs:
             done
           ls -l assets
       - name: Upload to OSS and rewrite latest.json
+        env:
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
         run: node tools/upload-oss.mjs
 
   # Publishing only after every platform succeeded keeps the release and
