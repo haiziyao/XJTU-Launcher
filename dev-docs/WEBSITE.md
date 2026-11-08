@@ -208,22 +208,17 @@ location ^~ /download/ {
 
 代价是 3.4 Mbps 出口：一个 25 MB 的包约一分钟，多人同时下载会互相拖慢。这个模式下 OSS 只承担存储，不再承担带宽。
 
-## 后续：更新源切到 HTTPS
+## 更新源（已切到 OSS 网关）
 
-安装包放 OSS 后，`latest.json` 也放私有 Bucket，由官网统一入口提供：
+`latest.json` 已放进私有 Bucket 的根目录，由下载网关提供。备案期间地址仍用 HTTP + IP：
 
 ```text
-https://xjtu-launcher.cn/latest.json
+http://8.152.100.169/latest.json
 ```
 
-清单里的 `platforms[*].url` 指向 `https://xjtu-launcher.cn/download/v<版本>/<文件>`，由下载网关 302 到 OSS；`signature` 保持 Tauri 生成的值不变。Tauri 更新器使用 reqwest，默认跟随重定向，但必须用真实旧版客户端验证一次。然后按 [P0.md](P0.md) 的退出条件改代码并发一个新版本：
+清单里的 `platforms[*].url` 指向 `http://8.152.100.169/download/v<版本>/<文件>`（`OSS_PUBLIC_BASE`），由网关 302 到私有 OSS；`signature` 保持 Tauri 生成的值不变。2026-11-08 已把 `updates.rs` 的 `DEFAULT_ENDPOINT`、`release.yml` 的 `XJTU_UPDATE_ENDPOINT`、GitHub 变量 `XJTU_UPDATE_ENDPOINT` 与 `OSS_PUBLIC_BASE` 都改成上面的 IP 地址；0.5.x 客户端内置的旧路径 `/xjtu-launcher/latest.json` 由 nginx 精确匹配转发到网关，旧用户也能收到新版本清单。
 
-1. `src-tauri/src/updates.rs` 的 `DEFAULT_ENDPOINT`。
-2. `.github/workflows/release.yml` 的 `XJTU_UPDATE_ENDPOINT`。
-3. 恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验。
-4. 发版后用真实旧版客户端走通「检查更新 → 下载 → 校验 → 安装 → 重启」。
-
-客户端内置地址是编译进去的，老用户必须装到新版本才会切换；旧 HTTP 镜像在迁移完成前继续保留。
+Tauri 更新器使用 reqwest，默认跟随重定向；**尚未用真实旧版客户端走通「检查更新 → 下载 → 校验 → 安装 → 重启」**。备案完成、域名与证书就绪后，按 [P0.md](P0.md) 的退出条件换成 `https://<域名>/latest.json`，恢复三处 HTTPS-only 校验，并把 `OSS_PUBLIC_BASE` 改回域名地址。
 
 ## 验收状态
 

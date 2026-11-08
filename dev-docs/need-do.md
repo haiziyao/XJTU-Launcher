@@ -16,7 +16,7 @@
 ## 现在做
 
 - [ ] **官网 xjtu-launcher.cn 与 OSS 下载**
-  - 现状（2026-11-08）：官网已部署到服务器（`http://8.152.100.169/site/` 可预览），nginx vhost 与限流 zone 已装好，域名访问返回阿里云 403 `Non-compliance ICP Filing`；下载网关已安装但缺 AccessKey 未启动；安装包自动上传脚本与 CI job 已就绪，未接真实 OSS。
+  - 现状（2026-11-08）：官网已部署到服务器（`http://8.152.100.169/site/` 可预览），nginx vhost 与限流 zone 已装好；备案期间阿里云不允许解析，域名访问返回 403 `Non-compliance ICP Filing`，暂用 IP。私有 OSS Bucket、两个最小权限 RAM 用户、下载网关与限流均已就绪，v0.5.2 资产已真实上传，`downloads.json` 与更新源都已走 `/download/` 与 `/latest.json` 网关地址；GitHub 变量与 Secrets 已配置，自动上传等待下一版发版验证。
   - 阻塞：`xjtu-launcher.cn` 需要单独 ICP 备案（阿里云「新增网站」），备案通过前域名 80/443 都不能对外服务，也拿不到 Let's Encrypt 证书。
   - 方案：官网只放 HTML、截图与 `downloads.json`；安装包放阿里云 OSS 的**私有** Bucket `xjtu-launcher`，由服务器签发 60 秒链接并按 IP 限流（12 次/分钟、4 并发），不让 Bucket 公共读；发版时由 `release.yml` 自动上传。
   - 验收：`https://xjtu-launcher.cn` 可访问且证书有效；三个安装包从 `/download/...` 下载完整，SHA256 与 `downloads.json` 一致；直连 OSS 未签名对象返回 403；连续请求出现 429；旧 HTTP 更新镜像在迁移完成前保持可用。

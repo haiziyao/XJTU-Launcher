@@ -59,7 +59,7 @@
 - 当前远端包只支持**声明式导航**；任意执行代码的插件运行时需要独立设计，不能借下载清单宣称已实现。校园 Rust 适配随 App 更新。
 - 应用更新与插件更新来源独立；发布私钥只进入 GitHub Secret。安装前检查正在执行的校园、账号和插件任务，未来 Agent 任务也要接入。
 - 正式插件服务器、应用更新端点和发布公钥尚未部署。**不要**写入设计稿示例域名、假版本或伪造可用插件。
-- P0（2026-10-25）：应用更新镜像暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/xjtu-launcher/latest.json`，客户端不额外提示用户。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](P0.md)。
+- P0（2026-10-25，2026-11-08 更新地址）：应用更新源暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/latest.json`（经 OSS 下载网关读私有 Bucket），客户端不额外提示用户。0.5.x 的旧地址 `/xjtu-launcher/latest.json` 由 nginx 转发到同一网关。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](P0.md)。
 
 ## 6. 分支、提交与发布
 

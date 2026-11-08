@@ -102,8 +102,9 @@ jobs:
             bundles: nsis
     runs-on: ${{ matrix.os }}
     env:
-      # P0: hard-coded plain HTTP mirror until it gets a domain and certificate.
-      XJTU_UPDATE_ENDPOINT: http://8.152.100.169/xjtu-launcher/latest.json
+      # P0: hard-coded plain HTTP manifest until it gets a domain and
+      # certificate. Served through nginx by the OSS download gateway.
+      XJTU_UPDATE_ENDPOINT: http://8.152.100.169/latest.json
       XJTU_UPDATE_PUBLIC_KEY: ${{ vars.XJTU_UPDATE_PUBLIC_KEY }}
       XJTU_PLUGIN_SERVER: ${{ vars.XJTU_PLUGIN_SERVER }}
       # No Developer ID yet: ad-hoc sign the bundle so macOS does not report
