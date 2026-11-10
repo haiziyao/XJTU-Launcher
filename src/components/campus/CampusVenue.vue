@@ -244,7 +244,7 @@ onMounted(() => void loadList());
         <StatTile label="我的订单" :value="orders.length" :loading="loading && !orders.length" />
       </StatRow>
 
-      <InlineAlert tone="info" title="预订尚未接入">
+      <InlineAlert notice-id="venue-booking" tone="info" title="预订尚未接入">
         应用内只能查看时段和我的订单；预订与取消请到场馆网站办理。
       </InlineAlert>
 

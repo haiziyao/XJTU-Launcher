@@ -3,19 +3,24 @@ import { computed, onMounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { IconArrowRight, IconFolderOpen, IconUpload } from '@tabler/icons-vue';
 import { fileSize } from '../domain';
-import type { StoragePreview, StorageReport, StorageStatus } from '../types';
+import type { AppConfig, StoragePreview, StorageReport, StorageStatus } from '../types';
 import { bridge } from '../bridge';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiButton from './ui/UiButton.vue';
+import UiSwitch from './ui/UiSwitch.vue';
 
 /**
- * The one visible folder for the user's own files: `workspace` (资料库) and
- * `download`. Settings, caches and credentials stay in `~/.xjtu-launcher`.
+ * The one visible folder for the user's own files: `workspace` (资料库),
+ * `plugin` (插件资源) and `download`. Settings, caches and credentials stay in
+ * `~/.xjtu-launcher`.
  * Moving the folder copies first and only deletes the old files after the new
  * root has been recorded, so the dialog spells out what moves before asking,
  * and shows the leftover warnings afterwards.
  */
+const props = defineProps<{ config: AppConfig; saving: boolean }>();
+const emit = defineEmits<{ update: [config: AppConfig] }>();
+
 const status = ref<StorageStatus | null>(null);
 const error = ref('');
 const busy = ref(false);
@@ -95,7 +100,7 @@ async function reveal() {
 <template>
   <SettingGroup
     title="文件位置"
-    footnote="设置、缓存、插件与账号密码都在 ~/.xjtu-launcher；这里只放你自己的文件。"
+    footnote="设置、缓存与账号密码在 ~/.xjtu-launcher；这里放你自己的文件和插件资源。"
   >
     <div class="storage-folder">
       <IconUpload :size="16" aria-hidden="true" />
@@ -127,6 +132,19 @@ async function reveal() {
     <Transition name="drop">
       <p v-if="error && step === 'closed'" class="notice storage-error" role="alert">{{ error }}</p>
     </Transition>
+    <SettingRow title="提交后自动归档" description="提交成功的作业会复制到对应课程文件夹">
+      <UiSwitch
+        :checked="props.config.workbenchAutoArchive"
+        label="提交后自动归档"
+        :disabled="props.saving"
+        @toggle="
+          emit('update', {
+            ...props.config,
+            workbenchAutoArchive: !props.config.workbenchAutoArchive,
+          })
+        "
+      />
+    </SettingRow>
 
     <!-- Kept inside the group so this component has one root element; the
          settings page fades whole sections in and out. -->
@@ -135,7 +153,9 @@ async function reveal() {
         <div class="storage-dialog" role="dialog" aria-modal="true" aria-labelledby="storage-title">
           <header class="storage-header">
             <h2 id="storage-title">更改文件位置</h2>
-            <p>工作台（资料库）与下载会一起搬到新位置，设置和缓存留在 ~/.xjtu-launcher。</p>
+            <p>
+              工作台（资料库）、插件资源与下载会一起搬到新位置，设置和缓存留在 ~/.xjtu-launcher。
+            </p>
           </header>
 
           <template v-if="step === 'running'">

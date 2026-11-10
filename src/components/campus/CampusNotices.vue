@@ -211,7 +211,7 @@ onMounted(() => void load());
             </p>
             <h3>{{ selected.title }}</h3>
           </header>
-          <InlineAlert tone="info" title="正文需要在校园网页中查看">
+          <InlineAlert notice-id="notice-body" tone="info" title="正文需要在校园网页中查看">
             当前只读取通知的标题、分类和日期；正文与附件请打开校园网页。
           </InlineAlert>
           <UiButton variant="primary" size="sm" @click="openExternal(selected)">

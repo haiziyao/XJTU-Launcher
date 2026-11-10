@@ -3,7 +3,11 @@
   "id": "cn.xjtu.campus",
   "name": "畅行校园",
   "version": "0.1.0",
+  "category": "campus",
+  "author": "haiziyao",
   "description": "成绩、考试、空闲教室、考勤、校园卡等校园服务",
+  "details": "把教务、思源学堂、图书馆、校园卡与体测等常用入口收在一页，按账号隔离缓存，并保留写操作的预览与确认。",
+  "enabledByDefault": true,
   "icon": "route",
   "page": { "type": "campus" },
   "widget": false

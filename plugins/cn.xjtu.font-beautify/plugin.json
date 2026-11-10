@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.font-beautify",
+  "name": "字体美化",
+  "version": "0.1.0",
+  "category": "invention",
+  "author": "haiziyao",
+  "description": "分别设置界面、标题、正文、课表数字和代码的字体",
+  "details": "每个区域可单独选择字体、字号、字重、行高与字距，改动实时预览；随时可以恢复默认，不影响账号与缓存。",
+  "enabledByDefault": false,
+  "icon": "type",
+  "page": { "type": "fontBeautify" },
+  "widget": false
+}

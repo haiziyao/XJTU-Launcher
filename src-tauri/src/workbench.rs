@@ -89,7 +89,7 @@ pub struct FileNode {
     pub note: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BindingInput {
     #[serde(default)]
@@ -108,6 +108,33 @@ pub struct ImportOutcome {
     pub path: String,
     pub file: Option<FileNode>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPreview {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub error: Option<String>,
+}
+
+/// Result of copying a submitted homework into its course folder. Archival is
+/// best effort: one bad file must not discard the others.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveReport {
+    pub files: Vec<ArchiveEntry>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveEntry {
+    pub path: String,
+    pub name: String,
+    /// False when an identical file was already in the folder.
+    pub copied: bool,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -373,12 +400,9 @@ pub fn import_files(
         .collect()
 }
 
-fn import_one(
-    root: &Path,
-    folder: &str,
-    source: &Path,
-    lock: &Mutex<()>,
-) -> Result<FileNode, String> {
+/// Validate a source file without copying it. Used by both the real import and
+/// the preview the Agent shows before it is allowed to copy anything.
+fn source_file(source: &Path) -> Result<(String, u64), String> {
     if !source.is_absolute() {
         return Err("请选择有效的本地文件".into());
     }
@@ -399,6 +423,52 @@ fn import_one(
         .trim()
         .to_string();
     validate_name(&name)?;
+    Ok((name, metadata.len()))
+}
+
+/// Check every picked file and the target folder without copying anything.
+pub fn preview_import(
+    root: &Path,
+    folder: &str,
+    paths: &[String],
+) -> Result<Vec<ImportPreview>, String> {
+    let dir = path_of(root, folder)?;
+    if !dir.is_dir() {
+        return Err("文件夹不存在".into());
+    }
+    Ok(paths
+        .iter()
+        .map(|path| {
+            let source = PathBuf::from(path);
+            match source_file(&source) {
+                Ok((name, size)) => ImportPreview {
+                    path: path.clone(),
+                    name,
+                    size,
+                    error: None,
+                },
+                Err(error) => ImportPreview {
+                    path: path.clone(),
+                    name: source
+                        .file_name()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    size: 0,
+                    error: Some(error),
+                },
+            }
+        })
+        .collect())
+}
+
+fn import_one(
+    root: &Path,
+    folder: &str,
+    source: &Path,
+    lock: &Mutex<()>,
+) -> Result<FileNode, String> {
+    let (name, _) = source_file(source)?;
     let dir = path_of(root, folder)?;
     if !dir.is_dir() {
         return Err("文件夹不存在".into());
@@ -455,30 +525,36 @@ fn unique_target(dir: &Path, name: &str) -> (PathBuf, String) {
     (dir.join(name), name.to_string())
 }
 
-pub fn set_binding(
-    root: &Path,
-    relative: &str,
-    input: BindingInput,
-    lock: &Mutex<()>,
-) -> Result<FileNode, String> {
+/// Check a binding without writing it, so a preview can show the same errors
+/// the real save would hit.
+pub fn validate_binding(root: &Path, relative: &str, input: &BindingInput) -> Result<(), String> {
     let path = path_of(root, relative)?;
     if !path.is_file() {
         return Err("文件不存在，可能已在访达中移动".into());
     }
-    let assignment = input.assignment.trim();
-    validate_text(assignment, MAX_NAME, "作业")?;
+    validate_text(input.assignment.trim(), MAX_NAME, "作业")?;
     validate_text(input.note.trim(), MAX_NOTE, "备注")?;
     if let Some(id) = input.activity_id {
         if !(1..=9_999_999_999).contains(&id) {
             return Err("作业编号无效".into());
         }
     }
-    let tags = normalize_tags(input.tags)?;
-    let folder = parent_of(relative);
-    let course = course_of(root, &folder)?;
-    if input.activity_id.is_some() && course.is_none() {
+    normalize_tags(input.tags.clone())?;
+    if input.activity_id.is_some() && course_of(root, &parent_of(relative))?.is_none() {
         return Err("绑定作业前，先把文件放进课程文件夹".into());
     }
+    Ok(())
+}
+
+pub fn set_binding(
+    root: &Path,
+    relative: &str,
+    input: BindingInput,
+    lock: &Mutex<()>,
+) -> Result<FileNode, String> {
+    validate_binding(root, relative, &input)?;
+    let assignment = input.assignment.trim();
+    let tags = normalize_tags(input.tags)?;
     let _guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut index = load_index(root)?;
     let meta = index.files.entry(relative.to_string()).or_default();
@@ -487,6 +563,23 @@ pub fn set_binding(
     meta.tags = tags.clone();
     meta.note = input.note.trim().to_string();
     save_index(root, &index)?;
+    file_node(root, relative)
+}
+
+/// One file's metadata, including whatever extras the index holds for it.
+pub fn file(root: &Path, relative: &str) -> Result<FileNode, String> {
+    migrate(root)?;
+    file_node(root, relative)
+}
+
+fn file_node(root: &Path, relative: &str) -> Result<FileNode, String> {
+    let path = path_of(root, relative)?;
+    if !path.is_file() {
+        return Err("文件不存在，可能已在访达中移动".into());
+    }
+    let folder = parent_of(relative);
+    let index = load_index(root)?;
+    let meta = index.files.get(relative).cloned().unwrap_or_default();
     let metadata = fs::metadata(&path).map_err(|_| "无法读取文件")?;
     Ok(FileNode {
         path: relative.to_string(),
@@ -495,15 +588,83 @@ pub fn set_binding(
             .and_then(|value| value.to_str())
             .unwrap_or_default()
             .to_string(),
-        folder,
+        folder: folder.clone(),
         size: metadata.len(),
         modified: modified(&metadata),
-        course,
-        assignment: assignment.to_string(),
-        activity_id: input.activity_id,
-        tags,
-        note: input.note.trim().to_string(),
+        course: course_of(root, &folder)?,
+        assignment: meta.assignment,
+        activity_id: meta.activity_id,
+        tags: meta.tags,
+        note: meta.note,
     })
+}
+
+/// Bind a file to an assignment without touching the user's tags or note.
+/// Automatic archiving uses this so re-submitting a file never erases what the
+/// user wrote about it.
+pub fn bind_assignment(
+    root: &Path,
+    relative: &str,
+    activity: u64,
+    assignment: &str,
+    lock: &Mutex<()>,
+) -> Result<FileNode, String> {
+    let path = path_of(root, relative)?;
+    if !path.is_file() {
+        return Err("文件不存在，可能已在访达中移动".into());
+    }
+    let assignment = assignment.trim();
+    validate_text(assignment, MAX_NAME, "作业")?;
+    if !(1..=9_999_999_999).contains(&activity) {
+        return Err("作业编号无效".into());
+    }
+    if course_of(root, &parent_of(relative))?.is_none() {
+        return Err("绑定作业前，先把文件放进课程文件夹".into());
+    }
+    let _guard = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut index = load_index(root)?;
+    let meta = index.files.entry(relative.to_string()).or_default();
+    meta.assignment = assignment.to_string();
+    meta.activity_id = Some(activity);
+    save_index(root, &index)?;
+    file_node(root, relative)
+}
+
+/// Search every folder below the workspace root by file name, assignment,
+/// tag, note or folder path. Results are newest first.
+pub fn search(root: &Path, query: &str, limit: usize) -> Result<Vec<FileNode>, String> {
+    migrate(root)?;
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Err("请提供搜索关键词".into());
+    }
+    let mut folders: Vec<String> = vec![String::new()];
+    folders.extend(tree(root)?.into_iter().map(|node| node.path));
+    let mut matches = Vec::new();
+    for folder in folders {
+        for file in files(root, &folder)? {
+            let haystack = format!(
+                "{} {} {} {} {}",
+                file.name,
+                file.assignment,
+                file.note,
+                file.tags.join(" "),
+                file.folder
+            )
+            .to_lowercase();
+            if haystack.contains(&needle) {
+                matches.push(file);
+            }
+        }
+    }
+    matches.sort_by(|left, right| {
+        right
+            .modified
+            .cmp(&left.modified)
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    matches.truncate(limit.clamp(1, 200));
+    Ok(matches)
 }
 
 pub fn delete_file(root: &Path, relative: &str, lock: &Mutex<()>) -> Result<(), String> {
@@ -518,6 +679,140 @@ pub fn delete_file(root: &Path, relative: &str, lock: &Mutex<()>) -> Result<(), 
         save_index(root, &index)?;
     }
     Ok(())
+}
+
+/// Copy submitted files into a course folder and bind them to the assignment.
+/// A file that is already inside the workspace is bound where it is; a file
+/// with identical content already in the folder is reused instead of copied.
+/// Nothing here is fatal: failures are reported as warnings.
+pub fn archive_files(
+    root: &Path,
+    folder: &str,
+    paths: &[String],
+    activity: u64,
+    assignment: &str,
+    lock: &Mutex<()>,
+) -> ArchiveReport {
+    let mut report = ArchiveReport::default();
+    for path in paths {
+        let source = PathBuf::from(path);
+        let label = source
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or(path)
+            .to_string();
+        match archive_one(root, folder, &source, activity, assignment, lock) {
+            Ok(entry) => report.files.push(entry),
+            Err(error) => report.warnings.push(format!("{label}：{error}")),
+        }
+    }
+    report
+}
+
+fn archive_one(
+    root: &Path,
+    folder: &str,
+    source: &Path,
+    activity: u64,
+    assignment: &str,
+    lock: &Mutex<()>,
+) -> Result<ArchiveEntry, String> {
+    // Already in a course folder of this workspace: bind in place, no copy.
+    if let Some(relative) = relative_inside(root, source) {
+        if course_of(root, &parent_of(&relative))?.is_some() {
+            let file = bind_assignment(root, &relative, activity, assignment, lock)?;
+            return Ok(ArchiveEntry {
+                path: file.path,
+                name: file.name,
+                copied: false,
+            });
+        }
+    }
+    source_file(source)?;
+    let dir = path_of(root, folder)?;
+    if !dir.is_dir() {
+        return Err("课程文件夹不存在".into());
+    }
+    let (relative, copied) = match identical_in(&dir, source)? {
+        Some(name) => (join_rel(folder, &name), false),
+        None => {
+            let file = import_one(root, folder, source, lock)?;
+            (file.path, true)
+        }
+    };
+    let file = bind_assignment(root, &relative, activity, assignment, lock)?;
+    Ok(ArchiveEntry {
+        path: file.path,
+        name: file.name,
+        copied,
+    })
+}
+
+/// The path relative to the workspace root when `path` is inside it. Both
+/// sides are canonicalized, so a symlink cannot pretend to be elsewhere.
+fn relative_inside(root: &Path, path: &Path) -> Option<String> {
+    let root = fs::canonicalize(root).ok()?;
+    let path = fs::canonicalize(path).ok()?;
+    let relative = path.strip_prefix(&root).ok()?;
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        match component {
+            Component::Normal(part) => {
+                let part = part.to_str()?;
+                if part.starts_with('.') {
+                    return None;
+                }
+                parts.push(part.to_string());
+            }
+            _ => return None,
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// Name of a file directly inside `dir` with the same size and content as
+/// `source`. Hashing only same-size files keeps the scan cheap.
+fn identical_in(dir: &Path, source: &Path) -> Result<Option<String>, String> {
+    let size = fs::metadata(source).map_err(|_| "无法读取所选文件")?.len();
+    let digest = digest_of(source)?;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return Err("无法读取文件夹".into()),
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.')
+            || entry
+                .file_type()
+                .map(|kind| kind.is_symlink())
+                .unwrap_or(false)
+        {
+            continue;
+        }
+        match entry.metadata() {
+            Ok(metadata) if metadata.is_file() && metadata.len() == size => {}
+            _ => continue,
+        }
+        if digest_of(&entry.path()).is_ok_and(|other| other == digest) {
+            return Ok(Some(name));
+        }
+    }
+    Ok(None)
+}
+
+fn digest_of(path: &Path) -> Result<[u8; 32], String> {
+    use std::io::Read;
+    let mut file = fs::File::open(path).map_err(|_| "无法读取所选文件")?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|_| "无法读取所选文件")?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().into())
 }
 
 pub fn absolute(root: &Path, relative: &str) -> Result<PathBuf, String> {
@@ -869,7 +1164,7 @@ fn parent_of(relative: &str) -> String {
         .unwrap_or_default()
 }
 
-fn validate_name(name: &str) -> Result<(), String> {
+pub fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("名称不能为空".into());
     }
@@ -1063,6 +1358,136 @@ mod tests {
         assert!(path_of(&root, "/etc/passwd").is_err());
         assert!(path_of(&root, ".xjtu-course.json").is_err());
         assert!(path_of(&root, "学期/课程/a.pdf").is_ok());
+    }
+
+    #[test]
+    fn preview_import_checks_files_without_copying() {
+        let data = tempfile::tempdir().unwrap();
+        let root = root(data.path(), &account());
+        fs::create_dir_all(root.join("学期/课程")).unwrap();
+        let source = data.path().join("作业.pdf");
+        fs::write(&source, b"one").unwrap();
+        let missing = data.path().join("不存在.pdf").to_string_lossy().to_string();
+        let preview = preview_import(
+            &root,
+            "学期/课程",
+            &[source.to_string_lossy().to_string(), missing],
+        )
+        .unwrap();
+        assert_eq!(preview[0].name, "作业.pdf");
+        assert_eq!(preview[0].size, 3);
+        assert!(preview[0].error.is_none());
+        assert!(preview[1].error.is_some());
+        assert!(files(&root, "学期/课程").unwrap().is_empty());
+    }
+
+    #[test]
+    fn archive_copies_once_and_binds_without_erasing_user_fields() {
+        let data = tempfile::tempdir().unwrap();
+        let root = root(data.path(), &account());
+        fs::create_dir_all(&root).unwrap();
+        let course_rel =
+            ensure_course_folder(&root, "2026-2027 秋季学期", &course(3, "计算机网络")).unwrap();
+        let source = data.path().join("答案.md");
+        fs::write(&source, b"answer").unwrap();
+        let lock = Mutex::new(());
+        let report = archive_files(
+            &root,
+            &course_rel,
+            &[source.to_string_lossy().to_string()],
+            42,
+            "第二章作业",
+            &lock,
+        );
+        assert!(report.warnings.is_empty());
+        assert!(report.files[0].copied);
+        assert_eq!(report.files[0].name, "答案.md");
+
+        // The user adds a note and a tag, then submits the same file again.
+        let relative = report.files[0].path.clone();
+        set_binding(
+            &root,
+            &relative,
+            BindingInput {
+                assignment: "第二章作业".into(),
+                activity_id: Some(42),
+                tags: vec!["终稿".into()],
+                note: "老师要求 A4".into(),
+            },
+            &lock,
+        )
+        .unwrap();
+        let again = archive_files(
+            &root,
+            &course_rel,
+            &[source.to_string_lossy().to_string()],
+            42,
+            "第二章作业",
+            &lock,
+        );
+        assert!(again.warnings.is_empty());
+        assert!(!again.files[0].copied);
+        assert_eq!(again.files[0].path, relative);
+        let listed = files(&root, &course_rel).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].note, "老师要求 A4");
+        assert_eq!(listed[0].tags, vec!["终稿"]);
+        assert_eq!(listed[0].activity_id, Some(42));
+    }
+
+    #[test]
+    fn archive_keeps_a_file_already_in_the_workbench() {
+        let data = tempfile::tempdir().unwrap();
+        let root = root(data.path(), &account());
+        fs::create_dir_all(&root).unwrap();
+        let course_rel =
+            ensure_course_folder(&root, "2026-2027 秋季学期", &course(4, "操作系统")).unwrap();
+        fs::write(root.join(&course_rel).join("a.pdf"), b"x").unwrap();
+        let lock = Mutex::new(());
+        let source = root.join(&course_rel).join("a.pdf");
+        let report = archive_files(
+            &root,
+            &course_rel,
+            &[source.to_string_lossy().to_string()],
+            7,
+            "第一次作业",
+            &lock,
+        );
+        assert!(report.warnings.is_empty());
+        assert!(!report.files[0].copied);
+        assert_eq!(files(&root, &course_rel).unwrap().len(), 1);
+        assert_eq!(
+            files(&root, &course_rel).unwrap()[0].assignment,
+            "第一次作业"
+        );
+    }
+
+    #[test]
+    fn search_matches_names_assignments_tags_and_folders() {
+        let data = tempfile::tempdir().unwrap();
+        let root = root(data.path(), &account());
+        fs::create_dir_all(&root).unwrap();
+        let course_rel =
+            ensure_course_folder(&root, "2026-2027 秋季学期", &course(5, "计算机网络")).unwrap();
+        fs::write(root.join(&course_rel).join("答案.md"), b"x").unwrap();
+        fs::write(root.join(&course_rel).join("笔记.md"), b"y").unwrap();
+        let lock = Mutex::new(());
+        set_binding(
+            &root,
+            &format!("{course_rel}/答案.md"),
+            BindingInput {
+                assignment: "第二章作业".into(),
+                activity_id: Some(9),
+                tags: vec!["终稿".into()],
+                note: String::new(),
+            },
+            &lock,
+        )
+        .unwrap();
+        assert_eq!(search(&root, "第二章", 10).unwrap()[0].name, "答案.md");
+        assert_eq!(search(&root, "终稿", 10).unwrap()[0].name, "答案.md");
+        assert_eq!(search(&root, "计算机网络", 10).unwrap().len(), 2);
+        assert!(search(&root, "  ", 10).is_err());
     }
 
     #[test]

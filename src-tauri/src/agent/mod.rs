@@ -109,7 +109,7 @@ impl Manager {
     }
 }
 
-fn provider_for(
+pub(crate) fn provider_for(
     app: &AppHandle,
     provider_id: Option<&str>,
     model: Option<&str>,

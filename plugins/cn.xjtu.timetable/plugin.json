@@ -3,7 +3,11 @@
   "id": "cn.xjtu.timetable",
   "name": "课程表",
   "version": "0.1.0",
+  "category": "campus",
+  "author": "haiziyao",
   "description": "查看学期课表与今日课程",
+  "details": "从教务系统同步本学期课表，支持周次切换、课程编辑与自定义课程，主页会显示今天的课程。",
+  "enabledByDefault": true,
   "icon": "calendar",
   "page": { "type": "timetable" },
   "widget": true

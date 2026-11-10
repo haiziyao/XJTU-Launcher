@@ -4,7 +4,8 @@
 //! receives the main window's IPC privileges: only the handful of commands in
 //! this module are exposed to it, and they only read its own settings and
 //! restore the main window.
-use serde::Serialize;
+use crate::plugin_settings::{self, PET_SOURCES};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     sync::{
@@ -21,7 +22,6 @@ use tauri::{
 pub const LABEL: &str = "pet";
 pub const EVENT_NOTIFICATIONS: &str = "pet-notifications";
 pub const EVENT_SETTINGS: &str = "pet-settings";
-pub const EVENT_CONFIG_CHANGED: &str = "pet-config-changed";
 pub const EVENT_OPEN_SETTINGS: &str = "pet-open-settings";
 
 /// The floating window is a fixed size so a speech bubble and the quick
@@ -41,6 +41,42 @@ pub struct Notification {
     pub id: String,
     pub source: String,
     pub text: String,
+}
+
+/// Stored in `plugins/settings/cn.xjtu.desktop-pet.json`.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Preferences {
+    pub character: String,
+    pub bar_style: String,
+    pub bar_hidden: bool,
+    pub bubble: bool,
+    pub sources: Vec<String>,
+    /// Last floating-window position in physical pixels.
+    pub position: Option<[i32; 2]>,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            character: "deepseek-girl".into(),
+            bar_style: "glass-light".into(),
+            bar_hidden: false,
+            bubble: true,
+            sources: ["campus", "agent", "update"]
+                .iter()
+                .map(|id| (*id).to_string())
+                .collect(),
+            position: None,
+        }
+    }
+}
+
+impl Preferences {
+    pub fn load(app: &AppHandle) -> Self {
+        let value = plugin_settings::load_or_default(app, plugin_settings::PET_ID);
+        serde_json::from_value(value).unwrap_or_default()
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -84,29 +120,31 @@ fn pet_only(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 
-fn update_config(
-    app: &AppHandle,
-    edit: impl FnOnce(&mut crate::config::AppConfig),
-) -> Result<crate::config::AppConfig, String> {
-    let state = app.state::<crate::AppState>();
-    let _guard = state.config_lock.lock().map_err(|_| "配置服务繁忙")?;
-    let path = crate::config_path(app)?;
-    let mut config = crate::config::load(&path)?;
-    edit(&mut config);
-    config.validate()?;
-    crate::config::save(&path, &config)?;
-    Ok(config)
+fn save_position(app: &AppHandle, [x, y]: [i32; 2]) {
+    let _ = plugin_settings::update(app, plugin_settings::PET_ID, |value| {
+        if let Some(fields) = value.as_object_mut() {
+            fields.insert("position".into(), serde_json::json!([x, y]));
+        }
+    });
+}
+
+fn pet_enabled(config: &crate::config::AppConfig) -> bool {
+    !config
+        .disabled_plugins
+        .iter()
+        .any(|id| id == plugin_settings::PET_ID)
 }
 
 pub fn settings(app: &AppHandle) -> Result<Settings, String> {
     let config = crate::config::load(&crate::config_path(app)?)?;
+    let preferences = Preferences::load(app);
     Ok(Settings {
-        enabled: config.pet_desktop_enabled,
-        character: config.pet_character,
-        bar_style: config.pet_bar_style,
-        bar_hidden: config.pet_bar_hidden,
-        bubble: config.pet_bubble_enabled,
-        sources: config.pet_sources,
+        enabled: pet_enabled(&config),
+        character: preferences.character,
+        bar_style: preferences.bar_style,
+        bar_hidden: preferences.bar_hidden,
+        bubble: preferences.bubble,
+        sources: preferences.sources,
         reduce_motion: config.reduce_motion,
         accent: config.accent,
     })
@@ -164,14 +202,14 @@ pub fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
 /// Puts the window at the saved position, or in the bottom-right corner of the
 /// current monitor's work area the first time, and keeps it fully on screen.
 fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
-    let config = crate::config::load(&crate::config_path(app)?)?;
+    let preferences = Preferences::load(app);
     let monitor = window
         .current_monitor()
         .ok()
         .flatten()
         .or_else(|| app.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else {
-        if let Some([x, y]) = config.pet_position {
+        if let Some([x, y]) = preferences.position {
             let _ = window.set_position(PhysicalPosition::new(x, y));
         }
         return Ok(());
@@ -183,7 +221,7 @@ fn place(app: &AppHandle, window: &WebviewWindow) -> Result<(), String> {
         (HEIGHT * scale).round() as u32,
     ));
     let margin = (MARGIN * scale).round() as i32;
-    let (mut x, mut y) = match config.pet_position {
+    let (mut x, mut y) = match preferences.position {
         Some([x, y]) => (x, y),
         None => (
             area.position.x + area.size.width as i32 - size.width as i32 - margin,
@@ -210,14 +248,10 @@ pub fn show(app: &AppHandle) -> Result<(), String> {
 }
 
 fn remember_position(app: &AppHandle, window: &WebviewWindow) {
-    let state = app.state::<State>();
     let Ok(position) = window.outer_position() else {
         return;
     };
-    let _ = update_config(app, |config| {
-        config.pet_position = Some([position.x, position.y])
-    });
-    let _ = state;
+    save_position(app, [position.x, position.y]);
 }
 
 pub fn hide(app: &AppHandle) {
@@ -253,7 +287,7 @@ fn flush_position(app: &AppHandle) {
         }
     };
     if let Some(position) = ready {
-        let _ = update_config(app, |config| config.pet_position = Some(position));
+        save_position(app, position);
     }
 }
 
@@ -280,9 +314,10 @@ pub fn notify(app: &AppHandle, source: &str, text: &str, key: Option<String>) {
     let Ok(config) = crate::config_path(app).and_then(|path| crate::config::load(&path)) else {
         return;
     };
-    if !config.pet_desktop_enabled
-        || !config.pet_sources.iter().any(|entry| entry == source)
-        || !["campus", "agent", "class", "update"].contains(&source)
+    let preferences = Preferences::load(app);
+    if !pet_enabled(&config)
+        || !preferences.sources.iter().any(|entry| entry == source)
+        || !PET_SOURCES.contains(&source)
     {
         return;
     }
@@ -317,12 +352,15 @@ pub fn notify(app: &AppHandle, source: &str, text: &str, key: Option<String>) {
 }
 
 fn enabled_source(app: &AppHandle, source: &str) -> bool {
-    crate::config_path(app)
+    let enabled = crate::config_path(app)
         .and_then(|path| crate::config::load(&path))
-        .map(|config| {
-            config.pet_desktop_enabled && config.pet_sources.iter().any(|entry| entry == source)
-        })
-        .unwrap_or(false)
+        .map(|config| pet_enabled(&config))
+        .unwrap_or(false);
+    enabled
+        && Preferences::load(app)
+            .sources
+            .iter()
+            .any(|entry| entry == source)
 }
 
 fn seen_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -447,14 +485,17 @@ fn poll_loop(app: AppHandle) {
 }
 
 /// Called once from `setup`: creates the hidden window and starts the two
-/// background loops. The pet is inert until the user enables it in settings.
+/// background loops. The pet is inert until the user enables it in the plugin
+/// centre.
 pub fn initialize(app: &AppHandle) -> Result<(), String> {
     let config = crate::config::load(&crate::config_path(app)?)?;
-    let state = app.state::<State>();
-    state
+    // Older builds kept these values in config.json; move them once.
+    let _ = plugin_settings::migrate_pet(app, &config);
+    let enabled = pet_enabled(&config);
+    app.state::<State>()
         .enabled
-        .store(config.pet_desktop_enabled, Ordering::Relaxed);
-    if config.pet_desktop_enabled {
+        .store(enabled, Ordering::Relaxed);
+    if enabled {
         ensure_window(app)?;
     }
     watch(app.clone());
@@ -465,16 +506,20 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
 /// Mirrors config changes made from the main window, so the watcher and the
 /// floating window see them immediately.
 pub fn sync_config(app: &AppHandle, config: &crate::config::AppConfig) {
+    let enabled = pet_enabled(config);
     app.state::<State>()
         .enabled
-        .store(config.pet_desktop_enabled, Ordering::Relaxed);
-    if config.pet_desktop_enabled {
+        .store(enabled, Ordering::Relaxed);
+    if enabled {
         let _ = ensure_window(app);
     }
+    sync_settings(app);
+}
+
+/// Pushes the plugin settings to the floating window after the pet page or
+/// the notification bar changes them.
+pub fn sync_settings(app: &AppHandle) {
     emit_to_pet(app, EVENT_SETTINGS);
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.emit(EVENT_CONFIG_CHANGED, config.clone());
-    }
 }
 
 #[tauri::command]
@@ -504,11 +549,12 @@ pub fn pet_set_bar_hidden(
     hidden: bool,
 ) -> Result<View, String> {
     pet_only(&window)?;
-    let config = update_config(&app, |config| config.pet_bar_hidden = hidden)?;
-    emit_to_pet(&app, EVENT_SETTINGS);
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.emit(EVENT_CONFIG_CHANGED, config);
-    }
+    plugin_settings::update(&app, plugin_settings::PET_ID, |value| {
+        if let Some(fields) = value.as_object_mut() {
+            fields.insert("barHidden".into(), serde_json::Value::Bool(hidden));
+        }
+    })?;
+    sync_settings(&app);
     view(&app)
 }
 

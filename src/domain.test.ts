@@ -17,9 +17,11 @@ import {
   formatWeeks,
   gradeStats,
   lmsTime,
+  mergeSidebarOrder,
   money,
   moveItem,
   orderedPlugins,
+  orderSidebarEntries,
   parseExamTime,
   parseWeeks,
   percent,
@@ -122,6 +124,27 @@ describe('workspace customization', () => {
         (p) => p.id,
       ),
     ).toEqual(['old.a', 'old.b', 'new.plugin']);
+  });
+  it('orders sidebar entries and appends unknown ones', () => {
+    const entries = ['home', 'agent', 'settings', 'new.plugin'].map((id) => ({ id }));
+    expect(orderSidebarEntries(entries, ['settings', 'home']).map((e) => e.id)).toEqual([
+      'settings',
+      'home',
+      'agent',
+      'new.plugin',
+    ]);
+    expect(orderSidebarEntries(entries, [])).toEqual(entries);
+  });
+  it('keeps hidden sidebar entries in their slots when merging a drag', () => {
+    const all = ['home', 'agent', 'campus', 'workbench', 'settings'];
+    // Agent is hidden; dragging settings above workbench keeps agent's slot.
+    expect(mergeSidebarOrder(all, ['home', 'campus', 'settings', 'workbench'])).toEqual([
+      'home',
+      'agent',
+      'campus',
+      'settings',
+      'workbench',
+    ]);
   });
 });
 

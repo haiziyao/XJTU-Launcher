@@ -208,10 +208,6 @@ pub async fn install_app_update(
             .auth_lock
             .try_lock()
             .map_err(|_| "账号操作正在执行，请稍后重试更新")?;
-        let _market = app_state
-            .market_lock
-            .try_lock()
-            .map_err(|_| "插件正在安装，请稍后重试更新")?;
         publish(&window, &state, |s| s.phase = "installing");
         crate::campus_browser::close_all(&app)?;
         update
@@ -253,10 +249,6 @@ pub fn restart_after_update(
         .auth_lock
         .try_lock()
         .map_err(|_| "账号操作正在执行，请稍后重启")?;
-    let _market = app_state
-        .market_lock
-        .try_lock()
-        .map_err(|_| "插件正在安装，请稍后重启")?;
     crate::campus_browser::close_all(&app)?;
     app.restart()
 }

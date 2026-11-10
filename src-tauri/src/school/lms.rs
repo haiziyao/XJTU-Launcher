@@ -7,7 +7,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Component, Path, PathBuf},
     time::Duration,
 };
@@ -38,6 +38,14 @@ const UPLOAD_EXTENSIONS: &[&str] = &[
     "hpp", "py", "java", "js", "ts", "m", "mm", "rs", "go", "sql", "tex", "bib", "ipynb", "html",
     "css", "xml", "yaml", "yml",
 ];
+
+/// Returned when the LMS rejects the saved session. Callers may renew the
+/// saved login once and retry a read; a submit that already reached the school
+/// must never be retried.
+pub(crate) const LOGIN_EXPIRED: &str = "思源学堂登录已失效，请重新登录校园账号";
+
+/// Returned when the account has no saved LMS site session yet.
+pub(crate) const LOGIN_REQUIRED: &str = "请先完成思源学堂登录";
 
 /// A homework submission as the Agent asked for it. Files stay as paths until
 /// the preview or submit step resolves and checks them.
@@ -201,13 +209,31 @@ fn local_time(raw: &str) -> Option<String> {
     ))
 }
 
-/// Today in campus time (UTC+8), used to pick the courses that are running now.
-fn campus_today() -> String {
+/// Now in campus time (UTC+8), `YYYY-MM-DD HH:MM:SS` like every other LMS time.
+fn campus_now() -> String {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_secs() as i64)
-        .unwrap_or(0);
-    let days = (seconds + 8 * 3600).div_euclid(86_400);
+        .unwrap_or(0)
+        + 8 * 3600;
+    let days = seconds.div_euclid(86_400);
+    let clock = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_date(days);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}",
+        clock / 3600,
+        clock % 3600 / 60,
+        clock % 60
+    )
+}
+
+/// Today in campus time (UTC+8), used to pick the courses that are running now.
+fn campus_today() -> String {
+    campus_now()[..10].to_string()
+}
+
+/// Howard Hinnant's civil-from-days: the calendar date of a Unix day number.
+fn civil_date(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
@@ -217,7 +243,7 @@ fn campus_today() -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
+    (year, month, day)
 }
 
 fn course_day(value: Option<&Value>) -> String {
@@ -402,14 +428,29 @@ fn replay_video(value: &Value) -> Option<ReplayVideo> {
     })
 }
 
+/// True when the school answered with its "session expired, go to /login"
+/// payload. It arrives as HTTP 200, so status codes alone are not enough.
+fn login_expired(value: &Value) -> bool {
+    if value.get("success").and_then(Value::as_bool) != Some(false) {
+        return false;
+    }
+    let message = text(value.get("message"));
+    value
+        .get("url")
+        .and_then(Value::as_str)
+        .is_some_and(|url| url.contains("/login"))
+        || message.contains("会话已经过期")
+        || message.contains("重新登录")
+}
+
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        let site = account.sites.get("lms").ok_or("请先完成思源学堂登录")?;
+        let site = account.sites.get("lms").ok_or(LOGIN_REQUIRED)?;
         let cookies = site
             .cookies
             .as_deref()
             .filter(|cookies| !cookies.is_empty())
-            .ok_or("请先完成思源学堂登录")?;
+            .ok_or(LOGIN_REQUIRED)?;
         Self::with_cookies(cookies, account.mode)
     }
 
@@ -430,15 +471,21 @@ impl Client {
             .map_err(|_| "无法连接思源学堂，请检查网络后重试")?;
         let status = response.status();
         if status.is_redirection() || matches!(status.as_u16(), 401 | 403) {
-            return Err("思源学堂登录已失效，请刷新后重试".into());
+            return Err(LOGIN_EXPIRED.into());
         }
         if !status.is_success() {
             return Err(format!("思源学堂服务暂不可用（HTTP {}）", status.as_u16()));
         }
-        response
+        let value: Value = response
             .json()
             .await
-            .map_err(|_| "思源学堂返回了非预期数据".into())
+            .map_err(|_| "思源学堂返回了非预期数据".to_string())?;
+        // The LMS now answers an expired session with HTTP 200 and a JSON body
+        // pointing at /login, which used to surface as a misleading "格式已变化".
+        if login_expired(&value) {
+            return Err(LOGIN_EXPIRED.into());
+        }
+        Ok(value)
     }
 
     async fn get(&self, path: &str) -> Result<Value, String> {
@@ -730,6 +777,21 @@ impl Client {
             "rows": rows,
             "files": files,
             "failed": failed,
+        }))
+    }
+
+    /// The school's official todo list, the only source for 待办. The
+    /// per-course `submitCount` in activity details stays 0 after a real
+    /// submission, so filtering on it left submitted homework on the page;
+    /// `/api/todos` already excludes submitted and closed work.
+    pub async fn todos(&self) -> Result<Value, String> {
+        let value = self.get("/api/todos").await?;
+        let rows = todo_rows(&value, &campus_now())?;
+        Ok(json!({
+            "semester": todo_semester(&rows),
+            "items": rows,
+            "partial": false,
+            "failures": [],
         }))
     }
 
@@ -1145,6 +1207,7 @@ impl Client {
         Ok(json!({
             "activity": request.activity,
             "title": title,
+            "courseId": value.get("course_id").and_then(Value::as_u64),
             "draft": request.draft,
             "submissionId": submission.and_then(|item| item.get("id")).and_then(Value::as_u64),
             "submittedAt": submission.map(|item| campus_time(item.get("submit_time"))).unwrap_or_default(),
@@ -1495,6 +1558,109 @@ fn course_term(value: &Value) -> String {
     }
 }
 
+/// The semester label carried by a 思源学堂 course code (`202620271…`:
+/// semester code, then the course number). 待办 rows only carry the code, so
+/// this is where their semester comes from; an unknown shape yields no label
+/// rather than a guessed one.
+fn semester_label_from_code(code: &str) -> String {
+    let bytes = code.as_bytes();
+    if bytes.len() < 9 || !bytes[..9].iter().all(u8::is_ascii_digit) {
+        return String::new();
+    }
+    let season = match bytes[8] {
+        b'1' => "秋季",
+        b'2' => "春季",
+        b'3' => "夏季",
+        _ => return String::new(),
+    };
+    format!("{}-{} {season}学期", &code[..4], &code[4..8])
+}
+
+/// The array in the school's todo answer. 思源学堂 web versions have answered
+/// with `todo_list`, `todos`/`list` or wrapped it inside `data`, so accept the
+/// shapes seen in probes instead of assuming one.
+fn todo_list(value: &Value) -> Option<&Vec<Value>> {
+    if let Some(list) = value.as_array() {
+        return Some(list);
+    }
+    for key in ["todo_list", "todos", "list", "items"] {
+        if let Some(list) = value.get(key).and_then(Value::as_array) {
+            return Some(list);
+        }
+    }
+    value.get("data").and_then(todo_list)
+}
+
+/// Normalise the official todo list into the rows the 待办 page renders.
+/// Nothing here infers submission state: an item is on the list because the
+/// school still has it open, and `overdue` only means its deadline has passed.
+fn todo_rows(answer: &Value, now: &str) -> Result<Vec<Value>, String> {
+    let list = todo_list(answer).ok_or("思源学堂待办列表格式已变化")?;
+    let mut seen = HashSet::new();
+    let mut rows = Vec::new();
+    for item in list {
+        let Some(id) = item.get("id").and_then(Value::as_u64).filter(|id| *id > 0) else {
+            continue;
+        };
+        let kind = text(item.get("type"));
+        if !kind.is_empty() && kind != "homework" {
+            continue;
+        }
+        if !seen.insert(id) {
+            continue;
+        }
+        let code = {
+            let value = text(item.get("course_code"));
+            if value.is_empty() {
+                text(item.get("code"))
+            } else {
+                value
+            }
+        };
+        let end = campus_time(item.get("end_time").or_else(|| item.get("endTime")));
+        let overdue = !end.is_empty() && end.as_str() < now;
+        rows.push(json!({
+            "id": id,
+            "courseId": item.get("course_id").and_then(Value::as_u64).unwrap_or(0),
+            "course": text(item.get("course_name").or_else(|| item.get("courseName"))),
+            "courseCode": code,
+            "semester": semester_label_from_code(&code),
+            "title": text(item.get("title")),
+            "end": end,
+            "state": if overdue { "overdue" } else { "todo" },
+            "locked": item.get("is_locked").and_then(Value::as_bool).unwrap_or(false),
+        }));
+    }
+    rows.sort_by(|left, right| {
+        let left_end = left["end"].as_str().unwrap_or("");
+        let right_end = right["end"].as_str().unwrap_or("");
+        match (left_end.is_empty(), right_end.is_empty()) {
+            (true, true) => std::cmp::Ordering::Equal,
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+            _ => left_end.cmp(right_end),
+        }
+    });
+    Ok(rows)
+}
+
+/// The semester most todo items belong to, so the page header can name it even
+/// when individual rows come from different terms.
+fn todo_semester(rows: &[Value]) -> String {
+    let mut labels: BTreeMap<String, usize> = BTreeMap::new();
+    for row in rows {
+        let label = text(row.get("semester"));
+        if !label.is_empty() {
+            *labels.entry(label).or_insert(0) += 1;
+        }
+    }
+    labels
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .map(|(label, _)| label)
+        .unwrap_or_default()
+}
+
 fn activity(value: &Value) -> Option<Value> {
     let id = value.get("id")?.as_i64()?;
     Some(json!({
@@ -1649,6 +1815,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn expired_session_payload_is_recognised() {
+        assert!(login_expired(&json!({
+            "message": "您的会话已经过期，请重新登录",
+            "success": false,
+            "url": "/login"
+        })));
+        assert!(!login_expired(&json!({"courses": []})));
+    }
+
+    #[test]
     fn utc_times_read_as_campus_time() {
         let at = |raw: &str| campus_time(Some(&json!(raw)));
         assert_eq!(at("2026-10-30T15:59:00Z"), "2026-10-30 23:59:00");
@@ -1671,6 +1847,83 @@ mod tests {
         let raw = json!({"termLabel": "", "year": "2026-2027", "term": "第一学期"});
         assert_eq!(course_semester_label(&raw), "2026-2027 · 第一学期");
         assert_eq!(course_semester_label(&json!({})), "");
+    }
+
+    #[test]
+    fn todo_rows_come_from_the_official_list_only() {
+        let answer = json!({"todo_list": [
+            {
+                "id": 3,
+                "course_id": 7,
+                "course_name": "编译原理",
+                "course_code": "202620271CO1101",
+                "title": "作业三",
+                "type": "homework",
+                "end_time": "2026-11-20T15:59:59Z",
+                "is_locked": false
+            },
+            {
+                "id": 1,
+                "course_id": 7,
+                "course_name": "编译原理",
+                "course_code": "202620271CO1101",
+                "title": "作业一",
+                "type": "homework",
+                "end_time": "2026-11-01T00:00:00Z"
+            },
+            // Duplicates and non-homework entries must not reach 待办 twice.
+            {"id": 3, "title": "作业三", "end_time": "2026-11-20T15:59:59Z"},
+            {"id": 9, "title": "课程评价", "type": "evaluation"},
+            {"title": "没有编号", "end_time": "2026-11-20T15:59:59Z"}
+        ]});
+        let rows = todo_rows(&answer, "2026-11-08 12:00:00").unwrap();
+        assert_eq!(rows.len(), 2);
+        // Sorted by deadline: the past one first, converted to campus time.
+        assert_eq!(rows[0]["id"], 1);
+        assert_eq!(rows[0]["end"], "2026-11-01 08:00:00");
+        assert_eq!(rows[0]["state"], "overdue");
+        assert_eq!(rows[1]["id"], 3);
+        assert_eq!(rows[1]["end"], "2026-11-20 23:59:59");
+        assert_eq!(rows[1]["state"], "todo");
+        assert_eq!(rows[1]["semester"], "2026-2027 秋季学期");
+        assert_eq!(rows[1]["course"], "编译原理");
+        assert_eq!(todo_semester(&rows), "2026-2027 秋季学期");
+        // An empty official list is a real answer: nothing left to submit.
+        assert!(todo_rows(&json!({"todo_list": []}), "2026-11-08 12:00:00")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn todo_answers_may_wrap_the_list() {
+        let item = json!({"id": 1, "title": "作业", "end_time": "2026-11-20T00:00:00Z"});
+        for answer in [
+            json!([item]),
+            json!({"todos": [item]}),
+            json!({"data": [item]}),
+            json!({"data": {"todo_list": [item]}}),
+        ] {
+            assert_eq!(todo_rows(&answer, "2026-11-08 12:00:00").unwrap().len(), 1);
+        }
+        assert!(todo_rows(&json!({"message": "ok"}), "2026-11-08 12:00:00").is_err());
+    }
+
+    #[test]
+    fn semester_labels_come_from_the_course_code_prefix() {
+        assert_eq!(
+            semester_label_from_code("202620271CO1101"),
+            "2026-2027 秋季学期"
+        );
+        assert_eq!(
+            semester_label_from_code("202620272CO1101"),
+            "2026-2027 春季学期"
+        );
+        assert_eq!(
+            semester_label_from_code("202620273CO1101"),
+            "2026-2027 夏季学期"
+        );
+        assert_eq!(semester_label_from_code("COMP45010502"), "");
+        assert_eq!(semester_label_from_code(""), "");
     }
 
     #[test]
@@ -1923,34 +2176,29 @@ mod tests {
             }
         };
         let client = Client::with_cookies(&cookies, AccessMode::Direct).expect("client");
+        // The raw answer's keys are diagnostic only; the normalised rows below
+        // are what the 待办 page actually shows.
         match client.get("/api/todos").await {
+            Ok(value) => println!(
+                "todos keys={:?}",
+                value
+                    .as_object()
+                    .map(|object| object.keys().cloned().collect::<Vec<_>>())
+            ),
+            Err(error) => println!("todos error: {error}"),
+        }
+        match client.todos().await {
             Ok(value) => {
-                println!(
-                    "todos keys={:?}",
-                    value
-                        .as_object()
-                        .map(|object| object.keys().cloned().collect::<Vec<_>>())
-                );
-                let list = value
-                    .get("todos")
-                    .or_else(|| value.get("data"))
-                    .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
-                println!("todos count={}", list.len());
-                for item in list.iter().take(30) {
+                let rows = value["items"].as_array().cloned().unwrap_or_default();
+                println!("todos semester={} count={}", value["semester"], rows.len());
+                for item in rows.iter().take(30) {
                     println!(
-                        "  id={} course={} title={} end={}",
-                        item.get("id").and_then(Value::as_u64).unwrap_or(0),
-                        item.get("course_name")
-                            .or_else(|| item.get("courseName"))
-                            .and_then(Value::as_str)
-                            .unwrap_or(""),
-                        item.get("title").and_then(Value::as_str).unwrap_or(""),
-                        item.get("end_time")
-                            .or_else(|| item.get("endTime"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
+                        "  id={} course={} title={} end={} state={}",
+                        item["id"].as_u64().unwrap_or(0),
+                        item["course"].as_str().unwrap_or(""),
+                        item["title"].as_str().unwrap_or(""),
+                        item["end"].as_str().unwrap_or(""),
+                        item["state"].as_str().unwrap_or("")
                     );
                 }
             }

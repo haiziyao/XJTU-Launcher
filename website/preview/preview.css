@@ -1,0 +1,75 @@
+/* Preview only: the "stable" tier of homepage polish. Pure overrides on top of ../styles.css. */
+
+@property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+/* ---------- carousel: pointer tilt, sheen, accent-tinted shadow ---------- */
+
+.slide.is-active .window {
+  transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .6s ease;
+  will-change: transform;
+  box-shadow:
+    0 60px 110px -44px color-mix(in srgb, var(--accent, #7c5cff) 34%, rgba(20, 28, 70, .5)),
+    0 16px 36px -22px rgba(20, 28, 70, .26);
+}
+
+.window::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .3s ease;
+  background:
+    radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .55), transparent 60%),
+    radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--accent, #7c5cff) 10%, transparent), transparent 70%);
+}
+
+.slide.is-active .window:hover::before { opacity: 1; }
+
+/* ---------- download cards: edge light that follows the pointer ---------- */
+
+.dl::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .25s ease;
+  background: radial-gradient(170px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--brand) 85%, #fff), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.dl:hover::after { opacity: 1; }
+
+/* Recommended card: a slow-turning gradient hairline instead of the static purple edge. */
+.dl.is-current::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(from var(--ang), #7c5cff, #14a08a, #e0912a, #7c5cff);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: ring-turn 7s linear infinite;
+}
+
+@keyframes ring-turn { to { --ang: 360deg; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .slide.is-active .window { transform: none; transition: box-shadow .6s ease; }
+  .window::before { display: none; }
+  .dl.is-current::before { animation: none; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .window::before, .dl::after { display: none; }
+}

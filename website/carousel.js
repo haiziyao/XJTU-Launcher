@@ -11,10 +11,8 @@
   const cdesc = document.getElementById("cdesc");
 
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const INTERVAL = 4600;
 
   let index = 0;
-  let timer = null;
   let paused = false;
   let captionTimer = null;
 
@@ -82,21 +80,13 @@
     const count = slides.length;
     next = ((next % count) + count) % count;
     if (next === index) return;
-    if (manual) restart();
     index = next;
     paint(index, false);
-  }
-
-  function restart() {
-    clearInterval(timer);
-    if (reduced || paused) return;
-    timer = setInterval(() => go(index + 1), INTERVAL);
   }
 
   function pause() {
     if (paused) return;
     paused = true;
-    clearInterval(timer);
     root.classList.add("is-paused");
   }
 
@@ -104,7 +94,19 @@
     if (!paused) return;
     paused = false;
     root.classList.remove("is-paused");
-    restart();
+  }
+
+  // The progress bar drives the rhythm: advance exactly when it fills, so bar and slide never drift apart.
+  dotsBox.addEventListener("animationend", (event) => {
+    if (event.animationName !== "dotfill" || paused) return;
+    if (event.target.classList.contains("is-active")) go(index + 1);
+  });
+
+  // Reduced motion turns the fill animation off, so there is no animationend to listen for.
+  if (reduced) {
+    setInterval(() => {
+      if (!paused) go(index + 1);
+    }, 2500);
   }
 
   root.querySelector("#next").addEventListener("click", () => go(index + 1, true));
@@ -141,5 +143,4 @@
   const hash = Number.parseInt(location.hash.replace("#slide-", ""), 10);
   if (hash >= 1 && hash <= slides.length) index = hash - 1;
   paint(index, true);
-  restart();
 })();

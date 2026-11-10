@@ -694,7 +694,12 @@ onMounted(async () => {
             <p v-else class="lms-detail-time">{{ timeRow }}</p>
           </header>
 
-          <InlineAlert v-if="detail.type === 'homework'" tone="info" title="应用内提交尚未开放">
+          <InlineAlert
+            v-if="detail.type === 'homework'"
+            notice-id="lms-homework-submit"
+            tone="info"
+            title="应用内提交尚未开放"
+          >
             作业只能在这里查看要求与提交记录；提交和撤回请到思源学堂网页办理。
           </InlineAlert>
 

@@ -3,6 +3,12 @@
 
   var GITHUB_RELEASES = "https://github.com/haiziyao/XJTU-Launcher/releases";
 
+  // Resolve relative to the page base so the same script works from /, /site/
+  // and the preview copy (which uses <base href="../">).
+  function assetUrl(path) {
+    return new URL(path, document.baseURI).href;
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -233,8 +239,6 @@
     });
   }
 
-  var LIKE_STORE = "xjtu-launcher-likes";
-
   function setLikeCount(button, value) {
     if (typeof value !== "number" || !isFinite(value)) return;
     var num = button.querySelector(".like-num");
@@ -245,30 +249,30 @@
     button.classList.add("is-voted");
     button.setAttribute("aria-pressed", "true");
     var label = button.querySelector(".like-label");
-    if (label) label.textContent = "已支持";
+    if (label) label.textContent = "人支持 · 你已投";
+  }
+
+  function markUnvoted(button) {
+    button.classList.remove("is-voted");
+    button.setAttribute("aria-pressed", "false");
+    var label = button.querySelector(".like-label");
+    if (label) label.textContent = "人支持";
   }
 
   function initLikes() {
     var buttons = document.querySelectorAll(".like");
     if (!buttons.length) return;
 
-    var voted = {};
-    try {
-      voted = JSON.parse(localStorage.getItem(LIKE_STORE) || "{}") || {};
-    } catch (error) {
-      voted = {};
-    }
-
     Array.prototype.forEach.call(buttons, function (button) {
       var key = button.getAttribute("data-key");
-      if (voted[key]) markVoted(button);
 
       button.addEventListener("click", function () {
-        if (button.classList.contains("is-voted") || button.dataset.busy) return;
+        // The server toggles: clicking a voted button cancels that vote.
+        if (button.dataset.busy) return;
         button.dataset.busy = "1";
         button.classList.remove("is-error");
 
-        fetch("api/like", {
+        fetch(assetUrl("api/like"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: key })
@@ -279,12 +283,10 @@
           })
           .then(function (result) {
             setLikeCount(button, result.count);
-            markVoted(button);
-            voted[key] = true;
-            try {
-              localStorage.setItem(LIKE_STORE, JSON.stringify(voted));
-            } catch (error) {
-              /* private mode: the vote still counted on the server */
+            if (result.voted) {
+              markVoted(button);
+            } else {
+              markUnvoted(button);
             }
           })
           .catch(function () {
@@ -293,7 +295,9 @@
             if (!label) return;
             label.textContent = "暂时不可用";
             window.setTimeout(function () {
-              label.textContent = "支持";
+              label.textContent = button.classList.contains("is-voted")
+                ? "人支持 · 你已投"
+                : "人支持";
               button.classList.remove("is-error");
             }, 2400);
           })
@@ -305,7 +309,7 @@
   }
 
   function loadStats() {
-    fetch("api/stats", { cache: "no-store" })
+    fetch(assetUrl("api/stats"), { cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("HTTP " + response.status);
         return response.json();
@@ -320,8 +324,19 @@
         }
 
         var likes = (data && data.likes) || {};
+        var mine = data && data.voted;
         Array.prototype.forEach.call(document.querySelectorAll(".like"), function (button) {
-          setLikeCount(button, likes[button.getAttribute("data-key")]);
+          var key = button.getAttribute("data-key");
+          setLikeCount(button, likes[key]);
+          // The server knows which directions this browser voted for, so the
+          // button state survives counter resets and is independent of the
+          // total count.
+          if (!mine || typeof mine[key] !== "boolean") return;
+          if (mine[key]) {
+            markVoted(button);
+          } else {
+            markUnvoted(button);
+          }
         });
       })
       .catch(function () {
@@ -338,6 +353,10 @@
     var details = document.querySelector(".checksums");
     if (details) details.hidden = true;
 
+    // The static HTML cannot know the current version; do not leave a stale placeholder on screen.
+    var version = document.getElementById("pill-version");
+    if (version) version.textContent = "v—";
+
     var meta = document.getElementById("version-meta");
     if (!meta) return;
     var link = el("a", null, "GitHub Release");
@@ -346,7 +365,7 @@
     meta.replaceChildren(document.createTextNode("读取版本信息失败，请前往 "), link, document.createTextNode(" 下载"));
   }
 
-  fetch("downloads.json", { cache: "no-cache" })
+  fetch(assetUrl("downloads.json"), { cache: "no-cache" })
     .then(function (response) {
       if (!response.ok) throw new Error("HTTP " + response.status);
       return response.json();

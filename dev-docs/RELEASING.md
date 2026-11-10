@@ -76,7 +76,7 @@ HTTP 端点必须在发布配置里带上 `dangerousInsecureTransportProtocol: t
 - `http://8.152.100.169/latest.json`：nginx → `127.0.0.1:8787` → 私有 OSS 根目录的清单；`platforms[*].url` 指向 `http://8.152.100.169/download/v<版本>/`，由网关 302 到签名地址。
 - `oss://xjtu-launcher/v0.5.2/`：两个 `.dmg`、两个 `.app.tar.gz`、`_x64-setup.exe` 及各自的 `.sig`。
 - 0.5.x 客户端内置的旧路径 `/xjtu-launcher/latest.json` 由 nginx 精确匹配转发到同一清单；`/srv/xjtu-launcher/public/` 的静态文件保留作回退。
-- 限流：每个 IP 每分钟 12 次、最多 4 个并发，超出 429。
+- 限流：每个 IP 每分钟 120 次、最多 50 个并发（只挡脚本）；浏览器 Cookie 配额默认每 10 分钟 20 次，超出网关返回 429。`latest.json` 不按 IP 限流。
 
 v0.5.2 上线时逐个文件与 GitHub Release 的 `sha256` 比对通过；从网关完整下载后哈希一致。实测：直连 OSS 未签名对象 403、网关密钥无写权限（PutObject 403）、签名 302、`Range` 206、同 IP 第 7 次起 429。
 

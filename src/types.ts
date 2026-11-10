@@ -2,8 +2,12 @@ export interface AppConfig {
   version: number;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
+  /** User order of the sidebar entries; unlisted entries go after these. */
+  sidebarOrder: string[];
   /** Show the Agent entry in the sidebar; on by default. */
   agentSidebarVisible: boolean;
+  /** Lets the community page's Agent search use the configured model service. */
+  agentSearchEnabled: boolean;
   nickname: string;
   avatar: string | null;
   wallpaper: string | null;
@@ -16,8 +20,8 @@ export interface AppConfig {
   pluginOrder: string[];
   disabledPlugins: string[];
   hiddenPlugins: string[];
-  pluginServer: string | null;
-  checkPluginUpdates: boolean;
+  /** Plugin layout generation; 1 means the built-in plugin centre. */
+  pluginLayout: number;
   checkAppUpdates: boolean;
   campusPinned: string[];
   /** 畅行校园 section rail collapsed to icons. */
@@ -32,19 +36,8 @@ export interface AppConfig {
   mcpServerPort: number;
   /** Built-in tools kept out of that endpoint. */
   mcpServerDisabledTools: string[];
-  /** Show the desktop pet after minimizing the main window. */
-  petDesktopEnabled: boolean;
-  /** Built-in pet id. */
-  petCharacter: string;
-  /** Notification bar material. */
-  petBarStyle: string;
-  /** Keep only the pet, without the notification bar. */
-  petBarHidden: boolean;
-  petBubbleEnabled: boolean;
-  /** Notification sources the bar may show. */
-  petSources: string[];
-  /** Last floating-window position in physical pixels. */
-  petPosition: [number, number] | null;
+  /** Copy a submitted homework's files into the matching 工作台 course folder. */
+  workbenchAutoArchive: boolean;
   /** Give each page-level tab its own rounded backing. */
   pageTabSurfaces: boolean;
   /** Wallpaper display preset (clear | balanced | vivid); only used with a wallpaper. */
@@ -120,12 +113,18 @@ export interface Link {
   description: string;
   url: string;
 }
+export type PluginCategory = 'campus' | 'invention' | 'lab';
 export interface Plugin {
   schemaVersion: number;
   id: string;
   name: string;
   version: string;
+  category: PluginCategory;
+  author: string;
   description: string;
+  details: string;
+  /** New installs start with this state; the user's switch wins afterwards. */
+  enabledByDefault: boolean;
   icon: string;
   page:
     | { type: 'timetable' }
@@ -133,16 +132,77 @@ export interface Plugin {
     | { type: 'campus' }
     | { type: 'agentSettings' }
     | { type: 'homeTheme' }
-    | { type: 'pptCapture' };
+    | { type: 'pptCapture' }
+    | { type: 'desktopPet' }
+    | { type: 'fontBeautify' };
   widget: boolean;
   /** Sidebar entry; absent means true. Pages opened from a workflow set false. */
   sidebar?: boolean;
 }
 export interface PluginList {
   plugins: Plugin[];
-  warnings: string[];
-  directory: string;
-  sources: Record<string, string>;
+}
+/** Stored in `plugins/settings/cn.xjtu.desktop-pet.json`. */
+export interface PetPluginSettings {
+  character: string;
+  barStyle: string;
+  barHidden: boolean;
+  bubble: boolean;
+  sources: string[];
+  position: [number, number] | null;
+}
+export type FontRegionId = 'ui' | 'title' | 'body' | 'timetable' | 'code';
+export interface FontRegion {
+  family: string;
+  size: number;
+  weight: number;
+  lineHeight: number;
+  letterSpacing: number;
+  /** `#rrggbb`, or empty to keep the app's own text colour. */
+  color: string;
+}
+/** Stored in `plugins/settings/cn.xjtu.font-beautify.json`. */
+export type FontPluginSettings = Record<FontRegionId, FontRegion>;
+
+/** A font the app can download from its fixed catalog. */
+export interface FontCatalogEntry {
+  id: string;
+  name: string;
+  family: string;
+  style: string;
+  license: string;
+  sourceUrl: string;
+  downloadUrl: string;
+  size: number;
+  format: string;
+  /** `font` for a direct file, `7z` when the official package is extracted. */
+  package: 'font' | '7z';
+}
+
+/** A font file already copied into `~/.xjtu-launcher/resources/fonts`. */
+export interface InstalledFont {
+  id: string;
+  name: string;
+  family: string;
+  file: string;
+  format: string;
+  source: 'catalog' | 'local';
+  size: number;
+  sha256: string;
+  addedAt: number;
+}
+
+export interface FontLibraryState {
+  catalog: FontCatalogEntry[];
+  installed: InstalledFont[];
+}
+
+/** Emitted on `font-download` while a catalog font is downloading. */
+export interface FontDownloadProgress {
+  id: string;
+  phase: 'download' | 'extract';
+  received: number;
+  total: number;
 }
 export interface AccountStatus {
   connected: boolean;
@@ -303,21 +363,6 @@ export interface ModelListInput {
   useLegacyKey: boolean;
 }
 
-export interface MarketEntry {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  minAppVersion: string;
-  downloadUrl: string;
-  sha256: string;
-}
-export interface MarketCatalog {
-  updates: string[];
-  source: string | null;
-  defaultSource: string | null;
-  plugins: MarketEntry[];
-}
 /** Closed query set for the campus plugin page. */
 export type SchoolQuery =
   | { type: 'card' }
@@ -340,6 +385,7 @@ export type SchoolQuery =
   | { type: 'lmsActivity'; activity: number }
   | { type: 'lmsSubmissions'; activity: number }
   | { type: 'lmsOverview' }
+  | { type: 'lmsTodos' }
   | { type: 'noticeChannels' }
   | { type: 'notices'; channel: string; limit: number }
   | { type: 'libraryFloors' }
@@ -719,6 +765,26 @@ export interface LmsOverview {
   /** Request count that failed, so the page can say the list is partial. */
   failed: number;
 }
+/** One homework the school's official todo list still keeps open. */
+export interface LmsTodoItem {
+  id: number;
+  courseId: number;
+  course: string;
+  courseCode: string;
+  semester: string;
+  title: string;
+  end: string;
+  /** `overdue` only means the deadline passed while the item stayed open. */
+  state: 'todo' | 'overdue';
+  locked: boolean;
+}
+/** `GET /api/todos`: the only source for 待办, one request for all courses. */
+export interface LmsTodos {
+  semester: string;
+  items: LmsTodoItem[];
+  partial: boolean;
+  failures: { courseId: number; courseName: string; message: string }[];
+}
 /** A course folder's hidden marker: the stable identity behind an alias. */
 export interface WorkbenchCourseMeta {
   id: number;
@@ -937,24 +1003,6 @@ export interface McpTool {
   description: string;
   inputSchema: unknown;
 }
-export interface McpField {
-  key: string;
-  label: string;
-  secret: boolean;
-  placeholder: string;
-}
-export interface McpEntry {
-  id: string;
-  name: string;
-  description: string;
-  transport: McpTransport;
-  fields: McpField[];
-}
-export interface McpCatalog {
-  source: string | null;
-  defaultSource: string | null;
-  servers: McpEntry[];
-}
 export interface AgentToolCall {
   id: string;
   name: string;
@@ -1037,6 +1085,15 @@ export interface AgentToolInfo {
   name: string;
   description: string;
   source: 'campus' | 'mcp';
+}
+export type AgentSearchReason =
+  'ready' | 'plugin-disabled' | 'disabled' | 'no-model' | 'unreachable';
+export interface AgentSearchStatus {
+  available: boolean;
+  reason: AgentSearchReason;
+}
+export interface AgentSearchAnswer {
+  answer: string;
 }
 /** 文件预览（SPEC §4.4）：图片和文本由后端内联，PDF 只带预览 id，交给 pdf.js。 */
 export type FilePreview =

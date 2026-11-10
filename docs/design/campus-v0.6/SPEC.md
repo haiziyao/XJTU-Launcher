@@ -517,7 +517,8 @@ interface LmsTodos {
   - `is_resubmit_open` 时显示“可重交”
   - “已批改”需要提交记录，列表不判断，在详情页显示。
 - `/api/todos` 只返回作业，评教和考试由各自接口补齐。
-- 按账号缓存 5 分钟，手动刷新时绕过。
+- 按账号缓存 60 秒（原方案 5 分钟；2026-11-05 用户反馈提交后待办不消失，2026-11-08 改为短缓存），手动刷新时绕过。
+- 实现备注（2026-11-08）：查询为 `Query::LmsTodos`，返回 `{ semester, items, partial, failures }`；`items` 沿用页面现有字段 `id`、`courseId`、`course`、`courseCode`、`semester`、`title`、`end`、`state`、`locked`，`end` 为北京时间字符串，`semester` 从课程编号前 9 位学期码推导，推不出时为空。
 
 #### `LmsCourseFiles`
 

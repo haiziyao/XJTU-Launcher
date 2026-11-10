@@ -12,10 +12,11 @@ ExecStart=/usr/bin/python3 /srv/xjtu-launcher/gateway/oss-gateway.py
 Restart=on-failure
 RestartSec=3
 
-# The service only signs URLs; it needs no filesystem write access.
+# The service signs URLs and appends to the download counter under STATS_DIR.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
+ReadWritePaths=/srv/xjtu-launcher/stats
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<base href="../">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XJTU Launcher — 西安交通大学桌面校园工作台</title>
+<meta name="description" content="XJTU Launcher 把课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆收进一个桌面应用。Rust 直接对接校园协议，凭据只保存在本机。">
+<link rel="icon" href="assets/favicon.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="styles.css?v=20261110b">
+<link rel="stylesheet" href="preview/preview.css?v=20261110b">
+<link rel="stylesheet" href="preview/direction.css?v=20261110b">
+<meta property="og:type" content="website">
+<meta property="og:title" content="XJTU Launcher — 西安交通大学桌面校园工作台">
+<meta property="og:description" content="课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆，都在同一个窗口里。">
+<meta property="og:url" content="https://xjtu-launcher.cn/">
+<meta property="og:image" content="https://xjtu-launcher.cn/assets/home-clean.jpg">
+<meta name="theme-color" content="#ffffff">
+</head>
+<body>
+<a class="skip" href="preview/#main">跳到主要内容</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="./">
+      <img src="assets/icon.png" width="28" height="28" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="community/">社区广场</a>
+      <a href="preview/#direction" data-sm="hide">方向</a>
+      <a href="preview/#download">下载</a>
+      <a href="preview/#about" data-sm="hide">项目</a>
+      <a href="doc/qa/">Q&amp;A</a>
+      <a class="ghost" href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <div class="hero-stat" id="download-stat" hidden title="GitHub Release 安装包下载次数，含历史版本">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9.3l3.4-3.4 1.4 1.4L12 16.4 7.2 10.3l1.4-1.4L12 12.3V3zM5 18h14v2H5z"/></svg>
+        <b id="download-total">0</b><span>次下载</span>
+      </div>
+      <div class="tags" aria-label="项目信息">
+        <span class="tag-item tag-version" id="pill-version">v—</span>
+        <span class="tag-item tag-stage" id="release-stage">预览版</span>
+        <span class="tag-item tag-rust">Rust</span>
+        <span class="tag-item tag-tauri">Tauri 2</span>
+        <span class="tag-item tag-vue">Vue 3</span>
+        <span class="tag-item tag-mit">MIT</span>
+      </div>
+      <h1 class="hero-title" id="hero-title" aria-label="把交大人的校园生活，收进一个窗口">把交大人的校园生活<br>收进一个窗口</h1>
+      <p class="lede">课表、成绩、思源学堂、Agent 与工作台。Rust 直接对接校园系统，凭据只保存在你的电脑上。</p>
+    </div>
+
+    <div class="carousel wrap" id="carousel" tabindex="0" aria-roledescription="carousel" aria-label="应用界面预览">
+      <div class="stage">
+        <div class="glow" id="glow"></div>
+        <div class="slides" id="slides">
+          <figure class="slide is-active" data-accent="#7c5cff" data-tag="主页" data-title="打开就知道今天要做什么" data-desc="今日课程、校园快捷入口与教务处通知放在同一个首页，不用在各个系统之间来回切。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>主页</span></div>
+              <img src="assets/home-clean.jpg" width="1280" height="869" alt="主页：今日课程、校园快捷入口与教务处通知">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#14a08a" data-tag="畅行校园" data-title="待办一眼看完" data-desc="未交、今天截止、本周与逾期分开统计，按周分组，点开就能交。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>畅行校园</span></div>
+              <img src="assets/campus-tools.jpg" width="1280" height="869" alt="畅行校园待办：统计卡、本周与以后分组、9 项待交作业">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#3b7ddd" data-tag="社区广场" data-title="社团、课程与校园生活" data-desc="社团、课程攻略、校园生活、生涯分享与资源导航五个板块；板块内容还在开发中。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>社区广场</span></div>
+              <img src="assets/community.jpg" width="1280" height="869" alt="社区广场：五个板块入口与搜索框">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#e8503a" data-tag="MCP" data-title="把校园能力交给 Agent" data-desc="本机 MCP 模式，开放 17 个校园工具；只监听本机，端口随时可换。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>MCP</span></div>
+              <img src="assets/mcp-card.jpg" width="1280" height="841" alt="MCP 模式设置卡：端口、地址、接入命令与 17 个工具">
+            </div>
+          </figure>
+        </div>
+
+        <button class="arrow prev" id="prev" aria-label="上一张">‹</button>
+        <button class="arrow next" id="next" aria-label="下一张">›</button>
+      </div>
+
+      <div class="carousel-foot">
+        <div class="caption" id="caption" aria-live="polite">
+          <span class="tag" id="tag">主页</span>
+          <strong id="ctitle">打开就知道今天要做什么</strong>
+          <span class="cdesc" id="cdesc">今日课程、校园快捷入口与教务处通知放在同一个首页，不用在各个系统之间来回切。</span>
+        </div>
+        <div class="dots" id="dots" role="tablist" aria-label="选择截图"></div>
+      </div>
+    </div>
+
+    <div class="download wrap" id="download">
+      <a class="dl" data-platform="macOS" data-arch="arm64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 12.6c0-2 1.6-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.5-.4 6.1 1 8.1.7 1 1.4 2.1 2.5 2 1 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.1zM14.6 6.4c.5-.6.9-1.4.8-2.2-.8 0-1.7.5-2.2 1.1-.5.5-.9 1.3-.8 2.1.9.1 1.7-.4 2.2-1z"/></svg></span>
+        <span class="dl-text"><strong>macOS</strong><small>Apple 芯片</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+      <a class="dl" data-platform="macOS" data-arch="x64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 12.6c0-2 1.6-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.5-.4 6.1 1 8.1.7 1 1.4 2.1 2.5 2 1 0 1.4-.6 2.6-.6s1.6.6 2.6.6c1.1 0 1.8-1 2.4-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.1-.8-2.1-3.1zM14.6 6.4c.5-.6.9-1.4.8-2.2-.8 0-1.7.5-2.2 1.1-.5.5-.9 1.3-.8 2.1.9.1 1.7-.4 2.2-1z"/></svg></span>
+        <span class="dl-text"><strong>macOS</strong><small>Intel 芯片</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+      <a class="dl" data-platform="Windows" data-arch="x64" href="https://github.com/haiziyao/XJTU-Launcher/releases" rel="noopener">
+        <span class="dl-icon win"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.7l7.2-1v6.9H3.5zm0 7.7h7.2v6.9l-7.2-1zM11.8 4.5l8.7-1.2v8.3h-8.7zm0 8h8.7v8.2l-8.7-1.2z"/></svg></span>
+        <span class="dl-text"><strong>Windows</strong><small>10 / 11 · x64</small></span>
+        <span class="dl-go">下载</span>
+      </a>
+    </div>
+    <p class="meta" id="version-meta">正在读取版本…</p>
+    <details class="checksums">
+      <summary>SHA256 校验值</summary>
+      <div id="checksum-list"></div>
+    </details>
+  </section>
+
+  <section class="direction-sec" id="direction">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">方向</p>
+          <h2>接下来，往三个方向走</h2>
+        </div>
+        <p class="sub">功能说明都在上面的截图里。这里是想去的地方：每个方向旁边有一个「支持」，一个人一票，票数公开统计，用来决定下一步先做什么。</p>
+      </div>
+
+      <div class="paths">
+        <article class="path path-powerful" data-key="powerful">
+          <div class="path-body">
+            <span class="path-no">01</span>
+            <h3>功能更强大</h3>
+            <p>接入更多校园系统与教务流程；让 Agent 能连续完成多步任务；常用数据断开网络也能先看到最近一次的结果。</p>
+            <button class="like" type="button" data-key="powerful" aria-pressed="false" aria-label="支持「功能更强大」">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3l-1.3-1.2C6.2 15.1 3.5 12.6 3.5 9.4 3.5 6.9 5.4 5 7.9 5c1.5 0 3 .7 4.1 1.9C13.1 5.7 14.6 5 16.1 5c2.5 0 4.4 1.9 4.4 4.4 0 3.2-2.7 5.7-7.2 9.7z"/></svg>
+              <span class="like-num">—</span>
+              <span class="like-label">人支持</span>
+            </button>
+          </div>
+          <figure class="path-fig">
+            <img src="assets/direction-powerful.svg" width="640" height="400" alt="功能方向示意图">
+            <span class="ph-note">示意图</span>
+          </figure>
+        </article>
+
+        <article class="path path-community" data-key="community">
+          <div class="path-body">
+            <span class="path-no">02</span>
+            <h3>社区更丰富</h3>
+            <p>插件市场从「开关」变成真正的社区：主题、插件和配置可以分享，课表模板与校园适配由大家一起维护。</p>
+            <button class="like" type="button" data-key="community" aria-pressed="false" aria-label="支持「社区更丰富」">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3l-1.3-1.2C6.2 15.1 3.5 12.6 3.5 9.4 3.5 6.9 5.4 5 7.9 5c1.5 0 3 .7 4.1 1.9C13.1 5.7 14.6 5 16.1 5c2.5 0 4.4 1.9 4.4 4.4 0 3.2-2.7 5.7-7.2 9.7z"/></svg>
+              <span class="like-num">—</span>
+              <span class="like-label">人支持</span>
+            </button>
+          </div>
+          <figure class="path-fig">
+            <img src="assets/direction-community.svg" width="640" height="400" alt="社区方向示意图">
+            <span class="ph-note">示意图</span>
+          </figure>
+        </article>
+
+        <article class="path path-design" data-key="design">
+          <div class="path-body">
+            <span class="path-no">03</span>
+            <h3>页面更美观</h3>
+            <p>新图标集、深浅主题、校园页改版，统一排版与动效，让每个页面都像桌面应用该有的样子。</p>
+            <button class="like" type="button" data-key="design" aria-pressed="false" aria-label="支持「页面更美观」">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3l-1.3-1.2C6.2 15.1 3.5 12.6 3.5 9.4 3.5 6.9 5.4 5 7.9 5c1.5 0 3 .7 4.1 1.9C13.1 5.7 14.6 5 16.1 5c2.5 0 4.4 1.9 4.4 4.4 0 3.2-2.7 5.7-7.2 9.7z"/></svg>
+              <span class="like-num">—</span>
+              <span class="like-label">人支持</span>
+            </button>
+          </div>
+          <figure class="path-fig">
+            <img src="assets/direction-design.svg" width="640" height="400" alt="界面方向示意图">
+            <span class="ph-note">示意图</span>
+          </figure>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="about-sec" id="about">
+    <div class="wrap about">
+      <div class="about-head">
+        <p class="kicker">项目</p>
+        <h2>关于这个项目</h2>
+        <p class="sub">一个个人项目，代码全部开源。没有公司、没有融资，也没有「注册即同意」的隐私条款——你的数据不出你的电脑。</p>
+        <div class="about-actions">
+          <a class="doc-btn" href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">在 GitHub 看源码</a>
+          <a class="doc-btn" href="doc/qa/">常见问题</a>
+        </div>
+      </div>
+
+      <div class="about-grid">
+        <article>
+          <h3>项目</h3>
+          <p>XJTU Launcher 是给交大人用的桌面校园客户端，用 Rust + Tauri 2 + Vue 3 写成，遵循 MIT 协议。它不把网页塞进窗口里：登录、课表、成绩、思源学堂、Agent 与工作台都是原生界面。</p>
+        </article>
+        <article>
+          <h3>团队</h3>
+          <p>由个人发起并维护，不是学校官方项目。代码、Issue 和每个版本的更新记录都在 GitHub；想参与的人可以直接提交 PR，或者在上面三个方向下点赞投票。</p>
+        </article>
+        <article>
+          <h3>理念</h3>
+          <p>数据留在本机：凭据只写进 <code>~/.xjtu-launcher/auth.json</code>，不经过任何服务器。会影响你数据的写操作——评教、交作业——必须先给出预览、由你确认才执行；没有暗改，也没有结果不明时的静默重试。</p>
+        </article>
+        <article>
+          <h3>畅想</h3>
+          <p>从「能查」到「能替你办」：接进更多校园流程，让 Agent 真正跑完多步任务；让插件与主题来自社区；把界面做得更安静、更好看。这三个方向就是我们对未来最直接的愿望。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="install-sec" id="install">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">安装</p>
+        <h2>第一次打开</h2>
+        <p class="sub">更多问题见 <a class="inline-link" href="doc/qa/">Q&amp;A</a>。</p>
+      </div>
+      <div class="install">
+        <div class="step">
+          <h3>macOS</h3>
+          <ol>
+            <li>打开 DMG，把 XJTU Launcher 拖进「应用程序」。</li>
+            <li>提示「无法验证开发者」时，去「系统设置 → 隐私与安全性」点「仍要打开」。</li>
+            <li>每个新版本确认一次，之后直接启动。</li>
+          </ol>
+        </div>
+        <div class="step">
+          <h3>Windows</h3>
+          <ol>
+            <li>运行 setup.exe，按向导完成安装。</li>
+            <li>出现「Windows 已保护你的电脑」时，点「更多信息」→「仍要运行」。</li>
+            <li>安装完成后从开始菜单启动。</li>
+          </ol>
+        </div>
+      </div>
+      <p class="fine">应用没有 Apple 与 Windows 代码签名证书，系统提示不代表安装包损坏；可以用官网公布的 SHA256 核对后再打开。</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="fbrand">
+      <img src="assets/icon.png" width="32" height="32" alt="">
+      <span>XJTU Launcher</span>
+    </div>
+    <p>MIT License · <a href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a> · <a href="doc/qa/">Q&amp;A</a><br>学生个人项目，与西安交通大学官方无关。凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<script src="app.js?v=20261110b" defer></script>
+<script src="carousel.js?v=20261110b" defer></script>
+<script src="preview/preview.js?v=20261110b" defer></script>
+</body>
+</html>

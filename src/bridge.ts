@@ -10,13 +10,13 @@ import type {
   AgentPresetInput,
   AgentPresetKind,
   AgentPresets,
+  AgentSearchAnswer,
+  AgentSearchStatus,
   AgentSummary,
   AgentToolInfo,
   EntryIconSet,
   ExposeStatus,
   ExposeTool,
-  MarketCatalog,
-  McpCatalog,
   McpServer,
   McpTool,
   McpTransport,
@@ -57,14 +57,14 @@ import type {
   StoragePreview,
   StorageReport,
   LmsReplayVideos,
+  FontDownloadProgress,
+  FontLibraryState,
+  InstalledFont,
 } from './types';
 
 export const native = isTauri();
 
 export const bridge = {
-  pluginSource: () =>
-    invoke<{ source: string | null; defaultSource: string | null }>('plugin_source'),
-  pluginCatalog: () => invoke<MarketCatalog>('plugin_catalog'),
   schoolCatalog: () => invoke<SchoolFeature[]>('school_catalog'),
   // Entry icons under `~/.xjtu-launcher/resources/icons`; never an error, an
   // empty set just means every entry keeps its built-in glyph.
@@ -174,9 +174,6 @@ export const bridge = {
     invoke<EvaluationOutcome[]>('school_submit_evaluations', { previewId }),
   schoolCancelEvaluations: (previewId: string) =>
     invoke<void>('school_cancel_evaluations', { previewId }),
-  installPlugin: (id: string, version: string) =>
-    invoke<void>('install_market_plugin', { id, version }),
-  removePlugin: (id: string) => invoke<void>('remove_plugin', { id }),
   updateStatus: () => invoke<UpdateStatus>('update_status'),
   checkUpdate: () => invoke<UpdateStatus>('check_app_update'),
   installUpdate: () => invoke<void>('install_app_update'),
@@ -212,6 +209,14 @@ export const bridge = {
   async testProvider(id: string): Promise<number> {
     requireNative();
     return invoke('test_provider', { id });
+  },
+  async agentSearchStatus(probe = false): Promise<AgentSearchStatus> {
+    requireNative();
+    return invoke('agent_search_status', { probe });
+  },
+  async communityAgentSearch(query: string): Promise<AgentSearchAnswer> {
+    requireNative();
+    return invoke('community_agent_search', { query });
   },
   async providerBalance(id: string): Promise<ProviderBalance | null> {
     requireNative();
@@ -255,16 +260,49 @@ export const bridge = {
     requireNative();
     return invoke('list_plugins');
   },
-  async importPlugin(): Promise<boolean> {
+  async pluginSettings<T>(id: string): Promise<T> {
     requireNative();
-    const directory = await open({
-      directory: true,
+    return invoke<T>('plugin_settings', { id });
+  },
+  async savePluginSettings<T>(id: string, settings: T): Promise<T> {
+    requireNative();
+    return invoke<T>('save_plugin_settings', { id, settings });
+  },
+  async fontsState(): Promise<FontLibraryState> {
+    requireNative();
+    return invoke('fonts_state');
+  },
+  async fontDownload(id: string): Promise<InstalledFont> {
+    requireNative();
+    return invoke('font_download', { id });
+  },
+  async fontDownloadCancel(id: string): Promise<boolean> {
+    requireNative();
+    return invoke('font_download_cancel', { id });
+  },
+  async fontAddLocal(): Promise<InstalledFont | null> {
+    requireNative();
+    const path = await open({
       multiple: false,
-      title: '选择包含 plugin.json 的插件目录',
+      directory: false,
+      title: '添加字体',
+      filters: [{ name: '字体', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
     });
-    if (!directory) return false;
-    await invoke('import_plugin', { directory });
-    return true;
+    if (!path) return null;
+    return invoke('font_add_local', { path });
+  },
+  async fontRemove(id: string): Promise<void> {
+    requireNative();
+    return invoke('font_remove', { id });
+  },
+  /** Raw font bytes for `FontFace`; no file path ever reaches the page. */
+  async fontData(id: string): Promise<ArrayBuffer> {
+    requireNative();
+    return invoke('font_data', { id });
+  },
+  async onFontDownload(callback: (progress: FontDownloadProgress) => void): Promise<() => void> {
+    requireNative();
+    return listen<FontDownloadProgress>('font-download', (event) => callback(event.payload));
   },
   async account(): Promise<AccountStatus> {
     requireNative();
@@ -395,14 +433,6 @@ export const bridge = {
   async probeMcpServer(id: string): Promise<McpTool[]> {
     requireNative();
     return invoke('probe_mcp_server', { id });
-  },
-  async mcpCatalog(): Promise<McpCatalog> {
-    requireNative();
-    return invoke('mcp_catalog');
-  },
-  async installMcpEntry(id: string, values: Record<string, string>): Promise<string> {
-    requireNative();
-    return invoke('install_mcp_entry', { entryId: id, values });
   },
   async onAuth(callback: (event: AuthEvent) => void): Promise<() => void> {
     requireNative();
@@ -562,10 +592,6 @@ export const bridge = {
   async onPetOpenSettings(callback: () => void): Promise<() => void> {
     requireNative();
     return listen('pet-open-settings', () => callback());
-  },
-  async onPetConfigChanged(callback: (config: AppConfig) => void): Promise<() => void> {
-    requireNative();
-    return listen<AppConfig>('pet-config-changed', (e) => callback(e.payload));
   },
 };
 

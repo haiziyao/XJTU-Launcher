@@ -2,7 +2,7 @@
 
 2026-10-29 起，macOS 构建使用 **ad-hoc 签名**（`APPLE_SIGNING_IDENTITY` 缺省为 `-`），修复 0.5.1 及更早版本因应用包未签名导致的“已损坏，无法打开”提示；0.5.2 是首个采用该签名的发布版本。ad-hoc 签名只保证 bundle 封条有效，不等于 Developer ID 或公证：下载后首次打开仍可能提示“无法验证开发者”，需要右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。
 
-当前 macOS 安装包**没有 Developer ID、未公证**，Windows 安装包**未做 Authenticode 签名**，Windows 会弹 SmartScreen“未知发布者”。Tauri 更新包自身还有一套 minisign 签名（`TAURI_SIGNING_PRIVATE_KEY`），与系统证书无关，已配置。
+当前 macOS 安装包**没有 Developer ID、未公证**，Windows 安装包**未做 Authenticode 签名**，Windows 会弹 SmartScreen“未知发布者”。Windows 的免费开源签名（SignPath Foundation）已写进工作流，**尚未申请、未启用**，见下文。Tauri 更新包自身还有一套 minisign 签名（`TAURI_SIGNING_PRIVATE_KEY`），与系统证书无关，已配置。
 
 自签名证书不能消除上述提示，只能使用公共 CA 的代码签名证书。
 
@@ -47,9 +47,42 @@
    在 CI 里登录 Azure（`azure/login`）并安装该 CLI；证书不经过仓库。
 2. **SSL.com eSigner / DigiCert KeyLocker 等云签名**：拿到 OV/EV 证书后用厂商 CLI 作为 `signCommand`（如 `smctl sign`）。
 3. **传统 PFX**（仅当 CA 仍提供文件式证书）：把 `.pfx` Base64 存入 `WINDOWS_CERTIFICATE`，密码存入 `WINDOWS_CERTIFICATE_PASSWORD`，CI 中导入证书并把指纹写进临时配置的 `bundle.windows.certificateThumbprint`。
-4. **SignPath.io**：开源项目可申请免费代码签名服务，走其 GitHub App 流程。
+4. **SignPath.io / SignPath Foundation**：公开的开源项目可申请免费代码签名，证书与私钥在他们的 HSM 上，构建产物必须来自受信任的 CI。已接入 `release.yml`，见下一节。
 
-所有方案都需要在 `tools/prepare-release.mjs` 生成的临时配置里设置 `bundle.windows.signCommand`（或 `certificateThumbprint`），仓库中不要保存私钥。
+除 SignPath 外，其余方案都需要在 `tools/prepare-release.mjs` 生成的临时配置里设置 `bundle.windows.signCommand`（或 `certificateThumbprint`），仓库中不要保存私钥。
+
+## Windows：SignPath Foundation（免费，已接入工作流）
+
+适用条件（本项目都满足）：公开仓库、OSI 认可的开源许可（MIT）、构建在 GitHub Actions 的 GitHub 托管 runner 上完成。
+
+### 1. 申请
+
+1. 用仓库所有者账号打开 <https://signpath.org/apply> 提交申请，填写项目地址 `https://github.com/haiziyao/XJTU-Launcher`、许可 MIT、构建方式 GitHub Actions。
+2. 通过后收到 SignPath.io 的组织邀请，接受邀请并安装 **SignPath GitHub App**，授权它读取本仓库（用于核验产物确实来自这个仓库的构建）。
+3. 在 SignPath.io 里建项目，签署策略选 **Open Source Code Signing**，上传 [`.signpath/artifact-configuration.xml`](../.signpath/artifact-configuration.xml) 作为 artifact configuration，记下组织 ID 与三个 slug。
+
+### 2. 配置仓库
+
+Variables：`SIGNPATH_PROJECT_SLUG`、`SIGNPATH_ORGANIZATION_ID`、`SIGNPATH_SIGNING_POLICY_SLUG`、`SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`
+Secret：`SIGNPATH_API_TOKEN`（SignPath 里创建的、只有提交权限的 API token）
+
+`SIGNPATH_PROJECT_SLUG` 是开关：未设置时工作流完全跳过签名，Windows 产物照旧不签名。
+
+### 3. 工作流做了什么
+
+`release.yml` 的 Windows 任务在 `tauri-action` 之后：
+
+1. 用 `actions/upload-artifact` 上传未签名的 `*-setup.exe`，SignPath 要求产物先落到 GitHub 的 workflow artifact 上。
+2. 提交签名请求并等待完成，签好的文件下载到 `signed/`。
+3. 用签好的安装包覆盖本地文件，再用 `tauri signer sign` 重新生成更新包签名（签名改变了文件字节，原来的 `.sig` 会失效），最后用 `tools/patch-latest-signature.mjs` 把 `latest.json` 里两个 Windows 平台的 `signature` 换成新的，`gh release upload --clobber` 覆盖草稿里的三个资产。
+
+只签外层安装包：NSIS 把应用 exe 打包在安装包里，SignPath 不能深入签名这种容器。安装出来的应用 exe 没有 Mark-of-the-Web，通常不会单独触发 SmartScreen。
+
+### 4. 待办与验证
+
+- **尚未申请、尚未验证**：代码已写好但从未真实跑过签名，`v0.6.0` 的 Windows 安装包仍无 Authenticode 签名。
+- 批准后先用 `workflow_dispatch` 跑一次完整发版，检查 `signtool verify /pa` 通过、Release 里的 `.sig` 与 `latest.json` 已更新、三平台资产齐全。
+- 即使签名，SmartScreen 对新证书仍需要下载量积累信誉；Foundation 证书显示的发布者是 SignPath Foundation，不是个人或组织名称。
 
 ## 验证清单
 

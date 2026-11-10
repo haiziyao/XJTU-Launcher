@@ -7,12 +7,12 @@
 <meta name="description" content="XJTU Launcher 把课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆收进一个桌面应用。Rust 直接对接校园协议，凭据只保存在本机。">
 <link rel="icon" href="assets/favicon.png" sizes="32x32">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261110b">
 <meta property="og:type" content="website">
 <meta property="og:title" content="XJTU Launcher — 西安交通大学桌面校园工作台">
 <meta property="og:description" content="课表、成绩、考勤、校园卡、空闲教室、思源学堂、评教和图书馆，都在同一个窗口里。">
 <meta property="og:url" content="https://xjtu-launcher.cn/">
-<meta property="og:image" content="https://xjtu-launcher.cn/assets/home.jpg">
+<meta property="og:image" content="https://xjtu-launcher.cn/assets/home-clean.jpg">
 <meta name="theme-color" content="#ffffff">
 </head>
 <body>
@@ -25,9 +25,10 @@
       <span>XJTU Launcher</span>
     </a>
     <nav aria-label="主导航">
-      <a href="#direction">方向</a>
+      <a href="community/">社区广场</a>
+      <a href="#direction" data-sm="hide">方向</a>
       <a href="#download">下载</a>
-      <a href="#about">项目</a>
+      <a href="#about" data-sm="hide">项目</a>
       <a href="doc/qa/">Q&amp;A</a>
       <a class="ghost" href="https://github.com/haiziyao/XJTU-Launcher" rel="noopener">GitHub</a>
     </nav>
@@ -42,7 +43,7 @@
         <b id="download-total">0</b><span>次下载</span>
       </div>
       <div class="tags" aria-label="项目信息">
-        <span class="tag-item tag-version" id="pill-version">v0.5.2</span>
+        <span class="tag-item tag-version" id="pill-version">v—</span>
         <span class="tag-item tag-stage" id="release-stage">预览版</span>
         <span class="tag-item tag-rust">Rust</span>
         <span class="tag-item tag-tauri">Tauri 2</span>
@@ -57,28 +58,28 @@
       <div class="stage">
         <div class="glow" id="glow"></div>
         <div class="slides" id="slides">
-          <figure class="slide is-active" data-accent="#7c5cff" data-tag="纯原生" data-title="干净的页面，原生实现" data-desc="Rust 直接对接校园系统，登录、课表、成绩都在原生界面里完成，不内嵌网页。">
+          <figure class="slide is-active" data-accent="#7c5cff" data-tag="主页" data-title="打开就知道今天要做什么" data-desc="今日课程、校园快捷入口与教务处通知放在同一个首页，不用在各个系统之间来回切。">
             <div class="window">
               <div class="titlebar"><i></i><i></i><i></i><span>主页</span></div>
-              <img src="assets/home.jpg" width="1280" height="870" alt="主页：问候、今日课程、校园快捷入口与插件开关">
+              <img src="assets/home-clean.jpg" width="1280" height="869" alt="主页：今日课程、校园快捷入口与教务处通知">
             </div>
           </figure>
-          <figure class="slide" data-accent="#14a08a" data-tag="畅行校园" data-title="一个工作区，看完校园" data-desc="学习、成绩、考试、考勤、空闲教室与场馆，按任务组织，不再到处找入口。">
+          <figure class="slide" data-accent="#14a08a" data-tag="畅行校园" data-title="待办一眼看完" data-desc="未交、今天截止、本周与逾期分开统计，按周分组，点开就能交。">
             <div class="window">
               <div class="titlebar"><i></i><i></i><i></i><span>畅行校园</span></div>
-              <img src="assets/campus.jpg" width="1280" height="870" alt="畅行校园：成绩、考试、空闲教室、校历与评教">
+              <img src="assets/campus-tools.jpg" width="1280" height="869" alt="畅行校园待办：统计卡、本周与以后分组、9 项待交作业">
             </div>
           </figure>
-          <figure class="slide" data-accent="#e8503a" data-tag="MCP" data-title="把校园能力交给 Agent" data-desc="本机 MCP 模式，Claude Code 等编程 Agent 可以直接调用同一批校园工具。">
+          <figure class="slide" data-accent="#3b7ddd" data-tag="社区广场" data-title="社团、课程与校园生活" data-desc="社团、课程攻略、校园生活、生涯分享与资源导航五个板块；板块内容还在开发中。">
+            <div class="window">
+              <div class="titlebar"><i></i><i></i><i></i><span>社区广场</span></div>
+              <img src="assets/community.jpg" width="1280" height="869" alt="社区广场：五个板块入口与搜索框">
+            </div>
+          </figure>
+          <figure class="slide" data-accent="#e8503a" data-tag="MCP" data-title="把校园能力交给 Agent" data-desc="本机 MCP 模式，开放 17 个校园工具；只监听本机，端口随时可换。">
             <div class="window">
               <div class="titlebar"><i></i><i></i><i></i><span>MCP</span></div>
-              <img src="assets/mcp.jpg" width="1280" height="870" alt="本机 MCP 模式">
-            </div>
-          </figure>
-          <figure class="slide" data-accent="#3b7ddd" data-tag="工具" data-title="每一项都由你开放" data-desc="工具按分类逐项授权，端口可改，默认只监听本机，不需要时不暴露。">
-            <div class="window">
-              <div class="titlebar"><i></i><i></i><i></i><span>工具</span></div>
-              <img src="assets/mcp-tools.jpg" width="1280" height="870" alt="MCP 工具列表">
+              <img src="assets/mcp-card.jpg" width="1280" height="841" alt="MCP 模式设置卡：端口、地址、接入命令与 17 个工具">
             </div>
           </figure>
         </div>
@@ -89,9 +90,9 @@
 
       <div class="carousel-foot">
         <div class="caption" id="caption" aria-live="polite">
-          <span class="tag" id="tag">纯原生</span>
-          <strong id="ctitle">干净的页面，原生实现</strong>
-          <span class="cdesc" id="cdesc">Rust 直接对接校园系统，登录、课表、成绩都在原生界面里完成，不内嵌网页。</span>
+          <span class="tag" id="tag">主页</span>
+          <strong id="ctitle">打开就知道今天要做什么</strong>
+          <span class="cdesc" id="cdesc">今日课程、校园快捷入口与教务处通知放在同一个首页，不用在各个系统之间来回切。</span>
         </div>
         <div class="dots" id="dots" role="tablist" aria-label="选择截图"></div>
       </div>
@@ -250,7 +251,7 @@
   </div>
 </footer>
 
-<script src="app.js" defer></script>
-<script src="carousel.js" defer></script>
+<script src="app.js?v=20261110b" defer></script>
+<script src="carousel.js?v=20261110b" defer></script>
 </body>
 </html>

@@ -190,7 +190,7 @@ onMounted(() => void load());
       </StatRow>
 
       <InlineAlert v-if="error" tone="error" :title="error" />
-      <InlineAlert tone="info" title="按课程汇总暂不可用">
+      <InlineAlert notice-id="attendance-summary" tone="info" title="按课程汇总暂不可用">
         考勤接口目前只返回日期、节次和地点，没有课程名称，这里先按记录展示。
       </InlineAlert>
 
