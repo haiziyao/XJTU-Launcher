@@ -1,6 +1,36 @@
 (function () {
   "use strict";
 
+  // Version and date come from the same manifest the homepage reads, so a
+  // release does not need this page edited by hand. On failure the placeholders
+  // stay empty instead of showing a version nobody has verified.
+  (function fillVersion() {
+    var versions = Array.prototype.slice.call(document.querySelectorAll("[data-qa-version]"));
+    var dates = Array.prototype.slice.call(document.querySelectorAll("[data-qa-date]"));
+    if (!versions.length && !dates.length) return;
+
+    fetch(new URL("../../downloads.json", document.baseURI).href, { cache: "no-cache" })
+      .then(function (response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        var version = String((data && data.version) || "");
+        if (!/^\d+\.\d+\.\d+$/.test(version)) return;
+        versions.forEach(function (node) {
+          node.textContent = "v" + version;
+        });
+        var date = String(data.date || "");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+        dates.forEach(function (node) {
+          node.textContent = date;
+        });
+      })
+      .catch(function () {
+        /* keep the placeholder */
+      });
+  })();
+
   var nav = document.querySelector(".side-nav");
   if (!nav) return;
 

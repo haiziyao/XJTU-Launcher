@@ -1,0 +1,126 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { Activity } from 'lucide-vue-next';
+import SettingGroup from '../../../components/ui/SettingGroup.vue';
+import SettingRow from '../../../components/ui/SettingRow.vue';
+import EmptyState from '../../../components/ui/EmptyState.vue';
+import MenuSelect from '../../../components/ui/MenuSelect.vue';
+import { directQuery } from '../campusSession';
+import { applyCached, cacheName } from '../../../shared/cache';
+import { currentAcademicStart } from '../../../shared/domain';
+import type { FitnessScore, FitnessYears } from '../../../types';
+
+const years = ref<FitnessYears | null>(null);
+const score = ref<FitnessScore | null>(null);
+const year = ref('');
+const loading = ref(false);
+const error = ref('');
+
+// Future academic years cannot have a score yet; keeping them in the picker
+// only produces empty pages.
+const academicStart = currentAcademicStart();
+const availableYears = computed(() =>
+  (years.value?.rows ?? []).filter(
+    (item) => /^\d{4}$/.test(item.year) && Number(item.year) <= academicStart,
+  ),
+);
+const yearOptions = computed(() =>
+  availableYears.value.map((item) => ({ value: item.year, label: item.name || item.year })),
+);
+
+async function loadYears() {
+  loading.value = true;
+  error.value = '';
+  try {
+    await applyCached<FitnessYears>('fitness', undefined, (value) => (years.value = value));
+    years.value = await directQuery<FitnessYears>({ type: 'fitness' }, 'fitness');
+    const preferred = availableYears.value.find((item) => item.checked) ?? availableYears.value[0];
+    if (preferred) {
+      year.value = preferred.year;
+      await loadScore();
+    }
+  } catch (e) {
+    console.error('[campus] fitness years', e);
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadScore() {
+  if (!year.value) return;
+  const params = { year: year.value };
+  await applyCached<FitnessScore>('fitnessScore', params, (value) => (score.value = value));
+  loading.value = true;
+  error.value = '';
+  try {
+    score.value = await directQuery<FitnessScore>(
+      { type: 'fitnessScore', year: year.value },
+      cacheName('fitnessScore', params),
+    );
+  } catch (e) {
+    console.error('[campus] fitness score', e);
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function changeYear(value: string) {
+  year.value = value;
+  score.value = null;
+  void loadScore();
+}
+
+onMounted(loadYears);
+</script>
+
+<template>
+  <p v-if="error" class="notice" role="alert">{{ error }}</p>
+  <SettingGroup title="体测成绩">
+    <SettingRow title="学年">
+      <MenuSelect
+        :model-value="year"
+        :options="yearOptions"
+        label="体测学年"
+        placeholder="选择学年"
+        @update:model-value="changeYear"
+      />
+    </SettingRow>
+  </SettingGroup>
+  <EmptyState v-if="loading && !score" compact :icon="Activity" title="正在读取体测成绩…" />
+  <EmptyState
+    v-else-if="years && !availableYears.length"
+    compact
+    :icon="Activity"
+    title="还没有可查询的体测学年"
+  />
+  <SettingGroup v-if="score" title="成绩明细">
+    <SettingRow
+      :title="`总分 ${score.totalScore || '—'}`"
+      :description="
+        [score.studentName, score.studentNumber, score.sex, score.grade].filter(Boolean).join(' · ')
+      "
+    >
+      <span class="badge accent">{{ score.totalGrade || '—' }}</span>
+    </SettingRow>
+    <div v-for="item in score.items" :key="item.key" class="campus-record three">
+      <span class="campus-record-main">
+        <strong>{{ item.name }}</strong>
+        <small>{{ item.grade || '—' }}</small>
+      </span>
+      <span class="campus-record-amount">{{ item.score || '—' }}</span>
+    </div>
+    <p v-if="score.reportStatus || score.reportType" class="fitness-note">
+      {{ [score.reportType, score.reportStatus].filter(Boolean).join(' · ') }}
+    </p>
+  </SettingGroup>
+</template>
+
+<style scoped>
+.fitness-note {
+  padding: 10px 16px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+</style>

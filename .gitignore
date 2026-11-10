@@ -13,3 +13,4 @@ playwright-report/
 
 # 本机连接与部署记录（含非仓库配置，不入库）
 /dev-docs/local/
+/dev-docs/operations/local/

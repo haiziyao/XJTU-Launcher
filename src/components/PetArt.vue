@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PetId } from '../pets';
+import type { PetId } from '../shared/pets';
 
 defineProps<{ variant: PetId }>();
 

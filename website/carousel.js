@@ -112,6 +112,19 @@
   root.querySelector("#next").addEventListener("click", () => go(index + 1, true));
   root.querySelector("#prev").addEventListener("click", () => go(index - 1, true));
 
+  // Hovering the stage pauses autoplay and lifts the active shot, so a visitor can look at it for as long as they like.
+  const stage = root.querySelector(".stage");
+  if (stage) {
+    stage.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "touch") return;
+      pause();
+    });
+    stage.addEventListener("pointerleave", (event) => {
+      if (event.pointerType === "touch" || document.hidden) return;
+      resume();
+    });
+  }
+
   document.addEventListener("visibilitychange", () => (document.hidden ? pause() : resume()));
 
   root.addEventListener("keydown", (event) => {

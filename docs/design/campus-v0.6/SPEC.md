@@ -385,7 +385,7 @@
 - 文件预览和下载的临时文件放在按账号隔离的缓存目录，账号删除时一起清理。
 - 新查询同步作为只读动作加入 Agent / MCP 工具；写操作和页面共用第 4.5 节的同一套实现。
 
-### 4.2 现有类型补充（`src/types.ts`）
+### 4.2 现有类型补充（`src/types/index.ts`）
 
 ```ts
 // 活动列表补字段（2026-10-30 实测原始响应已有）。列表不含 user_submit_count。
@@ -717,7 +717,7 @@ bridge.schoolWriteCancel(id: string): Promise<void>;
 
 按账号保存（和校园缓存一起隔离，不放全局配置）：通知已读 / 收藏、已下载文件标记、“新内容”判断用的上次快照、操作记录。
 
-### 4.7 前端派生计算（`src/domain.ts`，需单元测试）
+### 4.7 前端派生计算（`src/shared/domain.ts`，需单元测试）
 
 - `gradeStats(rows)`：
   - 已修学分 = `passed !== false` 且 `credits > 0` 的学分之和

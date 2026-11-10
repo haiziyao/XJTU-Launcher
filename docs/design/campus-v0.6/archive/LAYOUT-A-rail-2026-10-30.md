@@ -6,7 +6,7 @@
 
 更新：2026-10-30
 状态：**信息架构已确认（方案 A，2026-10-30），视觉未获准**。下一步按本文出参考图；用户确认图稿并同意开始实现之前，不改前端。
-配套：[功能与接口规格](SPEC.md)。文中 `HOME-01`、`LMS-06` 等编号对应 SPEC 第 3 节。
+配套：[功能与接口规格](../SPEC.md)。文中 `HOME-01`、`LMS-06` 等编号对应 SPEC 第 3 节。
 
 ## 1. 原则
 
@@ -124,7 +124,7 @@ campus/venues?venue=<id>&date=YYYY-MM-DD
 | `SegmentedTabs` (compact)     | 分区内筛选：状态、类型、时间范围             |
 | `SettingGroup` / `SettingRow` | 详情里的“属性 : 值”列表、设置类表单          |
 | `UiCard`                      | 主页组件、指标卡容器                         |
-| `UiButton` / `UiIconButton`   | 所有按钮，规则见 `dev-docs/UI_COMPONENTS.md` |
+| `UiButton` / `UiIconButton`   | 所有按钮，规则见 `dev-docs/reference/UI_COMPONENTS.md` |
 | `MenuSelect`                  | 学期、校区、楼宇等下拉                       |
 | `EmptyState`                  | 空状态和整页错误                             |
 | `IconTile`                    | 分区图标、文件类型图标                       |

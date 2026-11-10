@@ -13,16 +13,16 @@
 
 派生文件：
 
-| 文件                                                      | 对应能力                                                                     | 修改说明                                                                                                      |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `src/capture/frames.ts`                                   | 192×108 采样、逐通道去偏、灰度签名、翻页 / 相似 / 空白判定                   | 重写为纯函数；阈值改为具名常量；保留上游“空白帧不覆盖上一张”的规则                                            |
-| `src/capture/scanner.ts`                                  | 三种扫描方式、0.5 秒补查、0.25 秒确认、疑似过渡段合并、去重顺序、断点续扫    | 从上游扫描循环提取为带 hooks 的纯逻辑，视频读写由调用方注入；新增 `checkpoint` 回调用于落盘                   |
-| `src/capture/seek.ts`                                     | 跳转等待、超时与帧就绪                                                       | 新增的类型化封装（`SeekTimeout`、`requestVideoFrameCallback` 回退），供扫描循环使用                           |
-| `src/capture/naming.ts`                                   | 课程名、时间戳与文件命名                                                     | 按上游 `课程-YYYY-MM-DD-HH-mm-ss.pdf`、`001-HH-mm-ss.jpg` 规则重写；时间固定为东八区                          |
-| `src/capture/export.ts`                                   | 手写 PDF（JPEG `/DCTDecode`，原始版与 A4 讲义版）与 ZIP（store 方式、CRC32） | 重写为无依赖的 ByteWriter；去除上游的下载与文件系统调用，只返回字节；ZIP 时间戳固定为 1980-01-01 以保证可复现 |
-| `src/capture/store.ts` + `src-tauri/src/capture_store.rs` | 会话、页码、进度与图片的本地保存                                             | 本项目自行实现（按账号隔离的缓存目录），仅沿用上游的会话字段与续扫语义                                        |
+| 文件                                                                       | 对应能力                                                                     | 修改说明                                                                                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `src/features/plugins/capture/frames.ts`                                   | 192×108 采样、逐通道去偏、灰度签名、翻页 / 相似 / 空白判定                   | 重写为纯函数；阈值改为具名常量；保留上游“空白帧不覆盖上一张”的规则                                            |
+| `src/features/plugins/capture/scanner.ts`                                  | 三种扫描方式、0.5 秒补查、0.25 秒确认、疑似过渡段合并、去重顺序、断点续扫    | 从上游扫描循环提取为带 hooks 的纯逻辑，视频读写由调用方注入；新增 `checkpoint` 回调用于落盘                   |
+| `src/features/plugins/capture/seek.ts`                                     | 跳转等待、超时与帧就绪                                                       | 新增的类型化封装（`SeekTimeout`、`requestVideoFrameCallback` 回退），供扫描循环使用                           |
+| `src/features/plugins/capture/naming.ts`                                   | 课程名、时间戳与文件命名                                                     | 按上游 `课程-YYYY-MM-DD-HH-mm-ss.pdf`、`001-HH-mm-ss.jpg` 规则重写；时间固定为东八区                          |
+| `src/features/plugins/capture/export.ts`                                   | 手写 PDF（JPEG `/DCTDecode`，原始版与 A4 讲义版）与 ZIP（store 方式、CRC32） | 重写为无依赖的 ByteWriter；去除上游的下载与文件系统调用，只返回字节；ZIP 时间戳固定为 1980-01-01 以保证可复现 |
+| `src/features/plugins/capture/store.ts` + `src-tauri/src/plugins/capture.rs` | 会话、页码、进度与图片的本地保存                                             | 本项目自行实现（按账号隔离的缓存目录），仅沿用上游的会话字段与续扫语义                                        |
 
-`src/components/PptCaptureView.vue` 是本项目按现有界面组件新写的页面，不含上游代码；后端解析接口同样为本项目实现。
+`src/features/plugins/PptCaptureView.vue` 是本项目按现有界面组件新写的页面，不含上游代码；后端解析接口同样为本项目实现。
 
 ### MIT License
 

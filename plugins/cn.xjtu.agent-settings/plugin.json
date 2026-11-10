@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "category": "invention",
   "author": "haiziyao",
+  "license": "MIT",
   "description": "模型服务、接入工具与 MCP 管理",
   "details": "配置 Agent 使用的模型服务、工具开关与 MCP 服务；模型密钥保存在本地加密存储中，不会出现在日志里。",
   "enabledByDefault": true,

@@ -19,19 +19,19 @@ import {
   WifiOff,
   X,
 } from 'lucide-vue-next';
-import { initializeUpdates, updateStatus } from './updates';
-import { bridge, native } from './bridge';
-import { ensureDirectSession } from './campusSession';
-import { prefetchCampus } from './campusPrefetch';
-import { resetLmsCaches } from './campusOverview';
+import { initializeUpdates, updateStatus } from './shared/updates';
+import { bridge, native } from './shared/bridge';
+import { ensureDirectSession } from './features/campus/campusSession';
+import { prefetchCampus } from './features/campus/campusPrefetch';
+import { resetLmsCaches } from './features/campus/campusOverview';
 import {
   coursesForDay,
   defaultConfig,
   mergeSidebarOrder,
   orderedPlugins,
   orderSidebarEntries,
-} from './domain';
-import { pluginGlyph } from './pluginGlyph';
+} from './shared/domain';
+import { pluginGlyph } from './features/plugins/pluginGlyph';
 import type {
   AccountStatus,
   AppConfig,
@@ -43,35 +43,40 @@ import type {
   Timetable,
 } from './types';
 import SidebarPet from './components/SidebarPet.vue';
-import { normalizePet } from './pets';
-import HomeView from './components/HomeView.vue';
-import AccountsView from './components/AccountsView.vue';
-import PersonalView from './components/PersonalView.vue';
-import SettingsView from './components/SettingsView.vue';
-import CommunityView from './components/CommunityView.vue';
-import WorkbenchView from './components/WorkbenchView.vue';
-import AgentView from './components/AgentView.vue';
-import AgentSettingsView from './components/AgentSettingsView.vue';
-import HomeThemeView from './components/HomeThemeView.vue';
+import { normalizePet } from './shared/pets';
+import HomeView from './features/home/HomeView.vue';
+import AccountsView from './features/accounts/AccountsView.vue';
+import PersonalView from './features/personal/PersonalView.vue';
+import SettingsView from './features/settings/SettingsView.vue';
+import CommunityView from './features/community/CommunityView.vue';
+import WorkbenchView from './features/workbench/WorkbenchView.vue';
+import AgentView from './features/agent/AgentView.vue';
+import AgentSettingsView from './features/agent/AgentSettingsView.vue';
+import HomeThemeView from './features/appearance/HomeThemeView.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
-import { useSidebarResize } from './useSidebarResize';
-import PluginMarketView from './components/PluginMarketView.vue';
-import LinksView from './components/LinksView.vue';
-import TimetableView from './components/TimetableView.vue';
-import { applyCached } from './cache';
-import { loadEntryIcons } from './icons';
-import CampusView from './components/CampusView.vue';
-import PptCaptureView from './components/PptCaptureView.vue';
-import DesktopPetView from './components/DesktopPetView.vue';
-import FontBeautifyView from './components/FontBeautifyView.vue';
-import type { CaptureTarget } from './capture/target';
+import { useSidebarResize } from './composables/useSidebarResize';
+import PluginMarketView from './features/plugins/PluginMarketView.vue';
+import LinksView from './features/home/LinksView.vue';
+import TimetableView from './features/campus/TimetableView.vue';
+import { applyCached } from './shared/cache';
+import { loadEntryIcons } from './shared/icons';
+import CampusView from './features/campus/CampusView.vue';
+import PptCaptureView from './features/plugins/PptCaptureView.vue';
+import DesktopPetView from './features/appearance/DesktopPetView.vue';
+import FontBeautifyView from './features/appearance/FontBeautifyView.vue';
+import type { CaptureTarget } from './features/plugins/capture/target';
 import EmptyState from './components/ui/EmptyState.vue';
 import EntryIcon from './components/ui/EntryIcon.vue';
 import UiAvatar from './components/ui/UiAvatar.vue';
 import UiButton from './components/ui/UiButton.vue';
 import UiIconButton from './components/ui/UiIconButton.vue';
-import { useSlidingIndicator } from './useSlidingIndicator';
-import { DEFAULT_FONT_SETTINGS, FONT_PLUGIN_ID, applyFonts, normalizeFontSettings } from './fonts';
+import { useSlidingIndicator } from './composables/useSlidingIndicator';
+import {
+  DEFAULT_FONT_SETTINGS,
+  FONT_PLUGIN_ID,
+  applyFonts,
+  normalizeFontSettings,
+} from './features/appearance/fonts';
 import {
   WALLPAPER_MODES,
   applyAccent,
@@ -79,14 +84,14 @@ import {
   wallpaperMode,
   wallpaperPanelOpacity,
   wallpaperTokens,
-} from './theme';
-import './ui.css';
-import './pages.css';
-import './fonts.css';
-import './campus.css';
-import './desktop-shell.css';
-import './pet-toast.css';
-import './pet-art.css';
+} from './features/appearance/theme';
+import './styles/ui.css';
+import './styles/pages.css';
+import './styles/fonts.css';
+import './styles/campus.css';
+import './styles/desktop-shell.css';
+import './styles/pet-toast.css';
+import './styles/pet-art.css';
 
 const route = ref('home');
 /** Set when 思源学堂 hands a lesson to the capture page; that page reads it on mount. */

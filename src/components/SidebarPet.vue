@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import PetArt from './PetArt.vue';
-import type { PetId } from '../pets';
+import type { PetId } from '../shared/pets';
 import type { PetState } from '../types';
 
 const props = defineProps<{ state: PetState; message: string; variant: PetId }>();

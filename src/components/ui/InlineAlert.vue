@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { CircleAlert, Info, TriangleAlert, X } from 'lucide-vue-next';
 import UiIconButton from './UiIconButton.vue';
-import { dismissNotice, noticeDismissed } from '../../notices';
+import { dismissNotice, noticeDismissed } from '../../shared/notices';
 
 /**
  * Section-level message strip (LAYOUT §8): info, warning, error, and the

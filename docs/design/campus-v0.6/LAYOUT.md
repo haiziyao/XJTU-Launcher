@@ -6,7 +6,7 @@
 
 ## 1. 原则
 
-1. **风格不变，结构重做。** 沿用现有设计 token（`src/style.css`）、`src/components/ui/` 组件、lucide 图标、浅色主题和主题色。新增组件按同一套圆角、阴影、字号规则做，不另造视觉系统。
+1. **风格不变，结构重做。** 沿用现有设计 token（`src/styles/style.css`）、`src/components/ui/` 组件、lucide 图标、浅色主题和主题色。新增组件按同一套圆角、阴影、字号规则做，不另造视觉系统。
 2. **任务优先。** 每页第一屏回答“我现在要做什么”：待交的作业、下一场考试、余额。明细放在后面。
 3. **列表 + 详情。** 桌面端用分栏代替“点进去 → 返回”的层层跳转，选中项和详情同屏。
 4. **数字有出处。** 每个指标都能点进它的明细。本地计算的指标带“按本页数据计算”说明。
@@ -111,19 +111,19 @@ campus/venues?venue=<id>&date=YYYY-MM-DD
 
 ### 4.1 复用
 
-| 组件                          | 用途                                         |
-| ----------------------------- | -------------------------------------------- |
-| `PageHeader`                  | 页面标题                                     |
-| `PageTabs`                    | 页面级分区（成绩的“成绩 / 趋势”等）          |
-| `SegmentedTabs` (compact)     | 分区内筛选：状态、类型、时间范围             |
-| `SettingGroup` / `SettingRow` | 详情里的“属性 : 值”列表、设置类表单          |
-| `UiCard`                      | 主页组件、指标卡容器                         |
-| `UiButton` / `UiIconButton`   | 所有按钮，规则见 `dev-docs/UI_COMPONENTS.md` |
-| `MenuSelect`                  | 学期、校区、楼宇等下拉                       |
-| `EmptyState`                  | 空状态和整页错误                             |
-| `IconTile`                    | 分区图标、文件类型图标                       |
+| 组件                          | 用途                                                   |
+| ----------------------------- | ------------------------------------------------------ |
+| `PageHeader`                  | 页面标题                                               |
+| `PageTabs`                    | 页面级分区（成绩的“成绩 / 趋势”等）                    |
+| `SegmentedTabs` (compact)     | 分区内筛选：状态、类型、时间范围                       |
+| `SettingGroup` / `SettingRow` | 详情里的“属性 : 值”列表、设置类表单                    |
+| `UiCard`                      | 主页组件、指标卡容器                                   |
+| `UiButton` / `UiIconButton`   | 所有按钮，规则见 `dev-docs/reference/UI_COMPONENTS.md` |
+| `MenuSelect`                  | 学期、校区、楼宇等下拉                                 |
+| `EmptyState`                  | 空状态和整页错误                                       |
+| `IconTile`                    | 分区图标、文件类型图标                                 |
 
-### 4.2 新增（统一放在 `src/components/ui/` 或 `src/components/campus/`）
+### 4.2 新增（统一放在 `src/components/ui/` 或 `src/features/campus/components/`）
 
 | 组件                     | 说明                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------- |

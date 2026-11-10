@@ -32,7 +32,7 @@
 ## 版本 A 的既有实现（保留，不改）
 
 组件、后端查询与接线见 [LAYOUT-A-rail-2026-10-30.md](LAYOUT-A-rail-2026-10-30.md) 与
-[dev-docs/WIP-v0.6-frontend-kit.md](../../../dev-docs/WIP-v0.6-frontend-kit.md)；
+[dev-docs/archive/WIP-v0.6-frontend-kit_2026-10-31.md](../../../../dev-docs/archive/WIP-v0.6-frontend-kit_2026-10-31.md)；
 页面组件全部在 `src/components/campus/`。
 
 ## 恢复方式

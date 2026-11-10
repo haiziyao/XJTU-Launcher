@@ -19,6 +19,8 @@ import re
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from urllib.parse import quote
@@ -119,7 +121,10 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 # Only release objects: v0.5.2/XJTU.Launcher_0.5.2_aarch64.dmg and friends.
 KEY_RE = re.compile(r"^v\d+\.\d+\.\d+/[A-Za-z0-9][A-Za-z0-9._+-]*$")
-SPECIAL_KEYS = {"latest.json"}
+# latest.json is the app's update manifest; downloads.json is what the website
+# reads for the version pill, card sizes and SHA256 list.
+SPECIAL_KEYS = {"latest.json", "downloads.json"}
+MANIFEST_MAX_BYTES = 256 * 1024
 
 
 def allowed_key(key):
@@ -226,6 +231,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/latest.json":
             key = "latest.json"
+        elif path == "/downloads.json":
+            key = "downloads.json"
         elif path.startswith("/download/"):
             key = path[len("/download/") :]
         else:
@@ -242,6 +249,14 @@ class Handler(BaseHTTPRequestHandler):
             # and can be long or contain personal paths.
             log_event("referer_rejected", key=key)
             self.respond(403, b"forbidden\n", "text/plain; charset=utf-8", send_body)
+            return
+
+        # The site manifest is a few hundred bytes and every page view needs it,
+        # so serve the bytes instead of a 302: nginx can fall back to the static
+        # copy when the object is absent, and a broken object never reaches the
+        # browser. Not counted as a download.
+        if key == "downloads.json":
+            self.serve_json(key, send_body)
             return
 
         # A fresh GET is one download start; ignore HEAD, manifests and Range
@@ -280,10 +295,62 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", set_cookie)
         self.end_headers()
 
-    def respond(self, status, body, content_type, send_body, set_cookie=None, retry_after=None):
+    def serve_json(self, key, send_body):
+        """Fetch a manifest object and hand the bytes to the caller.
+
+        A missing object stays a 404 so nginx can serve the static fallback; a
+        bad signature, unreachable OSS or malformed JSON becomes 502 and the
+        stale copy is not shown as if it were current.
+        """
+        try:
+            with urllib.request.urlopen(signed_url(key), timeout=10) as response:
+                body = response.read(MANIFEST_MAX_BYTES + 1)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                self.respond(404, b"not found\n", "text/plain; charset=utf-8", send_body)
+            else:
+                self.respond(502, b"manifest unavailable\n", "text/plain; charset=utf-8", send_body)
+            return
+        except Exception as error:  # socket timeouts, DNS, TLS, OSS 5xx
+            log_event("manifest_failed", key=key, error=str(error)[:200])
+            self.respond(502, b"manifest unavailable\n", "text/plain; charset=utf-8", send_body)
+            return
+
+        if len(body) > MANIFEST_MAX_BYTES:
+            log_event("manifest_failed", key=key, error="too large")
+            self.respond(502, b"manifest unavailable\n", "text/plain; charset=utf-8", send_body)
+            return
+        try:
+            json.loads(body.decode("utf-8"))
+        except ValueError:
+            log_event("manifest_failed", key=key, error="invalid json")
+            self.respond(502, b"manifest unavailable\n", "text/plain; charset=utf-8", send_body)
+            return
+
+        # no-cache: a published release must show up on the next page load.
+        self.respond(
+            200,
+            body,
+            "application/json; charset=utf-8",
+            send_body,
+            cache_control="no-cache",
+        )
+
+    def respond(
+        self,
+        status,
+        body,
+        content_type,
+        send_body,
+        set_cookie=None,
+        retry_after=None,
+        cache_control=None,
+    ):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        if cache_control:
+            self.send_header("Cache-Control", cache_control)
         if set_cookie:
             self.send_header("Set-Cookie", set_cookie)
         if retry_after:

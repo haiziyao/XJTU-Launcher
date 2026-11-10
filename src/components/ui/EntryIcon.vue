@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue';
-import { entryIcon } from '../../icons';
+import { entryIcon } from '../../shared/icons';
 
 /**
  * A sidebar entry's glyph: the user's own image when `icons.json` maps the id,
