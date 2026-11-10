@@ -17,6 +17,10 @@ pub struct AppConfig {
     /// Agent settings page can turn it off without leaving the app.
     #[serde(default = "default_true")]
     pub agent_sidebar_visible: bool,
+    /// Whether 社区广场 may send a search question to the configured model.
+    /// Off by default; the user turns it on explicitly.
+    #[serde(default)]
+    pub agent_search_enabled: bool,
     #[serde(default)]
     pub nickname: String,
     #[serde(default)]
@@ -65,6 +69,11 @@ pub struct AppConfig {
     /// ignored so a config written by an older build still loads.
     #[serde(default)]
     pub mcp_server_disabled_tools: Vec<String>,
+    /// Copy a successfully submitted homework's files into the matching
+    /// 工作台 course folder and bind them to the assignment. On by default;
+    /// archival failures never change the submission's own result.
+    #[serde(default = "default_true")]
+    pub workbench_auto_archive: bool,
     /// Legacy plugin-service setting. Kept only so a config written by an
     /// older build still loads; the plugin centre is internal now, and this
     /// field is never written back.
@@ -188,6 +197,7 @@ impl Default for AppConfig {
             sidebar_width: default_sidebar_width(),
             sidebar_order: vec![],
             agent_sidebar_visible: true,
+            agent_search_enabled: false,
             nickname: String::new(),
             avatar: None,
             wallpaper: None,
@@ -221,6 +231,7 @@ impl Default for AppConfig {
             mcp_server_enabled: false,
             mcp_server_port: default_mcp_port(),
             mcp_server_disabled_tools: Vec::new(),
+            workbench_auto_archive: true,
             pet_desktop_enabled: true,
             pet_character: default_pet_character(),
             pet_bar_style: default_pet_bar_style(),
@@ -465,6 +476,42 @@ mod tests {
         assert!(!config.mcp_server_enabled);
         assert_eq!(config.mcp_server_port, 39217);
         assert!(config.mcp_server_disabled_tools.is_empty());
+        assert!(config.workbench_auto_archive);
+        assert!(!config.agent_search_enabled);
+    }
+
+    #[test]
+    fn community_search_defaults_off_and_stays_off_for_old_configs() {
+        assert!(!AppConfig::default().agent_search_enabled);
+
+        let old = r##"{"version":1,"accent":"#1f6fe5","greeting":"","widgets":["links"],"pluginOrder":[],"disabledPlugins":[]}"##;
+        let config: AppConfig = serde_json::from_str(old).unwrap();
+        config.validate().unwrap();
+        assert!(!config.agent_search_enabled);
+    }
+
+    #[test]
+    fn community_search_round_trips_as_camel_case() {
+        let config = AppConfig {
+            agent_search_enabled: true,
+            ..AppConfig::default()
+        };
+        let saved = serde_json::to_value(&config).unwrap();
+        assert_eq!(saved["agentSearchEnabled"], true);
+        let loaded: AppConfig = serde_json::from_value(saved).unwrap();
+        assert!(loaded.agent_search_enabled);
+    }
+
+    #[test]
+    fn workbench_auto_archive_round_trips_and_defaults_on() {
+        let mut config = AppConfig::default();
+        assert!(config.workbench_auto_archive);
+        config.workbench_auto_archive = false;
+        let saved = serde_json::to_value(&config).unwrap();
+        assert_eq!(saved["workbenchAutoArchive"], false);
+        let loaded: AppConfig = serde_json::from_value(saved).unwrap();
+        assert!(!loaded.workbench_auto_archive);
+        loaded.validate().unwrap();
     }
 
     #[test]

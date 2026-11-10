@@ -123,10 +123,14 @@ watch(() => config.value.accent, applyAccent, { immediate: true });
 // are still loaded while it is off so turning it on applies them at once.
 const fontSettings = ref<FontPluginSettings>(DEFAULT_FONT_SETTINGS);
 const fontPluginEnabled = computed(() => !config.value.disabledPlugins.includes(FONT_PLUGIN_ID));
-watch([fontSettings, fontPluginEnabled], ([settings, enabled]) => applyFonts(settings, enabled), {
-  deep: true,
-  immediate: true,
-});
+watch(
+  [fontSettings, fontPluginEnabled],
+  ([settings, enabled]) => void applyFonts(settings, enabled),
+  {
+    deep: true,
+    immediate: true,
+  },
+);
 async function reloadFontSettings() {
   try {
     fontSettings.value = normalizeFontSettings(
@@ -210,7 +214,7 @@ const sidebarCandidates = computed<SidebarEntry[]>(() => {
     },
     {
       id: 'community',
-      title: '社区',
+      title: '社区广场',
       iconName: 'nav.community',
       icon: MessagesSquare,
       visible: true,

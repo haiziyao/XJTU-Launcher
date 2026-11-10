@@ -213,6 +213,8 @@ fn access(name: &str) -> &'static [&'static str] {
         // Uploading and submitting homework changes the course's state.
         "campus_lms_submit" => &["write"],
         "campus_evaluations_submit" => &["write"],
+        // The workbench tool copies, renames and deletes the user's files.
+        "workbench_edit" => &["write", "update", "delete"],
         _ => &["read"],
     }
 }
@@ -236,6 +238,8 @@ fn label(name: &str) -> (&'static str, &'static str, &'static str) {
         "campus_library" => ("校园生活", "图书馆", "查询楼层、区域与空闲座位"),
         "campus_venues" => ("校园生活", "场馆", "查看可预约场馆与时段"),
         "campus_notices" => ("通知", "校园通知", "查看教务处等栏目公告"),
+        "workbench_files" => ("工作台", "查看文件", "浏览工作台文件夹、文件与搜索"),
+        "workbench_edit" => ("工作台", "编辑文件", "导入、建文件夹、绑定或删除文件"),
         _ => ("其他", "其他", ""),
     }
 }
@@ -245,9 +249,10 @@ fn group_rank(category: &str) -> usize {
     match category {
         "课程与成绩" => 0,
         "学习" => 1,
-        "校园生活" => 2,
-        "通知" => 3,
-        _ => 4,
+        "工作台" => 2,
+        "校园生活" => 3,
+        "通知" => 4,
+        _ => 5,
     }
 }
 
@@ -457,6 +462,8 @@ mod tests {
         assert_eq!(access("campus_timetable"), &["read"]);
         assert!(access("campus_timetable_edit").contains(&"delete"));
         assert_eq!(access("campus_lms_submit"), &["write"]);
+        assert!(access("workbench_edit").contains(&"delete"));
+        assert_eq!(access("workbench_files"), &["read"]);
     }
 
     #[test]

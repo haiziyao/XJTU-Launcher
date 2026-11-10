@@ -3,8 +3,10 @@ mod cache;
 mod campus;
 mod campus_browser;
 mod capture_store;
+mod community;
 mod config;
 mod expose;
+mod fonts;
 mod icons;
 mod mcp;
 mod personal_image;
@@ -55,6 +57,8 @@ struct AppState {
     library_lock: std::sync::Arc<std::sync::Mutex<()>>,
     /// One migration at a time; a second run would copy half-moved data.
     storage_lock: tokio::sync::Mutex<()>,
+    /// App-only font files, downloads and their index.
+    fonts: fonts::Manager,
 }
 
 pub(crate) fn accounts_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -700,8 +704,9 @@ enum SessionRefresh {
     NeedsManual,
 }
 
-/// Re-run the saved account's login with its stored password. Only used by the
-/// explicit sidebar self-check; the password never leaves this process.
+/// Re-run the saved account's login with its stored password. Used by the
+/// sidebar self-check and when the LMS reports the saved session has expired;
+/// the password never leaves this process.
 async fn refresh_saved_session(
     app: &tauri::AppHandle,
     state: &tauri::State<'_, AppState>,
@@ -751,8 +756,23 @@ async fn refresh_saved_session(
     };
     let _guard = state.auth_lock.lock().await;
     let mut book = accounts::load(&path)?;
-    if book.active().map(|a| a.id.as_str()) != Some(account_id.as_str()) {
-        return Ok(SessionRefresh::NeedsManual);
+    let previous = match book.active() {
+        Some(active) if active.id == account_id => active.clone(),
+        _ => return Ok(SessionRefresh::NeedsManual),
+    };
+    // A CAS login response carries no per-service sessions and may omit the
+    // saved password and direct session. Keep the stored ones so renewing the
+    // main session does not sign the user out of LMS, the profile site or the
+    // other campus services.
+    let mut account = account;
+    if account.sites.is_empty() {
+        account.sites = previous.sites;
+    }
+    if account.direct_cookies.is_none() {
+        account.direct_cookies = previous.direct_cookies;
+    }
+    if account.password.is_none() {
+        account.password = previous.password;
     }
     book.upsert(account)?;
     accounts::save(&path, &book)?;
@@ -761,6 +781,65 @@ async fn refresh_saved_session(
     campus_browser::close_all(app)?;
     account_changed(app, "校园会话已刷新");
     Ok(SessionRefresh::Refreshed)
+}
+
+/// Renew the LMS's own CAS cookie session with the saved password. The main
+/// CAS session can still be valid when only the LMS one expired, so this is a
+/// service login rather than a full account refresh. Saving the account must
+/// not drop its other site sessions; `Book::upsert` preserves them.
+async fn renew_lms_session(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let path = accounts_path(app)?;
+    let (account_id, username, password, mode, portal) = {
+        let _guard = state.auth_lock.lock().await;
+        let book = accounts::load(&path)?;
+        let record = book.active().ok_or("请先登录校园账号")?;
+        let saved = record
+            .password
+            .as_ref()
+            .ok_or("此账号未保存密码，无法自动登录思源学堂")?;
+        (
+            record.id.clone(),
+            record.username.clone(),
+            zeroize::Zeroizing::new(saved.0.clone()),
+            record.mode,
+            record.cookies.clone(),
+        )
+    };
+    let generation = state.generation.load(Ordering::SeqCst);
+    let visitor = device_visitor(app)?;
+    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
+    let cookies = auth::service_login(
+        school::LMS_LOGIN,
+        mode,
+        seed,
+        &username,
+        &password,
+        &visitor,
+    )
+    .await?;
+    let _guard = state.auth_lock.lock().await;
+    if generation != state.generation.load(Ordering::SeqCst) {
+        return Err("账号已切换，请重新打开".into());
+    }
+    let mut book = accounts::load(&path)?;
+    let account = book
+        .accounts
+        .iter_mut()
+        .find(|a| a.id == account_id)
+        .ok_or("校园账号不存在")?;
+    account.sites.insert(
+        "lms".into(),
+        accounts::SiteSession {
+            cookies: Some(cookies),
+            token: None,
+            system_type: None,
+        },
+    );
+    accounts::save(&path, &book)?;
+    Ok(())
 }
 
 /// Services such as the campus card refuse WebVPN sessions, so they get a CAS
@@ -879,54 +958,7 @@ async fn refresh_lms_session(
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, String> {
     main_only(&window)?;
-    let path = accounts_path(&app)?;
-    let (account_id, username, password, mode, portal) = {
-        let _guard = state.auth_lock.lock().await;
-        let book = accounts::load(&path)?;
-        let record = book.active().ok_or("请先登录校园账号")?;
-        let saved = record
-            .password
-            .as_ref()
-            .ok_or("此账号未保存密码，无法自动登录思源学堂")?;
-        (
-            record.id.clone(),
-            record.username.clone(),
-            zeroize::Zeroizing::new(saved.0.clone()),
-            record.mode,
-            record.cookies.clone(),
-        )
-    };
-    let generation = state.generation.load(Ordering::SeqCst);
-    let visitor = device_visitor(&app)?;
-    let seed = (mode == network::AccessMode::Webvpn).then_some(portal.as_str());
-    let cookies = auth::service_login(
-        school::LMS_LOGIN,
-        mode,
-        seed,
-        &username,
-        &password,
-        &visitor,
-    )
-    .await?;
-    let _guard = state.auth_lock.lock().await;
-    if generation != state.generation.load(Ordering::SeqCst) {
-        return Err("账号已切换，请重新打开".into());
-    }
-    let mut book = accounts::load(&path)?;
-    let account = book
-        .accounts
-        .iter_mut()
-        .find(|a| a.id == account_id)
-        .ok_or("校园账号不存在")?;
-    account.sites.insert(
-        "lms".into(),
-        accounts::SiteSession {
-            cookies: Some(cookies),
-            token: None,
-            system_type: None,
-        },
-    );
-    accounts::save(&path, &book)?;
+    renew_lms_session(&app, &state).await?;
     Ok(true)
 }
 
@@ -1574,6 +1606,204 @@ async fn workbench_submit(
     workbench_submit_inner(&app, &window, &state, activity, comment, paths, true).await
 }
 
+/// Arguments for the Agent's read-only workbench tool.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct WorkbenchRead {
+    pub action: String,
+    #[serde(default)]
+    pub folder: String,
+    #[serde(default)]
+    pub query: String,
+}
+
+/// Arguments for the Agent's workbench write tool. Every action previews
+/// first; `confirm = true` is the only way anything is copied or deleted.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct WorkbenchEdit {
+    pub action: String,
+    #[serde(default)]
+    pub folder: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub assignment: String,
+    #[serde(default)]
+    pub activity_id: Option<u64>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+/// The workbench is the user's own folder tree, so the Agent may browse all of
+/// it: folder metadata, files in one folder, and a text search across both.
+pub(crate) async fn run_workbench_read(
+    app: &tauri::AppHandle,
+    request: WorkbenchRead,
+) -> Result<serde_json::Value, String> {
+    let state = app.state::<AppState>();
+    let (root, account_id) = workbench_root(app, &state).await?;
+    match request.action.as_str() {
+        "overview" => {
+            let store = load_sync(&sync_state_path(app, &account_id)?)?;
+            let folders = run_workbench(move || workbench::tree(&root)).await?;
+            Ok(serde_json::json!({
+                "currentTerm": store.term,
+                "syncedAt": store.synced_at,
+                "folders": folders,
+                "courses": store.courses,
+            }))
+        }
+        "folder" => {
+            let folder = request.folder;
+            let target = folder.clone();
+            run_workbench(move || workbench::files(&root, &target))
+                .await
+                .map(|files| serde_json::json!({ "folder": folder, "files": files }))
+        }
+        "search" => {
+            let query = request.query;
+            let needle = query.clone();
+            run_workbench(move || workbench::search(&root, &needle, 100))
+                .await
+                .map(|files| serde_json::json!({ "query": query, "files": files }))
+        }
+        other => Err(format!(
+            "workbench_files 不支持 action={other}，可选 overview、folder、search"
+        )),
+    }
+}
+
+pub(crate) async fn run_workbench_edit(
+    app: &tauri::AppHandle,
+    request: WorkbenchEdit,
+) -> Result<serde_json::Value, String> {
+    let state = app.state::<AppState>();
+    let (root, _) = workbench_root(app, &state).await?;
+    let lock = state.library_lock.clone();
+    let confirm = request.confirm;
+    match request.action.as_str() {
+        "mkdir" => {
+            let parent = request.folder;
+            let name = request.name;
+            if !confirm {
+                workbench::path_of(&root, &parent)?;
+                workbench::validate_name(&name)?;
+                return Ok(serde_json::json!({
+                    "confirmRequired": true,
+                    "action": "mkdir",
+                    "parent": parent,
+                    "name": name,
+                    "message": "还没有创建文件夹。向用户说明位置和名称；用户明确同意后再带 confirm=true 调用。",
+                }));
+            }
+            let created =
+                run_workbench(move || workbench::create_folder(&root, &parent, &name)).await?;
+            Ok(serde_json::json!({ "done": true, "action": "mkdir", "folder": created }))
+        }
+        "import" => {
+            if request.paths.is_empty() {
+                return Err("请提供要添加的文件".into());
+            }
+            if request.paths.len() > 32 {
+                return Err("一次最多添加 32 个文件".into());
+            }
+            let folder = request.folder;
+            let paths = request.paths;
+            if !confirm {
+                let folder_copy = folder.clone();
+                let preview =
+                    run_workbench(move || workbench::preview_import(&root, &folder_copy, &paths))
+                        .await?;
+                return Ok(serde_json::json!({
+                    "confirmRequired": true,
+                    "action": "import",
+                    "folder": folder,
+                    "files": preview,
+                    "message": "还没有复制文件。向用户复述文件与目标文件夹；用户明确同意后再带 confirm=true 调用。",
+                }));
+            }
+            let target = folder.clone();
+            let outcomes =
+                run_workbench(move || Ok(workbench::import_files(&root, &target, &paths, &lock)))
+                    .await?;
+            Ok(serde_json::json!({
+                "done": true,
+                "action": "import",
+                "folder": folder,
+                "files": outcomes,
+            }))
+        }
+        "update" => {
+            if request.path.is_empty() {
+                return Err("请提供要更新的文件路径".into());
+            }
+            let path = request.path;
+            let input = workbench::BindingInput {
+                assignment: request.assignment,
+                activity_id: request.activity_id,
+                tags: request.tags,
+                note: request.note,
+            };
+            if !confirm {
+                let path_copy = path.clone();
+                let input_copy = input.clone();
+                let preview = run_workbench(move || {
+                    workbench::validate_binding(&root, &path_copy, &input_copy)?;
+                    workbench::file(&root, &path_copy)
+                })
+                .await?;
+                return Ok(serde_json::json!({
+                    "confirmRequired": true,
+                    "action": "update",
+                    "path": path,
+                    "current": preview,
+                    "proposed": {
+                        "assignment": input.assignment,
+                        "activityId": input.activity_id,
+                        "tags": input.tags,
+                        "note": input.note,
+                    },
+                    "message": "还没有保存。向用户复述新的绑定信息；用户明确同意后再带 confirm=true 调用。",
+                }));
+            }
+            let updated =
+                run_workbench(move || workbench::set_binding(&root, &path, input, &lock)).await?;
+            Ok(serde_json::json!({ "done": true, "action": "update", "file": updated }))
+        }
+        "delete" => {
+            if request.path.is_empty() {
+                return Err("请提供要删除的文件路径".into());
+            }
+            let path = request.path;
+            if !confirm {
+                let path_copy = path.clone();
+                let file = run_workbench(move || workbench::file(&root, &path_copy)).await?;
+                return Ok(serde_json::json!({
+                    "confirmRequired": true,
+                    "action": "delete",
+                    "file": file,
+                    "message": "还没有删除，删除后无法从应用恢复。向用户确认文件和后果；用户明确同意后再带 confirm=true 调用。",
+                }));
+            }
+            let target = path.clone();
+            run_workbench(move || workbench::delete_file(&root, &target, &lock)).await?;
+            Ok(serde_json::json!({ "done": true, "action": "delete", "path": path }))
+        }
+        other => Err(format!(
+            "workbench_edit 不支持 action={other}，可选 import、mkdir、update、delete"
+        )),
+    }
+}
+
 /// Refresh the current semester from 思源学堂: create missing course folders and
 /// keep each course's assignment list in app state (never as files on disk).
 #[tauri::command]
@@ -1747,7 +1977,7 @@ pub(crate) async fn run_school_query(
         }
         return Ok(data);
     }
-    let (account, generation) = school_account(app, &state).await?;
+    let (mut account, mut generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
     if !force {
         if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
@@ -1758,7 +1988,24 @@ pub(crate) async fn run_school_query(
             }
         }
     }
-    let (data, cookies) = school::query(Some(account), query).await?;
+    let mut outcome = school::query(Some(account.clone()), query.clone()).await;
+    if outcome
+        .as_ref()
+        .err()
+        .is_some_and(|error| is_lms_login_error(error))
+    {
+        // The LMS session can expire independently of the timetable session,
+        // so renew it here instead of failing with a misleading parse error.
+        renew_lms_session(app, &state).await?;
+        let (next, next_generation) = school_account(app, &state).await?;
+        if next.id != account_id {
+            return Err("校园账号已切换，请重新查询".into());
+        }
+        account = next;
+        generation = next_generation;
+        outcome = school::query(Some(account), query).await;
+    }
+    let (data, cookies) = outcome?;
     if let Some(cookies) = cookies {
         save_school_session(app, &state, &account_id, generation, cookies).await?;
     }
@@ -1779,6 +2026,24 @@ pub(crate) async fn run_lms_homework(
     run_lms_homework_checked(app, request, confirm, None).await
 }
 
+/// True for the two ways the LMS can lack a usable session: the saved cookie
+/// expired, or no LMS site session was saved at all.
+fn is_lms_login_error(error: &str) -> bool {
+    error == school::lms::LOGIN_EXPIRED || error == school::lms::LOGIN_REQUIRED
+}
+
+async fn lms_homework_once(
+    client: &school::lms::Client,
+    request: &school::lms::Homework,
+    confirm: bool,
+) -> Result<serde_json::Value, String> {
+    if confirm {
+        client.homework_submit(request).await
+    } else {
+        client.homework_preview(request).await
+    }
+}
+
 /// `expected_account` guards file uploads resolved under one campus account:
 /// if the active account changed in the meantime, the request is refused
 /// instead of sending the previous account's files through the new session.
@@ -1792,18 +2057,184 @@ pub(crate) async fn run_lms_homework_checked(
     request.validate()?;
     let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
-    let (account, _) = school_account(app, &state).await?;
-    if let Some(expected) = expected_account {
-        if account.id != expected {
-            return Err("校园账号已切换，请重新选择文件".into());
+    let (mut account, _) = school_account(app, &state).await?;
+    if expected_account.is_some_and(|expected| account.id != expected) {
+        return Err("校园账号已切换，请重新选择文件".into());
+    }
+    let client = match school::lms::Client::connect(&account) {
+        Ok(client) => client,
+        Err(error) if is_lms_login_error(&error) => {
+            renew_lms_session(app, &state).await?;
+            let (next, _) = school_account(app, &state).await?;
+            if expected_account.is_some_and(|expected| next.id != expected) {
+                return Err("校园账号已切换，请重新选择文件".into());
+            }
+            account = next;
+            school::lms::Client::connect(&account)?
+        }
+        Err(error) => return Err(error),
+    };
+    let mut data = match lms_homework_once(&client, &request, confirm).await {
+        Err(error) if is_lms_login_error(&error) => {
+            // Expiry is detected before any file is uploaded, so renewing and
+            // running the preview/submit again cannot duplicate a submission.
+            renew_lms_session(app, &state).await?;
+            let (next, _) = school_account(app, &state).await?;
+            if expected_account.is_some_and(|expected| next.id != expected) {
+                return Err("校园账号已切换，请重新选择文件".into());
+            }
+            let client = school::lms::Client::connect(&next)?;
+            account = next;
+            lms_homework_once(&client, &request, confirm).await?
+        }
+        other => other?,
+    };
+    // The school call is over; release the shared school lock before local
+    // copying so the rest of the app is not blocked behind a large file.
+    drop(_service_guard);
+    // Only a final submission archives. Drafts, previews and failures keep the
+    // workbench untouched, and a local archive problem never changes the
+    // submission result or makes the caller retry.
+    if confirm && !request.draft {
+        let archive = archive_homework(app, &account, &request, &data).await;
+        if let Some(map) = data.as_object_mut() {
+            map.insert("archive".into(), archive);
         }
     }
-    let client = school::lms::Client::connect(&account)?;
-    if confirm {
-        client.homework_submit(&request).await
-    } else {
-        client.homework_preview(&request).await
+    Ok(data)
+}
+
+/// Copy the submitted files into the synced course folder and bind them to the
+/// assignment. This runs after the school accepted the submission, so every
+/// failure is a warning in the returned value, never an error.
+async fn archive_homework(
+    app: &tauri::AppHandle,
+    account: &accounts::Account,
+    request: &school::lms::Homework,
+    result: &serde_json::Value,
+) -> serde_json::Value {
+    if request.files.is_empty() {
+        return serde_json::json!({ "skipped": "没有附件需要归档" });
     }
+    let enabled = config::load(&config_path(app).unwrap_or_default())
+        .map(|config| config.workbench_auto_archive)
+        .unwrap_or(true);
+    if !enabled {
+        return serde_json::json!({ "skipped": "自动归档已关闭" });
+    }
+    let workspace = match storage::file_path(app, "workspace") {
+        Ok(workspace) => workspace,
+        Err(error) => return serde_json::json!({ "warnings": [error] }),
+    };
+    let root = workbench::root(&workspace, &account.id);
+    let course_id = result.get("courseId").and_then(serde_json::Value::as_u64);
+    let folder = match archive_folder(app, account, root.clone(), course_id).await {
+        Ok(Some(folder)) => folder,
+        Ok(None) => {
+            return serde_json::json!({
+                "warnings": ["没有在思源学堂找到这门课程，文件没有归档；先在工作台同步本学期的课程后再试"],
+            })
+        }
+        Err(error) => return serde_json::json!({ "warnings": [error] }),
+    };
+    let title = result
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let activity = request.activity;
+    let files = request.files.clone();
+    let lock = app.state::<AppState>().library_lock.clone();
+    let target = folder.clone();
+    let assignment = title.clone();
+    let report = run_workbench(move || {
+        Ok(workbench::archive_files(
+            &root,
+            &target,
+            &files,
+            activity,
+            &assignment,
+            &lock,
+        ))
+    })
+    .await;
+    match report {
+        Ok(report) => serde_json::json!({
+            "folder": folder,
+            "assignment": title,
+            "files": report.files,
+            "warnings": report.warnings,
+        }),
+        Err(error) => serde_json::json!({ "warnings": [error] }),
+    }
+}
+
+/// The current course folder for an LMS course. The sync state answers this
+/// without a network call; a course that was never synced is looked up in the
+/// LMS and its folder is created once.
+async fn archive_folder(
+    app: &tauri::AppHandle,
+    account: &accounts::Account,
+    root: PathBuf,
+    course_id: Option<u64>,
+) -> Result<Option<String>, String> {
+    let Some(course_id) = course_id else {
+        return Ok(None);
+    };
+    let path = sync_state_path(app, &account.id)?;
+    if let Ok(state) = load_sync(&path) {
+        if let Some(course) = state.courses.iter().find(|course| course.id == course_id) {
+            let meta = workbench::CourseMeta {
+                id: course.id,
+                code: course.code.clone(),
+                subject_code: course.subject_code.clone(),
+                name: course.name.clone(),
+                term: state.term.clone(),
+            };
+            let root = root.clone();
+            return run_workbench(move || {
+                workbench::ensure_course_folder(&root, &state.term, &meta)
+            })
+            .await
+            .map(Some);
+        }
+    }
+    // Not synced yet: ask the LMS for the course list (one request).
+    let client = school::lms::Client::connect(account)?;
+    let value = client.courses().await?;
+    let course = value["courses"]
+        .as_array()
+        .and_then(|courses| {
+            courses
+                .iter()
+                .find(|course| course["id"].as_u64() == Some(course_id))
+        })
+        .cloned();
+    let Some(course) = course else {
+        return Ok(None);
+    };
+    let term = course["termLabel"]
+        .as_str()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if term.is_empty() {
+        return Ok(None);
+    }
+    let meta = workbench::CourseMeta {
+        id: course_id,
+        code: course["code"].as_str().unwrap_or_default().to_string(),
+        subject_code: course["subjectCode"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        name: course["name"].as_str().unwrap_or_default().to_string(),
+        term: term.clone(),
+    };
+    let root = root.clone();
+    run_workbench(move || workbench::ensure_course_folder(&root, &term, &meta))
+        .await
+        .map(Some)
 }
 
 /// Agent-facing 课程资料 download. The file lands in the visible download
@@ -2794,6 +3225,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             plugin_settings,
             save_plugin_settings,
+            fonts::fonts_state,
+            fonts::font_download,
+            fonts::font_download_cancel,
+            fonts::font_add_local,
+            fonts::font_remove,
+            fonts::font_data,
             updates::update_status,
             updates::check_app_update,
             updates::install_app_update,
@@ -2862,6 +3299,8 @@ pub fn run() {
             agent_send,
             agent_cancel,
             agent_tools,
+            community::agent_search_status,
+            community::community_agent_search,
             expose_status,
             expose_tools,
             expose_set_enabled,

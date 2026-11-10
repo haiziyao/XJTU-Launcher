@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use url::Url;
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Query {
     Grades {

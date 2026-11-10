@@ -3,6 +3,12 @@
 
   var GITHUB_RELEASES = "https://github.com/haiziyao/XJTU-Launcher/releases";
 
+  // Resolve relative to the page base so the same script works from /, /site/
+  // and the preview copy (which uses <base href="../">).
+  function assetUrl(path) {
+    return new URL(path, document.baseURI).href;
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -266,7 +272,7 @@
         button.dataset.busy = "1";
         button.classList.remove("is-error");
 
-        fetch("api/like", {
+        fetch(assetUrl("api/like"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: key })
@@ -303,7 +309,7 @@
   }
 
   function loadStats() {
-    fetch("api/stats", { cache: "no-store" })
+    fetch(assetUrl("api/stats"), { cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("HTTP " + response.status);
         return response.json();
@@ -347,6 +353,10 @@
     var details = document.querySelector(".checksums");
     if (details) details.hidden = true;
 
+    // The static HTML cannot know the current version; do not leave a stale placeholder on screen.
+    var version = document.getElementById("pill-version");
+    if (version) version.textContent = "v—";
+
     var meta = document.getElementById("version-meta");
     if (!meta) return;
     var link = el("a", null, "GitHub Release");
@@ -355,7 +365,7 @@
     meta.replaceChildren(document.createTextNode("读取版本信息失败，请前往 "), link, document.createTextNode(" 下载"));
   }
 
-  fetch("downloads.json", { cache: "no-cache" })
+  fetch(assetUrl("downloads.json"), { cache: "no-cache" })
     .then(function (response) {
       if (!response.ok) throw new Error("HTTP " + response.status);
       return response.json();

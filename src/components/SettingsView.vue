@@ -226,7 +226,13 @@ const sections = [
             :saving="saving"
             @update="emit('update', $event)"
           />
-          <StorageSettings v-else key="storage" />
+          <StorageSettings
+            v-else
+            key="storage"
+            :config="config"
+            :saving="saving"
+            @update="emit('update', $event)"
+          />
         </Transition>
       </div>
     </div>

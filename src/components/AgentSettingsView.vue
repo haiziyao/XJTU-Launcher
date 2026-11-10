@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { IconRobot, IconLayoutSidebar } from '@tabler/icons-vue';
+import { IconRobot, IconLayoutSidebar, IconSearch } from '@tabler/icons-vue';
 import type { AppConfig } from '../types';
 import PageHeader from './ui/PageHeader.vue';
 import PageTabs from './ui/PageTabs.vue';
@@ -30,6 +30,13 @@ function toggleAgentSidebar() {
     agentSidebarVisible: !props.config.agentSidebarVisible,
   });
 }
+
+function toggleAgentSearch() {
+  emit('update', {
+    ...props.config,
+    agentSearchEnabled: !props.config.agentSearchEnabled,
+  });
+}
 </script>
 <template>
   <section class="desktop-page">
@@ -51,6 +58,19 @@ function toggleAgentSidebar() {
             label="在侧边栏显示 Agent"
             :disabled="saving"
             @toggle="toggleAgentSidebar"
+          />
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup title="搜索服务">
+        <SettingRow title="开启搜索服务 Agent">
+          <template #leading>
+            <IconTile tone="blue" :size="30"><IconSearch :size="16" /></IconTile>
+          </template>
+          <UiSwitch
+            :checked="config.agentSearchEnabled"
+            label="开启搜索服务 Agent"
+            :disabled="saving"
+            @toggle="toggleAgentSearch"
           />
         </SettingRow>
       </SettingGroup>

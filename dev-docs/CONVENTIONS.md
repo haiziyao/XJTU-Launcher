@@ -45,6 +45,8 @@
 
 - 查询与提交分开。评教先显示真实问卷对应的完整答案；**实际提交必须由用户主动触发**：界面里由用户点提交，Agent 工具必须拿到预览的 `previewId` 且用户明确要求后，才带 `confirm=true` 提交。
 - 课表自定义的 Agent 工具（`campus_timetable_edit`）必须先返回改动前后的预览，用户明确同意后才带 `confirm=true` 生效。
+- 工作台按用户决定的“完整读写”开放给 MCP / Agent（2026-11-09）：`workbench_files` 只读，`workbench_edit` 可建文件夹、导入、绑定与删除。编辑默认只返回预览与 `confirmRequired`，用户明确要求后才带 `confirm=true`；删除同样需要确认。所有路径必须落在当前账号的工作区根目录内，拒绝隐藏目录与 `..`；`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不在此范围。
+- 作业正式提交成功后按 `workbenchAutoArchive`（默认开）复制并绑定到课程文件夹；同大小同 SHA-256 不重复复制，已在课程文件夹内的文件原地绑定；归档失败只警告，不改变提交结果。
 - 结果不明（网络中断、5xx、无响应）时**不自动重试**，标记为未知并提示用户到学校系统确认；只有明确 4xx 拒绝才清理本次临时上传。取消只停止后续请求，不宣称撤回已发送内容。
 - 批次结果逐项记录（`submitted` / `failed` / `skipped` / `cancelled` / `unknown`）。
 - 校园网页只复用账号持有的会话，不能承诺所有学校网站免登录。校园窗口不得拥有主窗口的 IPC 权限；账号变化时关闭旧窗口。
@@ -64,7 +66,7 @@
 
 ## 6. 分支、提交与发布
 
-- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；`tested-label` 表示测试人员已在 `dev` 验证并给 PR 加了 `tested` 标签。当前最新发布版为 **0.6.0**，`main` 应与它一致。
+- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；`tested-label` 表示测试人员已在 `dev` 验证并给 PR 加了 `tested` 标签。当前最新发布版为 **0.6.6**，`main` 应与它一致。
 - `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），不再使用 `codex/*`。分支先合入 `dev`，由测试人员验证；验证通过后只能由 `dev` 创建 PR 合入 `main`。Git 不允许 `dev` 与 `dev/v0.6.0` 同时存在，所以版本分支用连字符。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
 - 推送功能分支与合入 `dev` 可按当次任务执行；合入 `main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](RELEASING.md)。

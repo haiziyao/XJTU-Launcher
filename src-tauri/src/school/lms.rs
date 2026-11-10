@@ -39,6 +39,14 @@ const UPLOAD_EXTENSIONS: &[&str] = &[
     "css", "xml", "yaml", "yml",
 ];
 
+/// Returned when the LMS rejects the saved session. Callers may renew the
+/// saved login once and retry a read; a submit that already reached the school
+/// must never be retried.
+pub(crate) const LOGIN_EXPIRED: &str = "思源学堂登录已失效，请重新登录校园账号";
+
+/// Returned when the account has no saved LMS site session yet.
+pub(crate) const LOGIN_REQUIRED: &str = "请先完成思源学堂登录";
+
 /// A homework submission as the Agent asked for it. Files stay as paths until
 /// the preview or submit step resolves and checks them.
 #[derive(Clone, Debug)]
@@ -420,14 +428,29 @@ fn replay_video(value: &Value) -> Option<ReplayVideo> {
     })
 }
 
+/// True when the school answered with its "session expired, go to /login"
+/// payload. It arrives as HTTP 200, so status codes alone are not enough.
+fn login_expired(value: &Value) -> bool {
+    if value.get("success").and_then(Value::as_bool) != Some(false) {
+        return false;
+    }
+    let message = text(value.get("message"));
+    value
+        .get("url")
+        .and_then(Value::as_str)
+        .is_some_and(|url| url.contains("/login"))
+        || message.contains("会话已经过期")
+        || message.contains("重新登录")
+}
+
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        let site = account.sites.get("lms").ok_or("请先完成思源学堂登录")?;
+        let site = account.sites.get("lms").ok_or(LOGIN_REQUIRED)?;
         let cookies = site
             .cookies
             .as_deref()
             .filter(|cookies| !cookies.is_empty())
-            .ok_or("请先完成思源学堂登录")?;
+            .ok_or(LOGIN_REQUIRED)?;
         Self::with_cookies(cookies, account.mode)
     }
 
@@ -448,15 +471,21 @@ impl Client {
             .map_err(|_| "无法连接思源学堂，请检查网络后重试")?;
         let status = response.status();
         if status.is_redirection() || matches!(status.as_u16(), 401 | 403) {
-            return Err("思源学堂登录已失效，请刷新后重试".into());
+            return Err(LOGIN_EXPIRED.into());
         }
         if !status.is_success() {
             return Err(format!("思源学堂服务暂不可用（HTTP {}）", status.as_u16()));
         }
-        response
+        let value: Value = response
             .json()
             .await
-            .map_err(|_| "思源学堂返回了非预期数据".into())
+            .map_err(|_| "思源学堂返回了非预期数据".to_string())?;
+        // The LMS now answers an expired session with HTTP 200 and a JSON body
+        // pointing at /login, which used to surface as a misleading "格式已变化".
+        if login_expired(&value) {
+            return Err(LOGIN_EXPIRED.into());
+        }
+        Ok(value)
     }
 
     async fn get(&self, path: &str) -> Result<Value, String> {
@@ -1178,6 +1207,7 @@ impl Client {
         Ok(json!({
             "activity": request.activity,
             "title": title,
+            "courseId": value.get("course_id").and_then(Value::as_u64),
             "draft": request.draft,
             "submissionId": submission.and_then(|item| item.get("id")).and_then(Value::as_u64),
             "submittedAt": submission.map(|item| campus_time(item.get("submit_time"))).unwrap_or_default(),
@@ -1783,6 +1813,16 @@ fn plain_text(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expired_session_payload_is_recognised() {
+        assert!(login_expired(&json!({
+            "message": "您的会话已经过期，请重新登录",
+            "success": false,
+            "url": "/login"
+        })));
+        assert!(!login_expired(&json!({"courses": []})));
+    }
 
     #[test]
     fn utc_times_read_as_campus_time() {

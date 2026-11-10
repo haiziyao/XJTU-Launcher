@@ -6,6 +6,8 @@ export interface AppConfig {
   sidebarOrder: string[];
   /** Show the Agent entry in the sidebar; on by default. */
   agentSidebarVisible: boolean;
+  /** Lets the community page's Agent search use the configured model service. */
+  agentSearchEnabled: boolean;
   nickname: string;
   avatar: string | null;
   wallpaper: string | null;
@@ -34,6 +36,8 @@ export interface AppConfig {
   mcpServerPort: number;
   /** Built-in tools kept out of that endpoint. */
   mcpServerDisabledTools: string[];
+  /** Copy a submitted homework's files into the matching 工作台 course folder. */
+  workbenchAutoArchive: boolean;
   /** Give each page-level tab its own rounded backing. */
   pageTabSurfaces: boolean;
   /** Wallpaper display preset (clear | balanced | vivid); only used with a wallpaper. */
@@ -154,9 +158,52 @@ export interface FontRegion {
   weight: number;
   lineHeight: number;
   letterSpacing: number;
+  /** `#rrggbb`, or empty to keep the app's own text colour. */
+  color: string;
 }
 /** Stored in `plugins/settings/cn.xjtu.font-beautify.json`. */
 export type FontPluginSettings = Record<FontRegionId, FontRegion>;
+
+/** A font the app can download from its fixed catalog. */
+export interface FontCatalogEntry {
+  id: string;
+  name: string;
+  family: string;
+  style: string;
+  license: string;
+  sourceUrl: string;
+  downloadUrl: string;
+  size: number;
+  format: string;
+  /** `font` for a direct file, `7z` when the official package is extracted. */
+  package: 'font' | '7z';
+}
+
+/** A font file already copied into `~/.xjtu-launcher/resources/fonts`. */
+export interface InstalledFont {
+  id: string;
+  name: string;
+  family: string;
+  file: string;
+  format: string;
+  source: 'catalog' | 'local';
+  size: number;
+  sha256: string;
+  addedAt: number;
+}
+
+export interface FontLibraryState {
+  catalog: FontCatalogEntry[];
+  installed: InstalledFont[];
+}
+
+/** Emitted on `font-download` while a catalog font is downloading. */
+export interface FontDownloadProgress {
+  id: string;
+  phase: 'download' | 'extract';
+  received: number;
+  total: number;
+}
 export interface AccountStatus {
   connected: boolean;
   name?: string | null;
@@ -1038,6 +1085,15 @@ export interface AgentToolInfo {
   name: string;
   description: string;
   source: 'campus' | 'mcp';
+}
+export type AgentSearchReason =
+  'ready' | 'plugin-disabled' | 'disabled' | 'no-model' | 'unreachable';
+export interface AgentSearchStatus {
+  available: boolean;
+  reason: AgentSearchReason;
+}
+export interface AgentSearchAnswer {
+  answer: string;
 }
 /** 文件预览（SPEC §4.4）：图片和文本由后端内联，PDF 只带预览 id，交给 pdf.js。 */
 export type FilePreview =

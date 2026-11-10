@@ -8,6 +8,11 @@ html.font-styled {
   line-height: var(--plugin-ui-leading);
   letter-spacing: var(--plugin-ui-tracking);
 }
+/* Colour is opt-in: without the font-color-* class the app keeps its own
+   theme colour, including secondary and tertiary text. */
+html.font-styled.font-color-ui {
+  color: var(--plugin-ui-color);
+}
 
 /* 标题 */
 html.font-styled :is(h1, h2, h3) {
@@ -18,6 +23,9 @@ html.font-styled :is(h1, h2, h3) {
 }
 html.font-styled :is(.page-header h1, .dialog-head h2) {
   font-size: var(--plugin-title-size);
+}
+html.font-styled.font-color-title :is(h1, h2, h3) {
+  color: var(--plugin-title-color);
 }
 
 /* 正文。根字号只影响没有显式字号的元素，常用文字容器再单独对齐。 */
@@ -38,6 +46,17 @@ html.font-styled
 html.font-styled :is(.setting-row-copy, .desktop-content) {
   font-size: var(--plugin-body-size);
 }
+html.font-styled.font-color-body
+  :is(
+    .setting-row-copy strong,
+    .setting-row-copy small,
+    .list-item,
+    .desktop-page p,
+    .empty-state,
+    .data-table td
+  ) {
+  color: var(--plugin-body-color);
+}
 
 /* 课表数字 */
 html.font-styled :is(.timetable-grid, .period-number, .day-heading, .course-cell) {
@@ -47,6 +66,10 @@ html.font-styled :is(.timetable-grid, .period-number, .day-heading, .course-cell
   line-height: var(--plugin-timetable-leading);
   letter-spacing: var(--plugin-timetable-tracking);
 }
+html.font-styled.font-color-timetable
+  :is(.timetable-grid, .period-number, .day-heading, .course-cell) {
+  color: var(--plugin-timetable-color);
+}
 
 /* 代码 */
 html.font-styled :is(code, pre, kbd, samp) {
@@ -55,4 +78,7 @@ html.font-styled :is(code, pre, kbd, samp) {
   font-weight: var(--plugin-code-weight);
   line-height: var(--plugin-code-leading);
   letter-spacing: var(--plugin-code-tracking);
+}
+html.font-styled.font-color-code :is(code, pre, kbd, samp) {
+  color: var(--plugin-code-color);
 }

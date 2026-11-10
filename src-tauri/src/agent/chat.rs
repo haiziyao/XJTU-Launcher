@@ -737,6 +737,153 @@ impl Chat<'_> {
     }
 }
 
+/// Non-streaming, tool-free completion used by the 社区广场 search.
+///
+/// Sends exactly one system message and one user message. It never attaches
+/// tools or campus data, and it does not persist anything.
+pub async fn complete_once(
+    provider: &Provider,
+    system: &str,
+    user: &str,
+) -> Result<String, String> {
+    if provider.base_url.trim().is_empty() {
+        return Err("模型服务地址为空".into());
+    }
+    let client = community_client()?;
+    let text = match provider.protocol.as_str() {
+        "openai-compatible" => {
+            let body = json!({
+                "model": provider.model,
+                "stream": false,
+                "messages": [
+                    { "role": "system", "content": system },
+                    { "role": "user", "content": user }
+                ],
+                "max_tokens": 900,
+            });
+            let request = client
+                .post(format!("{}/chat/completions", base(provider)?))
+                .bearer_auth(&provider.api_key)
+                .json(&body);
+            let response = request.send().await.map_err(connect_error)?;
+            let response = check(response).await?;
+            parse_openai(&json_response(response).await?)
+        }
+        "anthropic" => {
+            let body = json!({
+                "model": provider.model,
+                "max_tokens": 900,
+                "system": system,
+                "messages": [{ "role": "user", "content": user }],
+            });
+            let request = client
+                .post(format!("{}/messages", base(provider)?))
+                .header("x-api-key", &provider.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body);
+            let response = request.send().await.map_err(connect_error)?;
+            let response = check(response).await?;
+            parse_anthropic(&json_response(response).await?)
+        }
+        "gemini" => {
+            let body = json!({
+                "systemInstruction": { "parts": [{ "text": system }] },
+                "contents": [{ "role": "user", "parts": [{ "text": user }] }],
+                "generationConfig": { "maxOutputTokens": 900 },
+            });
+            let model = provider.model.trim_start_matches("models/");
+            let mut url = url::Url::parse(&format!(
+                "{}/models/{}:generateContent",
+                base(provider)?,
+                model
+            ))
+            .map_err(|_| "模型服务地址无效")?;
+            if !provider.api_key.is_empty() {
+                url.query_pairs_mut().append_pair("key", &provider.api_key);
+            }
+            let request = client.post(url).json(&body);
+            let response = request.send().await.map_err(connect_error)?;
+            let response = check(response).await?;
+            parse_gemini(&json_response(response).await?)
+        }
+        _ => return Err("不支持的模型协议".into()),
+    };
+    non_empty(text)
+}
+
+fn community_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(45))
+        .connect_timeout(Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent("XJTU-Launcher/community")
+        .build()
+        .map_err(|_| "无法初始化模型连接".to_string())
+}
+
+async fn json_response(response: reqwest::Response) -> Result<Value, String> {
+    let bytes = crate::network::limited_bytes(response, 2 * 1024 * 1024).await?;
+    serde_json::from_slice(&bytes).map_err(|_| "模型服务返回了非预期数据".into())
+}
+
+fn non_empty(text: String) -> Result<String, String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("模型没有返回内容".into());
+    }
+    Ok(text)
+}
+
+fn parse_openai(value: &Value) -> String {
+    value
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn parse_anthropic(value: &Value) -> String {
+    let mut text = String::new();
+    for block in value
+        .get("content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if block.get("type").and_then(Value::as_str) != Some("text") {
+            continue;
+        }
+        if let Some(chunk) = block.get("text").and_then(Value::as_str) {
+            text.push_str(chunk);
+        }
+    }
+    text
+}
+
+fn parse_gemini(value: &Value) -> String {
+    let Some(parts) = value
+        .get("candidates")
+        .and_then(Value::as_array)
+        .and_then(|candidates| candidates.first())
+        .and_then(|candidate| candidate.get("content"))
+        .and_then(|content| content.get("parts"))
+        .and_then(Value::as_array)
+    else {
+        return String::new();
+    };
+    let mut text = String::new();
+    for part in parts {
+        if let Some(chunk) = part.get("text").and_then(Value::as_str) {
+            text.push_str(chunk);
+        }
+    }
+    text
+}
+
 fn base(provider: &Provider) -> Result<String, String> {
     let value = provider.base_url.trim().trim_end_matches('/');
     if value.is_empty() {
@@ -887,5 +1034,48 @@ mod tests {
         let schema = json!({"type": "object", "properties": {}, "additionalProperties": false});
         let cleaned = gemini_schema(&schema);
         assert!(cleaned.get("additionalProperties").is_none());
+    }
+
+    #[test]
+    fn parses_openai_completion_text() {
+        let value = json!({
+            "choices": [{ "message": { "role": "assistant", "content": "社团内容仍在开发中。" } }]
+        });
+        assert_eq!(parse_openai(&value), "社团内容仍在开发中。");
+        assert_eq!(parse_openai(&json!({ "choices": [] })), "");
+    }
+
+    #[test]
+    fn anthropic_concatenates_text_blocks_and_skips_others() {
+        let value = json!({
+            "content": [
+                { "type": "text", "text": "第一段" },
+                { "type": "tool_use", "id": "x", "name": "n", "input": {} },
+                { "type": "text", "text": "第二段" }
+            ]
+        });
+        assert_eq!(parse_anthropic(&value), "第一段第二段");
+    }
+
+    #[test]
+    fn gemini_concatenates_text_parts() {
+        let value = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{ "text": "课程" }, { "text": "攻略" }]
+                }
+            }]
+        });
+        assert_eq!(parse_gemini(&value), "课程攻略");
+        assert_eq!(
+            parse_gemini(&json!({ "candidates": [{ "content": { "parts": [] } }] })),
+            ""
+        );
+    }
+
+    #[test]
+    fn empty_model_output_is_rejected() {
+        assert_eq!(non_empty("   \n".into()), Err("模型没有返回内容".into()));
+        assert_eq!(non_empty(" 回答 ".into()), Ok("回答".into()));
     }
 }

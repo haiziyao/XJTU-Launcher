@@ -49,7 +49,26 @@ fn default_font_region(family: &str, size: f64, weight: u32, line_height: f64) -
         "weight": weight,
         "lineHeight": line_height,
         "letterSpacing": 0.0,
+        "color": "",
     })
+}
+
+/// `#rrggbb`, or empty for "follow the app theme". Anything else falls back.
+fn font_color(value: Option<&Value>, fallback: &Value) -> String {
+    let raw = value
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let hex = raw.strip_prefix('#').unwrap_or("");
+    if hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        raw
+    } else {
+        fallback.as_str().unwrap_or("").to_string()
+    }
 }
 
 pub fn default_font() -> Value {
@@ -80,14 +99,13 @@ fn settings_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
 
 fn valid_family(value: &str) -> bool {
     let len = value.chars().count();
-    (1..=48).contains(&len)
-        && value.chars().all(|c| {
-            c.is_ascii_alphanumeric()
-                || c == ' '
-                || c == '-'
-                || c == '_'
-                || ('\u{4e00}'..='\u{9fff}').contains(&c)
-        })
+    // Downloaded and local fonts may use any Unicode family name; keep the
+    // same character set as `fonts::sanitize_family` so a name accepted when
+    // adding a file is not silently reset when the page saves settings.
+    (1..=64).contains(&len)
+        && value
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
 }
 
 fn text(value: Option<&Value>, fallback: &str) -> String {
@@ -171,6 +189,7 @@ fn font_region(value: Option<&Value>, fallback: &Value) -> Value {
     );
     let letter_spacing = number(reads("letterSpacing"), 0.0, -1.0, 5.0);
     let letter_spacing = (letter_spacing * 10.0).round() / 10.0;
+    let color = font_color(reads("color"), &fallback["color"]);
     let round = |value: f64| (value * 10.0).round() / 10.0;
     json!({
         "family": family,
@@ -178,6 +197,7 @@ fn font_region(value: Option<&Value>, fallback: &Value) -> Value {
         "weight": weight,
         "lineHeight": (line_height * 100.0).round() / 100.0,
         "letterSpacing": letter_spacing,
+        "color": color,
     })
 }
 
@@ -357,16 +377,20 @@ mod tests {
                 "size": 200,
                 "weight": 437,
                 "lineHeight": 0.2,
-                "letterSpacing": 99
+                "letterSpacing": 99,
+                "color": "#FF8800"
             },
-            "code": { "family": "Comic Sans; background: red" }
+            "code": { "family": "Comic Sans; background: red", "color": "red" }
         })));
         assert_eq!(value["ui"]["size"], 48.0);
         assert_eq!(value["ui"]["weight"], 400);
         assert_eq!(value["ui"]["lineHeight"], 1.0);
         assert_eq!(value["ui"]["letterSpacing"], 5.0);
+        assert_eq!(value["ui"]["color"], "#ff8800");
         // An invalid family falls back instead of becoming CSS.
         assert_eq!(value["code"]["family"], "mono");
+        // Colours are limited to hex literals; anything else means "default".
+        assert_eq!(value["code"]["color"], "");
         // Untouched regions keep their defaults.
         assert_eq!(value["title"]["size"], 20.0);
     }

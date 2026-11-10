@@ -256,6 +256,42 @@ pub fn builtin() -> Vec<ToolDef> {
             }),
             &[],
         ),
+        campus(
+            "workbench_files",
+            "工作台（用户自己的文件夹，只读）。action=overview 返回文件夹树、已同步的学期与课程作业；folder 列出某个文件夹内的文件（需要 folder，根目录传空字符串）；search 按文件名、作业、标签、备注或文件夹路径搜索（需要 query）。路径都是工作台内的相对路径，例如 2026-2027 秋季学期/计算机网络/答案.md。",
+            json!({
+                "action": choice(&["overview", "folder", "search"], "要查询的内容"),
+                "folder": { "type": "string", "description": "folder 必填，工作台内的文件夹路径；根目录传空字符串" },
+                "query": { "type": "string", "description": "search 必填，搜索关键词" }
+            }),
+            &["action"],
+        ),
+        campus(
+            "workbench_edit",
+            "修改工作台（写操作）。默认只返回预览，不复制、不保存、不删除；把预览向用户复述，用户明确要求后再带 confirm=true 调用。import 把用户指定的本地绝对路径复制进 folder；mkdir 在 folder 下新建 name；update 修改 path 的作业绑定、标签或备注；delete 永久删除 path（删后应用内无法恢复）。",
+            json!({
+                "action": {
+                    "type": "string",
+                    "enum": ["import", "mkdir", "update", "delete"],
+                    "description": "import 复制文件；mkdir 新建文件夹；update 修改绑定；delete 删除文件"
+                },
+                "folder": { "type": "string", "description": "import / mkdir 的工作台相对路径；根目录传空字符串" },
+                "name": { "type": "string", "description": "mkdir 必填，新文件夹名称" },
+                "paths": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "items": { "type": "string" },
+                    "description": "import 必填，用户明确指定的本地文件绝对路径"
+                },
+                "path": { "type": "string", "description": "update / delete 必填，工作台内的文件相对路径，来自 workbench_files" },
+                "assignment": { "type": "string", "description": "update 可选，绑定的作业名称" },
+                "activityId": { "type": "integer", "minimum": 1, "description": "update 可选，思源学堂作业活动编号" },
+                "tags": { "type": "array", "maxItems": 8, "items": { "type": "string" }, "description": "update 可选，最多 8 个标签" },
+                "note": { "type": "string", "description": "update 可选，备注" },
+                "confirm": { "type": "boolean", "description": "默认 false，只预览；用户明确同意后才设为 true" }
+            }),
+            &["action"],
+        ),
     ]
 }
 
@@ -667,6 +703,23 @@ impl ToolDef {
                         serde_json::to_string_pretty(&data).map_err(|_| "无法序列化下载结果")?,
                     ))
                 }
+                "workbench_files" => {
+                    let request: crate::WorkbenchRead = serde_json::from_value(args)
+                        .map_err(|error| format!("参数格式不正确：{error}"))?;
+                    let data = crate::run_workbench_read(app, request).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data).map_err(|_| "无法序列化工作台内容")?,
+                    ))
+                }
+                "workbench_edit" => {
+                    let request: crate::WorkbenchEdit = serde_json::from_value(args)
+                        .map_err(|error| format!("参数格式不正确：{error}"))?;
+                    let data = crate::run_workbench_edit(app, request).await?;
+                    Ok(truncate(
+                        serde_json::to_string_pretty(&data)
+                            .map_err(|_| "无法序列化工作台修改结果")?,
+                    ))
+                }
                 "campus_lms_submit" => {
                     let request = school::lms::Homework {
                         activity: id(&args, "activity")?,
@@ -907,6 +960,8 @@ mod tests {
                 "campus_lms_submit",
                 "campus_library",
                 "campus_venues",
+                "workbench_files",
+                "workbench_edit",
             ]
         );
         for def in &defs {

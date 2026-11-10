@@ -10,3 +10,6 @@ playwright-report/
 .xjtu-launcher/
 
 .release/
+
+# 本机连接与部署记录（含非仓库配置，不入库）
+/dev-docs/local/

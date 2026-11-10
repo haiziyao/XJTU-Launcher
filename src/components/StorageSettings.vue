@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { IconArrowRight, IconFolderOpen, IconUpload } from '@tabler/icons-vue';
 import { fileSize } from '../domain';
-import type { StoragePreview, StorageReport, StorageStatus } from '../types';
+import type { AppConfig, StoragePreview, StorageReport, StorageStatus } from '../types';
 import { bridge } from '../bridge';
 import SettingGroup from './ui/SettingGroup.vue';
 import SettingRow from './ui/SettingRow.vue';
 import UiButton from './ui/UiButton.vue';
+import UiSwitch from './ui/UiSwitch.vue';
 
 /**
  * The one visible folder for the user's own files: `workspace` (资料库),
@@ -17,6 +18,9 @@ import UiButton from './ui/UiButton.vue';
  * root has been recorded, so the dialog spells out what moves before asking,
  * and shows the leftover warnings afterwards.
  */
+const props = defineProps<{ config: AppConfig; saving: boolean }>();
+const emit = defineEmits<{ update: [config: AppConfig] }>();
+
 const status = ref<StorageStatus | null>(null);
 const error = ref('');
 const busy = ref(false);
@@ -128,6 +132,19 @@ async function reveal() {
     <Transition name="drop">
       <p v-if="error && step === 'closed'" class="notice storage-error" role="alert">{{ error }}</p>
     </Transition>
+    <SettingRow title="提交后自动归档" description="提交成功的作业会复制到对应课程文件夹">
+      <UiSwitch
+        :checked="props.config.workbenchAutoArchive"
+        label="提交后自动归档"
+        :disabled="props.saving"
+        @toggle="
+          emit('update', {
+            ...props.config,
+            workbenchAutoArchive: !props.config.workbenchAutoArchive,
+          })
+        "
+      />
+    </SettingRow>
 
     <!-- Kept inside the group so this component has one root element; the
          settings page fades whole sections in and out. -->
