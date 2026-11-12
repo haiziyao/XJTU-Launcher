@@ -82,6 +82,8 @@ v0.5.2 上线时逐个文件与 GitHub Release 的 `sha256` 比对通过；从�
 
 下一版起不再手动上传：`release.yml` 的 `oss` job 把草稿资产传到 `oss://xjtu-launcher/v<版本>/`，按 `OSS_PUBLIC_BASE` 改写清单后上传到 Bucket 根目录，上传成功才发布；GitHub 变量与 Secrets 已配置。`website/downloads.json` 不参与自动改写，发版后要手动更新版本、日期、大小与 SHA256，并重新部署官网。
 
+`tools/upload-oss.mjs` 同时把 `docs/releases/v<版本>.md` 的全文写进清单的 `notes`，与 GitHub Release 说明保持一致（应用更新弹窗显示的就是这段）。v0.7.0 及更早的清单 `notes` 为空；需要补时手动触发 `Repair latest.json` 工作流（`.github/workflows/repair-latest.yml`），填版本号即可，它只重写 Bucket 根目录的 `latest.json`，不动已上传的安装包与平台 URL。
+
 ## 发布后
 
 - 更新 README「下载安装」里的三条直达链接到新版本的资产名（`vX.Y.Z` 与文件名都含版本号）；否则首页按钮会指向旧版本。

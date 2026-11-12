@@ -1,0 +1,60 @@
+name: Repair latest.json
+# Rewrites only the update manifest in the OSS bucket: notes from
+# docs/releases/v<version>.md, platform URLs left as they are. Used when a
+# published release's latest.json is missing its notes; normal releases go
+# through release.yml, which now writes the same field.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version to repair, e.g. 0.7.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    if: vars.OSS_BUCKET != ''
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+      MANIFEST_ONLY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install ossutil 1.7.18
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ossutil.zip \
+            https://github.com/aliyun/ossutil/releases/download/v1.7.18/ossutil-v1.7.18-linux-amd64.zip
+          unzip -q -o /tmp/ossutil.zip -d /tmp/ossutil
+          install -m 755 "$(find /tmp/ossutil -type f -name 'ossutil*' ! -name '*.zip' | head -n1)" /usr/local/bin/ossutil
+          ossutil --version
+      - name: Write the ossutil config
+        env:
+          # `runner` is only available to steps, not to job-level env.
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo '[Credentials]'
+            echo 'language=EN'
+            echo 'endpoint=https://oss-cn-beijing.aliyuncs.com'
+            echo "accessKeyID=$OSS_ACCESS_KEY_ID"
+            echo "accessKeySecret=$OSS_ACCESS_KEY_SECRET"
+          } > "$OSS_CONFIG_FILE"
+      - name: Rewrite latest.json with the version record
+        env:
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          ossutil cp -f "oss://$OSS_BUCKET/latest.json" assets/latest.json -c "$OSS_CONFIG_FILE"
+          node tools/upload-oss.mjs
