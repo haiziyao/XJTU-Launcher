@@ -1,24 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import SplitView from '../../../components/ui/SplitView.vue';
-import ListItem from '../../../components/ui/ListItem.vue';
-import StatRow from '../../../components/ui/StatRow.vue';
-import StatTile from '../../../components/ui/StatTile.vue';
-import MenuSelect from '../../../components/ui/MenuSelect.vue';
-import Skeleton from '../../../components/ui/Skeleton.vue';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import InlineAlert from '../../../components/ui/InlineAlert.vue';
 import SeatMap from './SeatMap.vue';
 import { bridge } from '../../../shared/bridge';
 import { siteQuery } from '../campusSession';
 import { applyCached, cacheName } from '../../../shared/cache';
-import { percent } from '../../../shared/domain';
+import { percent, updatedInfo } from '../../../shared/domain';
 import type { LibraryArea, LibraryAreas, LibraryFloor, LibrarySeats } from '../../../types';
 
 /**
- * 图书馆 (LAYOUT §9.8): areas on the left with their live free/total counts,
- * the seat map on the right. The seat service is plain HTTP; WebVPN reaches it
- * through its port mapping, so both network modes can query it.
+ * 图书馆 (layout v2): areas on the left with their live free/total counts and
+ * occupancy bars, the seat map in the centre. The seat service is plain HTTP;
+ * WebVPN reaches it through its port mapping, so both network modes can query.
  */
 const floors = ref<LibraryFloor[]>([]);
 const campus = ref('');
@@ -26,7 +20,6 @@ const floor = ref('');
 const areas = ref<LibraryArea[]>([]);
 const area = ref('');
 const seats = ref<LibrarySeats | null>(null);
-const listWidth = ref(320);
 const loading = ref(false);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
@@ -63,11 +56,15 @@ const areaRows = computed(() => {
     );
 });
 const current = computed(() => areaRows.value.find((row) => row.code === area.value) ?? null);
-const freeCount = computed(() =>
-  seats.value ? seats.value.seats.filter((seat) => seat.free).length : 0,
-);
-const totalSeats = computed(() => seats.value?.seats.length ?? 0);
 const subtitle = computed(() => [campus.value, floorName.value].filter(Boolean).join(' · '));
+const meta = computed(() =>
+  [subtitle.value, loadedAt.value ? `更新于 ${updatedInfo(loadedAt.value)}` : '']
+    .filter(Boolean)
+    .join(' · '),
+);
+
+const freeWidth = (row: { free: number; total: number }) =>
+  `${row.total ? Math.round((row.free / row.total) * 100) : 0}%`;
 
 async function loadFloors(force = false) {
   loading.value = true;
@@ -172,137 +169,90 @@ onMounted(loadFloors);
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="图书馆"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="loadSeats(true)"
+  <CampusHeaderSlot slot="meta">
+    <span v-if="meta">{{ meta }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <select
+      class="cv-select"
+      :value="campus"
+      aria-label="校区"
+      @change="changeCampus(($event.target as HTMLSelectElement).value)"
     >
-      <template #filters>
-        <MenuSelect
-          :model-value="campus"
-          :options="campusOptions"
-          label="校区"
-          placeholder="选择校区"
-          fit
-          @update:model-value="changeCampus"
-        />
-        <MenuSelect
-          :model-value="floor"
-          :options="floorOptions"
-          label="楼层"
-          placeholder="选择楼层"
-          fit
-          @update:model-value="changeFloor"
-        />
-      </template>
-    </SectionHeader>
-
-    <InlineAlert v-if="error" tone="error" :title="error" />
-
-    <StatRow label="当前区域">
-      <StatTile label="空余座位" :value="area ? freeCount : null" :loading="loading && !seats" />
-      <StatTile label="座位总数" :value="area ? totalSeats : null" :loading="loading && !seats" />
-      <StatTile
-        label="空余率"
-        :value="totalSeats ? percent(freeCount / totalSeats) : null"
-        :loading="loading && !seats"
-      />
-      <StatTile label="区域" :value="areas.length" :loading="loading && !areas.length" />
-    </StatRow>
-
-    <SplitView
-      v-model:width="listWidth"
-      :detail-open="Boolean(area)"
-      list-label="阅览区域"
-      detail-label="座位图"
-      @back="area = ''"
+      <option v-for="option in campusOptions" :key="option.value" :value="option.value">
+        {{ option.label }}
+      </option>
+    </select>
+    <select
+      class="cv-select"
+      :value="floor"
+      aria-label="楼层"
+      @change="changeFloor(($event.target as HTMLSelectElement).value)"
     >
-      <template #list>
-        <Skeleton v-if="loading && !areas.length" :lines="6" height="18px" label="正在读取区域" />
-        <p v-else-if="!areas.length" class="library-empty">这一层没有可查询的区域</p>
-        <div v-else class="library-areas" role="listbox" aria-label="阅览区域">
-          <ListItem
-            v-for="row in areaRows"
-            :key="row.code"
-            :title="row.name"
-            :selected="row.code === area"
-            @select="openArea(row.code)"
-          >
-            <template #subtitle>
-              <span class="library-free"> 空余 {{ row.free }} / {{ row.total }} </span>
-            </template>
-            <template #meta>{{ row.total ? percent(row.free / row.total) : '—' }}</template>
-          </ListItem>
-        </div>
-      </template>
+      <option v-for="option in floorOptions" :key="option.value" :value="option.value">
+        {{ option.label }}
+      </option>
+    </select>
+    <button type="button" class="cv-btn" :disabled="loading" @click="loadSeats(true)">刷新</button>
+  </CampusHeaderSlot>
 
-      <template #detail>
-        <div v-if="!area" class="library-placeholder">
-          <p>选择一个区域查看座位分布。</p>
-        </div>
-        <Skeleton v-else-if="loading && !seats" :lines="6" height="24px" label="正在读取座位" />
-        <div v-else-if="seats" class="library-detail">
-          <header class="library-detail-head">
-            <h3>{{ areaName || '座位' }}</h3>
-            <p>
-              空余 <strong>{{ current?.free ?? freeCount }}</strong> /
-              {{ current?.total ?? totalSeats }}
-            </p>
-          </header>
-          <SeatMap :seats="seats.seats" label="图书馆座位图" />
-        </div>
-        <div v-else class="library-placeholder">
-          <p>暂时无法读取这个区域的座位。</p>
-        </div>
+  <InlineAlert v-if="error" tone="error" :title="error" />
+
+  <div class="cv-cols lc">
+    <div class="cv-panel cv-list">
+      <div class="cv-lh">{{ floorName || '阅览区域' }}<span>空余</span></div>
+      <div v-if="loading && !areas.length" class="cv-placeholder">正在读取区域…</div>
+      <div v-else-if="!areas.length" class="cv-placeholder">这一层没有可查询的区域</div>
+      <template v-else>
+        <button
+          v-for="row in areaRows"
+          :key="row.code"
+          type="button"
+          class="cv-item plain"
+          :class="{ on: row.code === area }"
+          @click="openArea(row.code)"
+        >
+          <b>{{ row.name }}</b>
+          <span class="cv-n">{{ row.total ? `${row.free} / ${row.total}` : '—' }}</span>
+          <span class="s cv-occ" aria-hidden="true"
+            ><i :style="{ width: freeWidth(row) }"></i
+          ></span>
+        </button>
       </template>
-    </SplitView>
-  </section>
+    </div>
+
+    <div class="cv-center">
+      <div class="cv-ch">
+        <b>{{ areaName || floorName || '座位图' }}</b>
+        <span v-if="current && seats" class="meta">
+          空余 {{ current.free }} / {{ current.total }} · {{ percent(current.ratio) }}
+        </span>
+      </div>
+      <div v-if="!area" class="cv-placeholder">选择一个区域查看座位分布。</div>
+      <div v-else-if="loading && !seats" class="cv-empty">正在读取座位…</div>
+      <div v-else-if="seats" class="cv-panel cv-scroll library-map">
+        <SeatMap :seats="seats.seats" label="图书馆座位图" />
+      </div>
+      <div v-else class="cv-placeholder">暂时无法读取这个区域的座位。</div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.library-empty,
-.library-placeholder {
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-  text-align: center;
+.library-map {
+  padding: 14px 16px;
 }
-.library-areas {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+.cv-occ {
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
   overflow: hidden;
 }
-.library-free {
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-.library-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.library-detail-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.library-detail-head h3 {
-  font-size: 14px;
-  font-weight: 600;
-}
-.library-detail-head p {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.library-detail-head strong {
-  color: var(--success-text);
+.cv-occ i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--success);
 }
 </style>

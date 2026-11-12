@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-11",
+  "categories": [
+    { "id": "study", "title": "学习" },
+    { "id": "campus", "title": "校园服务" },
+    { "id": "library", "title": "图书馆" },
+    { "id": "network", "title": "网络与账号" },
+    { "id": "life", "title": "生活" }
+  ],
+  "sites": [
+    {
+      "id": "jwxt",
+      "title": "教务系统",
+      "url": "https://jwxt.xjtu.edu.cn/jwapp/sys/homeapp/index.do",
+      "icon": "icons/jwxt.svg",
+      "description": "选课、课表、成绩与考试安排。",
+      "categories": ["study"],
+      "tags": ["选课", "成绩", "课表"],
+      "featured": true
+    },
+    {
+      "id": "lms",
+      "title": "思源学堂",
+      "url": "https://lms.xjtu.edu.cn/",
+      "icon": "icons/lms.svg",
+      "description": "课程资料、作业提交与课程回放。",
+      "categories": ["study"],
+      "tags": ["课程", "作业", "回放"],
+      "featured": true
+    },
+    {
+      "id": "library-seat",
+      "title": "图书馆座位预约",
+      "url": "http://rg.lib.xjtu.edu.cn:8086/seat/",
+      "icon": "icons/library.svg",
+      "description": "预约图书馆座位，查看当前场馆。",
+      "categories": ["library"],
+      "tags": ["座位", "预约"],
+      "featured": true
+    },
+    {
+      "id": "ncard",
+      "title": "校园一卡通",
+      "url": "https://ncard.xjtu.edu.cn/",
+      "icon": "icons/card.svg",
+      "description": "校园卡余额、消费记录与充值。",
+      "categories": ["campus", "life"],
+      "tags": ["校园卡", "充值"],
+      "featured": true
+    },
+    {
+      "id": "login",
+      "title": "统一身份认证",
+      "url": "https://login.xjtu.edu.cn/",
+      "icon": "icons/login.svg",
+      "description": "学校统一账号登录入口。",
+      "categories": ["network"],
+      "tags": ["账号", "登录"]
+    },
+    {
+      "id": "webvpn",
+      "title": "WebVPN",
+      "url": "https://webvpn.xjtu.edu.cn/",
+      "icon": "icons/vpn.svg",
+      "description": "在校外访问校园网服务。",
+      "categories": ["network"],
+      "tags": ["校外", "访问"]
+    },
+    {
+      "id": "hello",
+      "title": "迎新系统",
+      "url": "https://hello.xjtu.edu.cn/",
+      "icon": "icons/hello.svg",
+      "description": "迎新流程与个人信息入口。",
+      "categories": ["campus"],
+      "tags": ["迎新", "个人信息"]
+    },
+    {
+      "id": "fitness",
+      "title": "体测系统",
+      "url": "https://tyxylp.xjtu.edu.cn/bdlp_h5_fitness_test/view/h5xajt/#/pages/index/index",
+      "icon": "icons/sports.svg",
+      "description": "体测成绩与体育相关服务。",
+      "categories": ["life"],
+      "tags": ["体测", "体育"]
+    }
+  ]
+}

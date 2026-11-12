@@ -2,23 +2,31 @@
 //! This module never submits passwords or sends evaluation answers during a query.
 mod attendance;
 mod card;
+mod direct;
 pub mod evaluation;
-mod fitness;
 mod library;
 pub(crate) mod lms;
 pub(crate) mod notices;
+#[allow(dead_code)]
+pub(crate) mod portal;
 mod profile;
 mod queries;
+#[allow(dead_code)]
+pub(crate) mod sports;
 mod transport;
 mod venue;
 
 /// SSO entry used when a direct session is created; the card service is the
 /// most common reason to need one.
+pub(crate) use attendance::label_courses;
 pub(crate) use card::LOGIN_URL as CARD_LOGIN;
 pub(crate) use library::LOGIN_URL as LIBRARY_LOGIN;
 pub(crate) use lms::LOGIN_URL as LMS_LOGIN;
 pub use queries::{query, Query};
 use serde::Serialize;
+pub(crate) use sports::LOGIN as FITNESS_LOGIN;
+pub(crate) use venue::index_logged_in as venue_index_logged_in;
+pub(crate) use venue::HOME_URL as VENUE_HOME;
 pub(crate) use venue::LOGIN_URL as VENUE_LOGIN;
 
 #[derive(Serialize)]

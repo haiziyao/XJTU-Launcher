@@ -1,4 +1,5 @@
 import {
+  CalendarCheck,
   CalendarDays,
   Cat,
   Compass,
@@ -7,6 +8,7 @@ import {
   Route,
   Settings2,
   Type,
+  UserRound,
 } from 'lucide-vue-next';
 import type { Plugin } from '../../types';
 
@@ -16,6 +18,8 @@ export function pluginGlyph(plugin: Plugin) {
     case 'timetable':
       return CalendarDays;
     case 'campus':
+      if (plugin.page.preset === 'reservations') return CalendarCheck;
+      if (plugin.page.preset === 'profile') return UserRound;
       return Route;
     case 'homeTheme':
       return Palette;

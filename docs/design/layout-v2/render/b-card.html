@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 52px 1fr 80px 80px; }
+.tbl .tr { height: 33px; }
+.out { color: var(--text); } .in { color: var(--success-text); }
+.chart { padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+.chart .hd { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.chart .hd b { font-size: 13px; font-weight: 600; }
+.bars { display: grid; grid-template-columns: repeat(30, 1fr); gap: 4px; align-items: end; height: 64px; }
+.bars i { display: block; background: #c9d8f3; border-radius: 2px 2px 0 0; }
+.bars i.wk { background: var(--accent); }
+.axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-tertiary); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="生活" data-s="校园卡"><span class="search">搜索商户</span></header>
+    <div class="content">
+      <div class="cols l-c">
+        <div class="panel clist">
+          <div class="figs" style="grid-template-columns:1fr">
+            <div class="fig"><span class="k2">余额</span><span class="v" style="font-size:26px">¥ 236.40</span><span class="k2">待入账 ¥ 0.00 · 卡状态正常</span></div>
+          </div>
+          <div class="hr"></div>
+          <div class="lh">时间<span>支出</span></div>
+          <div class="citem plain"><b>本周</b><span class="n">¥ 86.30</span></div>
+          <div class="citem plain"><b>本月</b><span class="n">¥ 312.80</span></div>
+          <div class="citem plain on"><b>近 30 天</b><span class="n">¥ 684.50</span></div>
+          <div class="lh">类型</div>
+          <div class="citem plain on"><b>全部</b><span class="n">142</span></div>
+          <div class="citem plain"><b>支出</b><span class="n">136</span></div>
+          <div class="citem plain"><b>收入</b><span class="n">6</span></div>
+          <div class="lh">常去</div>
+          <div class="citem plain"><b>康桥苑餐厅</b><span class="n">¥ 268.0</span></div>
+          <div class="citem plain"><b>梧桐苑餐厅</b><span class="n">¥ 154.5</span></div>
+          <div class="citem plain"><b>校内超市</b><span class="n">¥ 96.2</span></div>
+        </div>
+
+        <div class="center">
+          <div class="panel chart">
+            <div class="hd"><b>近 30 天支出</b><span class="muted">¥ 684.50 · 日均 ¥ 22.8</span></div>
+            <div class="bars">
+              <i style="height:40%"></i><i style="height:52%"></i><i style="height:30%"></i><i style="height:61%"></i><i style="height:44%"></i><i style="height:12%"></i><i style="height:20%"></i><i style="height:48%"></i><i style="height:55%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:46%"></i><i style="height:18%"></i><i style="height:26%"></i><i style="height:50%"></i><i style="height:42%"></i><i style="height:58%"></i><i style="height:36%"></i><i style="height:95%"></i><i style="height:22%"></i><i style="height:15%"></i><i style="height:44%"></i><i style="height:39%"></i><i style="height:62%"></i><i class="wk" style="height:48%"></i><i class="wk" style="height:35%"></i><i class="wk" style="height:28%"></i><i class="wk" style="height:51%"></i><i class="wk" style="height:41%"></i><i class="wk" style="height:30%"></i>
+            </div>
+            <div class="axis"><span>10-14</span><span>10-21</span><span>10-28</span><span>11-04</span><span>今天</span></div>
+          </div>
+          <div class="panel tbl">
+            <div class="thead"><span>时间</span><span>商户</span><span class="r">金额</span><span class="r">余额</span></div>
+            <div class="grp">今天<span class="n">¥ 24.50</span></div>
+            <div class="tr"><span class="num muted">12:06</span><span class="ellip">康桥苑餐厅 <span class="muted">· 二楼自选</span></span><span class="r num out">−14.00</span><span class="r num muted">236.40</span></div>
+            <div class="tr"><span class="num muted">07:42</span><span class="ellip">梧桐苑餐厅 <span class="muted">· 早餐</span></span><span class="r num out">−6.50</span><span class="r num muted">250.40</span></div>
+            <div class="tr"><span class="num muted">07:30</span><span class="ellip">东区浴室 <span class="muted">· 热水</span></span><span class="r num out">−4.00</span><span class="r num muted">256.90</span></div>
+            <div class="grp">昨天<span class="n">¥ 31.80 · 收入 ¥ 200.00</span></div>
+            <div class="tr"><span class="num muted">18:20</span><span class="ellip">康桥苑餐厅 <span class="muted">· 一楼</span></span><span class="r num out">−12.00</span><span class="r num muted">260.90</span></div>
+            <div class="tr"><span class="num muted">16:05</span><span class="ellip">校内超市</span><span class="r num out">−9.80</span><span class="r num muted">272.90</span></div>
+            <div class="tr"><span class="num muted">12:10</span><span class="ellip">梧桐苑餐厅 <span class="muted">· 二楼</span></span><span class="r num out">−10.00</span><span class="r num muted">282.70</span></div>
+            <div class="tr"><span class="num muted">09:00</span><span class="ellip">银行卡圈存</span><span class="r num in">+200.00</span><span class="r num muted">292.70</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

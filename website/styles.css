@@ -237,6 +237,13 @@ h1 {
 .slide.is-prev .window img,
 .slide.is-next .window img {
   filter: blur(3.5px) saturate(.9) brightness(1.03);
+  transition: filter .22s ease;
+}
+
+/* Pointing at a preview sharpens it: nothing under the cursor stays blurred. */
+.slide.is-prev:hover .window img,
+.slide.is-next:hover .window img {
+  filter: none;
 }
 
 .slide.is-prev .titlebar,
@@ -1028,21 +1035,6 @@ footer a:hover { border-bottom-color: var(--ink); }
   .stage:hover .slide.is-active .window { --lift: 1.1; }
 }
 
-.window::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .3s ease;
-  background:
-    radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .55), transparent 60%),
-    radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--accent, #7c5cff) 10%, transparent), transparent 70%);
-}
-
-.slide.is-active .window:hover::before { opacity: 1; }
-
 /* download cards: edge light that follows the pointer */
 .dl::after {
   content: '';
@@ -1080,12 +1072,11 @@ footer a:hover { border-bottom-color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .slide.is-active .window { transform: none; transition: box-shadow .6s ease; }
-  .window::before { display: none; }
   .dl.is-current::before { animation: none; }
 }
 
 @media (hover: none), (pointer: coarse) {
-  .window::before, .dl::after { display: none; }
+  .dl::after { display: none; }
 }
 
 /* direction section: full-width alternating rows */

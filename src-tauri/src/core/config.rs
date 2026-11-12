@@ -457,6 +457,21 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// `plugin.json`'s `enabledByDefault` and the default disabled list are
+    /// separate sources; a fresh install must not disagree with the manifest.
+    #[test]
+    fn default_disabled_plugins_match_manifests() {
+        let disabled = AppConfig::default().disabled_plugins;
+        for plugin in crate::plugins::list().expect("built-in plugins").plugins {
+            assert_eq!(
+                !disabled.contains(&plugin.id),
+                plugin.enabled_by_default,
+                "{} 的 enabledByDefault 与默认禁用列表不一致",
+                plugin.id
+            );
+        }
+    }
+
     #[test]
     fn old_config_keeps_sidebar_and_plugins_when_personal_fields_are_added() {
         let old = r#"{"version":1,"sidebarCollapsed":true,"accent":"blue","greeting":"","widgets":["links"],"pluginOrder":[],"disabledPlugins":["cn.xjtu.timetable"]}"#;

@@ -60,6 +60,7 @@ import type {
   FontDownloadProgress,
   FontLibraryState,
   InstalledFont,
+  ResourceCatalog,
 } from '../types';
 
 export const native = isTauri();
@@ -75,6 +76,8 @@ export const bridge = {
   // `force` is what a user-initiated refresh passes.
   schoolQuery: (query: SchoolQuery, cacheName?: string, force = false) =>
     invoke<unknown>('school_query', { query, cacheKey: cacheName ?? null, force }),
+  /** Calendar image downloaded into the local cache, returned as a data URL. */
+  calendarImage: (url: string) => invoke<string>('calendar_image', { url }),
   lmsOpenFile: (uploadId: number) => invoke<void>('lms_open_file', { uploadId }),
   /** Resolve direct replay videos; the result is presigned and not cached. */
   lmsReplayVideos: (activity: number) => invoke<LmsReplayVideos>('lms_replay_videos', { activity }),
@@ -218,6 +221,11 @@ export const bridge = {
     requireNative();
     return invoke('community_agent_search', { query });
   },
+  /** Resource sites bundled under `resources/community/`; no network request. */
+  async resourceSites(): Promise<ResourceCatalog> {
+    requireNative();
+    return invoke('resource_sites');
+  },
   async providerBalance(id: string): Promise<ProviderBalance | null> {
     requireNative();
     return invoke('provider_balance', { id });
@@ -332,6 +340,10 @@ export const bridge = {
   async refreshVenueSession(): Promise<boolean> {
     requireNative();
     return invoke('refresh_venue_session');
+  },
+  async refreshFitnessSession(): Promise<boolean> {
+    requireNative();
+    return invoke('refresh_fitness_session');
   },
   // Native campus authentication and local account management.
   async accounts(): Promise<CampusAccountList> {

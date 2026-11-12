@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.cols { display: grid; grid-template-columns: 206px 1fr 252px; gap: 12px; flex: 1; min-height: 0; padding-bottom: 14px; }
+.tree { display: flex; flex-direction: column; padding: 6px; gap: 1px; }
+.node { display: flex; align-items: center; gap: 6px; height: 27px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; white-space: nowrap; }
+.node .tw { width: 8px; color: var(--text-tertiary); font-size: 9px; flex-shrink: 0; }
+.node .ct { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.node.on { background: var(--nav-active); color: var(--nav-active-text); font-weight: 500; }
+.node.d1 { padding-left: 18px; } .node.d2 { padding-left: 32px; }
+.node .k { font-size: 10.5px; font-weight: 600; color: var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 0 5px; margin-left: auto; }
+.node .k + .ct { margin-left: 4px; }
+.tree .tf { margin-top: auto; border-top: 1px solid var(--divider); padding: 8px 6px 2px; font-size: 12px; color: var(--accent-text); }
+.center { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ch { display: flex; align-items: baseline; gap: 8px; }
+.ch b { font-size: 15px; font-weight: 600; }
+.ch .meta { font-size: 11.5px; color: var(--text-tertiary); }
+.asg .thead, .asg .tr { grid-template-columns: 1fr 96px 64px 56px; }
+.files .thead, .files .tr { grid-template-columns: 1fr 60px 72px 86px; }
+.insp { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.preview { height: 112px; border-radius: 8px; background: var(--surface-sunken); display: flex; align-items: center; justify-content: center; }
+.preview .pg { width: 64px; height: 84px; background: #fff; border-radius: 3px; box-shadow: var(--shadow-sm); padding: 8px 7px; display: flex; flex-direction: column; gap: 4px; }
+.preview .pg i { height: 3px; background: #e3e6ea; border-radius: 2px; display: block; }
+.insp h3 { margin: 0; font-size: 13.5px; font-weight: 600; word-break: break-all; }
+.insp .blk { border-top: 1px solid var(--divider); padding-top: 10px; }
+.insp .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="workbench"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>工作台</h1>
+      <span class="term">2026-2027 秋季学期</span>
+      <div class="right"><span class="sample">示例数据</span><span class="search">搜索文件</span></div>
+    </div>
+    <nav class="sub">
+      <span class="sec" style="font-size:12px">13 门课程 · 128 个文件 · <span class="due-soon">1 项未交</span> · 同步于 10 分钟前</span>
+      <div class="tools">
+        <span class="btn">新建文件夹</span>
+        <span class="btn">添加文件</span>
+        <span class="btn">同步</span>
+      </div>
+    </nav>
+
+    <div class="content">
+      <div class="cols">
+        <div class="panel tree">
+          <div class="node"><span class="tw">▾</span><i class="folder"></i>2026-2027 秋<span class="ct">128</span></div>
+          <div class="node d1 on"><span class="tw">▾</span><i class="cs c1"></i>计组<span class="k">1</span><span class="ct">24</span></div>
+          <div class="node d2"><span class="tw"></span><i class="folder"></i>实验报告<span class="ct">5</span></div>
+          <div class="node d2"><span class="tw"></span><i class="folder"></i>课件<span class="ct">11</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="cs c2"></i>计网<span class="ct">18</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="cs c3"></i>操作系统原理<span class="ct">12</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="cs c6"></i>人工智能<span class="ct">9</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="cs c1"></i>自然语言处理<span class="ct">7</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="cs c4"></i>文学经典<span class="ct">3</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>期末复习<span class="ct">6</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2025-2026 春<span class="ct">96</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2025-2026 秋<span class="ct">84</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2024-2025 春<span class="ct">71</span></div>
+          <div class="tf">在访达中打开</div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>计组</b><span class="meta">计算机组成 · COMP3021 · 王老师</span></div>
+          <div class="sh"><h2>作业</h2><span class="meta">自动同步自思源学堂</span></div>
+          <div class="panel asg">
+            <div class="thead"><span>作业</span><span class="r">截止</span><span class="r">状态</span><span></span></div>
+            <div class="tr"><span class="ellip">第四章作业（第一次）</span><span class="r num due-today">今天 23:59</span><span class="r"><span class="badge warn">未交</span></span><span class="r"><span class="btn sm primary">提交</span></span></div>
+            <div class="tr"><span class="ellip">第三章作业</span><span class="r num muted">10月29日</span><span class="r"><span class="badge ok">✓ 已交</span></span><span class="r link" style="font-size:12px">重交</span></div>
+            <div class="tr"><span class="ellip sec">第一章作业</span><span class="r num muted">9月30日</span><span class="r"><span class="badge muted">已截止</span></span><span></span></div>
+          </div>
+          <div class="sh"><h2>文件</h2><span class="meta">24 个 · 2 个文件夹</span></div>
+          <div class="panel files">
+            <div class="thead"><span>名称</span><span class="r">大小</span><span class="r">修改</span><span>绑定</span></div>
+            <div class="tr"><span class="c"><i class="folder"></i>实验报告</span><span class="r num muted">5 项</span><span class="r num muted">11-10</span><span></span></div>
+            <div class="tr"><span class="c"><i class="folder"></i>课件</span><span class="r num muted">11 项</span><span class="r num muted">11-11</span><span></span></div>
+            <div class="tr sel"><span class="c"><i class="ft">PDF</i><span class="ellip">第4次作业_存储层次.pdf</span></span><span class="r num muted">386 KB</span><span class="r num muted">今天 10:12</span><span class="ellip">第四章作业</span></div>
+            <div class="tr"><span class="c"><i class="ft">PPT</i><span class="ellip">Chapter7 控制器.pptx</span></span><span class="r num muted">4.1 MB</span><span class="r num muted">昨天</span><span class="muted">—</span></div>
+            <div class="tr"><span class="c"><i class="ft">MD</i><span class="ellip">复习提纲.md</span></span><span class="r num muted">12 KB</span><span class="r num muted">11-06</span><span class="muted">—</span></div>
+          </div>
+        </div>
+
+        <div class="panel insp">
+          <div class="preview"><div class="pg"><i style="width:70%"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i><i></i><i style="width:75%"></i></div></div>
+          <h3>第4次作业_存储层次.pdf</h3>
+          <dl class="kv" style="margin:0">
+            <dt>大小</dt><dd class="num">386 KB</dd>
+            <dt>修改</dt><dd class="num">今天 10:12</dd>
+            <dt>位置</dt><dd class="ellip">~/…/计组</dd>
+            <dt>绑定</dt><dd>第四章作业（第一次）</dd>
+          </dl>
+          <div class="acts">
+            <span class="btn primary">提交到第四章作业</span>
+            <span class="btn">打开</span>
+            <span class="btn">在访达中显示</span>
+            <span class="btn">改绑定</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

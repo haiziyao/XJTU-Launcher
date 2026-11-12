@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, MapPin } from 'lucide-vue-next';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import StatRow from '../../../components/ui/StatRow.vue';
-import StatTile from '../../../components/ui/StatTile.vue';
-import ListItem from '../../../components/ui/ListItem.vue';
-import MenuSelect from '../../../components/ui/MenuSelect.vue';
-import StatusBadge, { type StatusTone } from '../../../components/ui/StatusBadge.vue';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import InlineAlert from '../../../components/ui/InlineAlert.vue';
-import Skeleton from '../../../components/ui/Skeleton.vue';
-import UiButton from '../../../components/ui/UiButton.vue';
 import SlotMatrix, { type SlotCell, type SlotCourt } from './SlotMatrix.vue';
 import { bridge } from '../../../shared/bridge';
 import { siteQuery } from '../campusSession';
 import { applyCached, cacheName } from '../../../shared/cache';
-import { campusDateKey, campusTimestamp, money } from '../../../shared/domain';
+import {
+  campusDateKey,
+  campusParts,
+  campusTimestamp,
+  money,
+  updatedInfo,
+} from '../../../shared/domain';
 import type {
   Venue,
   VenueList,
@@ -25,22 +24,38 @@ import type {
 } from '../../../types';
 
 /**
- * 场馆 (LAYOUT §9.9): my orders and the time × court matrix for one venue and
- * day. Booking is not wired to the write protocol yet, so cells are read-only
- * and the page says where to book.
+ * 场馆 (layout v2): venues and the quick date list on the left, the time ×
+ * court grid in the centre and the picked slot plus my orders on the right.
+ * The write protocol for booking is not wired yet, so cells only report state;
+ * the page says where to book instead of offering a button that cannot work.
  */
 const venues = ref<Venue[]>([]);
 const orders = ref<VenueOrder[]>([]);
 const selected = ref<Venue | null>(null);
 const slots = ref<VenueSlot[]>([]);
+const picked = ref<SlotCell | null>(null);
 const date = ref(campusDateKey(Date.now()));
 const loading = ref(true);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
+// The venue closes every endpoint outside 8:40–21:40. That is a service
+// schedule, not a failure, so the page states it without an error strip.
+const closedHours = computed(() => error.value.startsWith('晚上服务不可用'));
 
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const venueOptions = computed(() =>
   venues.value.map((venue) => ({ value: String(venue.id), label: venue.name })),
 );
+const venueGroups = computed(() => {
+  const groups = new Map<string, Venue[]>();
+  for (const venue of venues.value) {
+    const title = venue.category || '其他';
+    const list = groups.get(title);
+    if (list) list.push(venue);
+    else groups.set(title, [venue]);
+  }
+  return [...groups.entries()].map(([title, items]) => ({ title, items }));
+});
 const courts = computed<SlotCourt[]>(() => {
   const names = [...new Set(slots.value.map((slot) => slot.area))].sort((a, b) =>
     a.localeCompare(b, 'zh-Hans-CN', { numeric: true }),
@@ -77,12 +92,41 @@ const availableCount = computed(
 );
 const usedSeats = computed(() => slots.value.reduce((sum, slot) => sum + slot.using, 0));
 const totalSeats = computed(() => slots.value.reduce((sum, slot) => sum + slot.total, 0));
-const subtitle = computed(() => (selected.value ? selected.value.name : '场馆与时段'));
-const dateLabel = computed(() => {
-  const parts = campusTimestamp(`${date.value} 00:00`);
-  const parsed = new Date(parts + 8 * 3600000);
-  if (!Number.isFinite(parts)) return date.value;
-  return `${parsed.getUTCMonth() + 1}月${parsed.getUTCDate()}日`;
+const dateLabel = (value: string) => {
+  const parts = campusParts(`${value} 00:00`);
+  if (!parts) return value;
+  const month = String(parts.month).padStart(2, '0');
+  const day = String(parts.day).padStart(2, '0');
+  return `${month}-${day} 周${WEEKDAYS[parts.weekday]}`;
+};
+const quickDates = computed(() => {
+  const today = campusDateKey(Date.now());
+  const stamp = campusTimestamp(`${today} 00:00`);
+  return Array.from({ length: 5 }, (_, index) => {
+    const key = campusDateKey(stamp + index * 86400000);
+    return {
+      key,
+      label:
+        index === 0
+          ? `今天 ${dateLabel(key)}`
+          : index === 1
+            ? `明天 ${dateLabel(key)}`
+            : dateLabel(key),
+    };
+  });
+});
+const headerMeta = computed(() => {
+  const venue = selected.value;
+  const parts = venue
+    ? [venue.category, venue.address, venue.advanceDays ? `可提前 ${venue.advanceDays} 天` : '']
+    : [];
+  parts.push(dateLabel(date.value));
+  return parts.filter(Boolean).join(' · ');
+});
+const summary = computed(() => {
+  if (!selected.value || !cells.value.length) return '';
+  const seats = totalSeats.value ? ` · 已订 ${usedSeats.value} / ${totalSeats.value}` : '';
+  return `${courts.value.length} 块场地 · ${availableCount.value} 个时段可约${seats}`;
 });
 const orderLine = (order: VenueOrder) =>
   order.details
@@ -93,8 +137,11 @@ const orderLine = (order: VenueOrder) =>
     )
     .filter(Boolean)
     .join(' / ');
-const orderTone = (order: VenueOrder): StatusTone =>
-  order.status === 1 ? 'done' : order.status === 2 ? 'neutral' : 'active';
+const orderBadge = (order: VenueOrder) =>
+  order.status === 1 ? 'ok' : order.status === 2 ? 'muted' : 'accent';
+const pickedPrice = computed(() =>
+  picked.value?.price == null ? '' : money(Math.round(picked.value.price * 100)),
+);
 
 async function loadList(force = false) {
   loading.value = true;
@@ -147,6 +194,7 @@ async function loadSlots(force = false) {
       force,
     );
     slots.value = result.slots;
+    picked.value = null;
     loadedAt.value = Date.now();
   } catch (e) {
     console.error('[campus] venue slots', e);
@@ -169,6 +217,10 @@ function shiftDay(days: number) {
   date.value = campusDateKey(stamp + days * 86400000);
 }
 
+function pickDate(value: string) {
+  if (date.value !== value) date.value = value;
+}
+
 function refresh() {
   void loadList(true);
 }
@@ -178,135 +230,202 @@ onMounted(() => void loadList());
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="场馆"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="refresh"
+  <CampusHeaderSlot slot="meta">
+    <span v-if="loadedAt">更新于 {{ updatedInfo(loadedAt) }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <select
+      class="cv-select"
+      :value="selected ? String(selected.id) : ''"
+      aria-label="场馆"
+      @change="changeVenue(($event.target as HTMLSelectElement).value)"
     >
-      <template #filters>
-        <MenuSelect
-          :model-value="selected ? String(selected.id) : ''"
-          :options="venueOptions"
-          label="场馆"
-          placeholder="选择场馆"
-          fit
-          @update:model-value="changeVenue"
-        />
-      </template>
-    </SectionHeader>
+      <option value="" disabled>选择场馆</option>
+      <option v-for="option in venueOptions" :key="option.value" :value="option.value">
+        {{ option.label }}
+      </option>
+    </select>
+    <button type="button" class="cv-btn" :disabled="loading" @click="refresh">刷新</button>
+  </CampusHeaderSlot>
 
-    <InlineAlert v-if="error" tone="error" :title="error" />
+  <InlineAlert v-if="error" :tone="closedHours ? 'info' : 'error'" :title="error" />
 
-    <section class="venue-orders" aria-label="我的预订">
-      <h3 class="venue-subtitle">我的预订</h3>
-      <Skeleton v-if="loading && !orders.length" :lines="3" height="18px" label="正在读取预订" />
-      <p v-else-if="!orders.length" class="venue-empty">
-        <MapPin :size="18" aria-hidden="true" />还没有场馆预订
-      </p>
-      <div v-else class="venue-order-list">
-        <ListItem
-          v-for="order in orders"
-          :key="order.id"
-          :title="orderLine(order) || '场馆预订'"
-          :subtitle="order.created ? `下单于 ${order.created}` : ''"
-        >
-          <template #status>
-            <StatusBadge :status="orderTone(order)" :label="order.statusText" />
-          </template>
-          <template #meta>{{ money(order.price * 100) }}</template>
-        </ListItem>
+  <div class="cv-cols lcr">
+    <div class="cv-panel cv-list">
+      <div v-if="loading && !venues.length" class="cv-placeholder">正在读取场馆…</div>
+      <div v-else-if="!venueGroups.length" class="cv-placeholder">
+        {{ closedHours ? '预约系统当前未开放。' : '没有可查询的场馆' }}
       </div>
-    </section>
+      <template v-else>
+        <template v-for="group in venueGroups" :key="group.title">
+          <div class="cv-lh">{{ group.title }}</div>
+          <button
+            v-for="venue in group.items"
+            :key="venue.id"
+            type="button"
+            class="cv-item plain"
+            :class="{ on: selected?.id === venue.id }"
+            @click="changeVenue(String(venue.id))"
+          >
+            <b>{{ venue.name }}</b>
+            <span class="cv-n">{{ venue.advanceDays ? `${venue.advanceDays} 天` : '' }}</span>
+            <span v-if="venue.address" class="s">{{ venue.address }}</span>
+          </button>
+        </template>
+      </template>
 
-    <section class="venue-slots" aria-label="场馆时段">
-      <header class="venue-slot-head">
-        <h3 class="venue-subtitle">{{ selected?.name || '场馆时段' }} · {{ dateLabel }}</h3>
-        <div class="venue-date">
-          <UiButton size="sm" variant="ghost" aria-label="前一天" @click="shiftDay(-1)">
+      <div class="cv-lh">日期</div>
+      <button
+        v-for="item in quickDates"
+        :key="item.key"
+        type="button"
+        class="cv-item plain"
+        :class="{ on: date === item.key }"
+        @click="pickDate(item.key)"
+      >
+        <b>{{ item.label }}</b>
+      </button>
+    </div>
+
+    <div class="cv-center">
+      <div class="cv-ch">
+        <b>{{ selected?.name || '场馆时段' }}</b>
+        <span class="meta">{{ summary || headerMeta }}</span>
+        <span class="end">
+          <button type="button" class="cv-btn sm" aria-label="前一天" @click="shiftDay(-1)">
             <ChevronLeft :size="14" />
-          </UiButton>
-          <input
-            v-model="date"
-            class="text-field venue-date-input"
-            type="date"
-            aria-label="查询日期"
-          />
-          <UiButton size="sm" variant="ghost" aria-label="后一天" @click="shiftDay(1)">
+          </button>
+          <input v-model="date" class="venue-date" type="date" aria-label="查询日期" />
+          <button type="button" class="cv-btn sm" aria-label="后一天" @click="shiftDay(1)">
             <ChevronRight :size="14" />
-          </UiButton>
+          </button>
+        </span>
+      </div>
+
+      <div class="cv-scroll">
+        <InlineAlert notice-id="venue-booking" tone="info" title="预订尚未接入">
+          应用内只能查看时段和我的订单；预订与取消请到场馆网站办理。
+        </InlineAlert>
+
+        <div v-if="loading && !slots.length" class="cv-empty">正在读取时段…</div>
+        <div v-else-if="!selected" class="cv-placeholder">选择场馆后查看时段。</div>
+        <div v-else-if="!cells.length" class="cv-placeholder">这一天没有开放时段。</div>
+        <div v-else class="cv-panel venue-matrix">
+          <SlotMatrix
+            :times="times"
+            :courts="courts"
+            :cells="cells"
+            label="场馆时段表"
+            @select="picked = $event"
+          />
+          <div class="venue-legend">
+            <span><i class="lg-free"></i>可约</span>
+            <span><i class="lg-full"></i>已满</span>
+            <span><i class="lg-closed"></i>不可订</span>
+          </div>
         </div>
-      </header>
+      </div>
+    </div>
 
-      <StatRow label="当日时段">
-        <StatTile label="可订时段" :value="availableCount" :loading="loading && !slots.length" />
-        <StatTile label="全部时段" :value="cells.length" :loading="loading && !slots.length" />
-        <StatTile
-          label="已订座位"
-          :value="totalSeats ? `${usedSeats} / ${totalSeats}` : null"
-          :loading="loading && !slots.length"
-        />
-        <StatTile label="我的订单" :value="orders.length" :loading="loading && !orders.length" />
-      </StatRow>
+    <div class="cv-panel cv-detail">
+      <div class="cv-type">时段信息<span v-if="picked" class="cv-badge accent">已选</span></div>
+      <template v-if="picked">
+        <h3>{{ [picked.court, picked.time].filter(Boolean).join(' · ') }}</h3>
+        <dl class="cv-kv">
+          <dt>场馆</dt>
+          <dd>{{ selected?.name || '—' }}</dd>
+          <dt>日期</dt>
+          <dd class="cv-num">{{ dateLabel(date) }}</dd>
+          <dt>费用</dt>
+          <dd v-if="pickedPrice" class="cv-num">{{ pickedPrice }}</dd>
+          <dd v-else>—</dd>
+          <dt>状态</dt>
+          <dd>
+            {{
+              picked.state === 'available'
+                ? '可预约'
+                : picked.state === 'full'
+                  ? '已满'
+                  : '不可预订'
+            }}
+          </dd>
+        </dl>
+        <div class="cv-blk">
+          <p>应用内还不能提交预约；请到场馆网站办理。开场 15 分钟内未到场记为违约。</p>
+        </div>
+      </template>
+      <div v-else class="cv-placeholder">
+        <MapPin :size="16" aria-hidden="true" />点一个时段查看详情
+      </div>
 
-      <InlineAlert notice-id="venue-booking" tone="info" title="预订尚未接入">
-        应用内只能查看时段和我的订单；预订与取消请到场馆网站办理。
-      </InlineAlert>
-
-      <Skeleton v-if="loading && !slots.length" :lines="5" height="26px" label="正在读取时段" />
-      <p v-else-if="!selected" class="venue-empty">选择场馆后查看时段。</p>
-      <p v-else-if="!cells.length" class="venue-empty">这一天没有开放时段。</p>
-      <SlotMatrix v-else :times="times" :courts="courts" :cells="cells" label="场馆时段表" />
-    </section>
-  </section>
+      <div class="cv-blk">
+        <h4>
+          我的预订<span>{{ orders.length }}</span>
+        </h4>
+        <div v-if="loading && !orders.length" class="cv-placeholder">正在读取预订…</div>
+        <div v-else-if="!orders.length" class="cv-placeholder">还没有场馆预订</div>
+        <template v-else>
+          <div v-for="order in orders" :key="order.id" class="cv-order">
+            <div class="l1">
+              <b>{{ orderLine(order) || '场馆预订' }}</b>
+              <span class="cv-badge" :class="orderBadge(order)">{{ order.statusText || '—' }}</span>
+            </div>
+            <span class="cv-muted">{{ order.created ? `下单于 ${order.created}` : '' }}</span>
+            <span class="cv-sec cv-num">{{ money(order.price * 100) }}</span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.venue-orders,
-.venue-slots {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.venue-subtitle {
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.venue-order-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-.venue-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px 16px;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-}
-.venue-slot-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.venue-matrix {
+  padding: 10px 12px;
+  overflow: auto;
 }
 .venue-date {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.venue-date-input {
   width: 138px;
-  height: 26px;
+  height: 28px;
   padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text);
   font-size: 12px;
+}
+.venue-date:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.venue-legend {
+  display: flex;
+  gap: 14px;
+  padding-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+.venue-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.venue-legend i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.venue-legend .lg-free {
+  background: var(--success-soft);
+  border: 1px solid var(--success-text);
+}
+.venue-legend .lg-full {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+.venue-legend .lg-closed {
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border-strong);
 }
 </style>

@@ -28,6 +28,9 @@ export interface LmsActivity {
   end: string;
   published: boolean;
   group: boolean;
+  closed: boolean;
+  /** The student's submission count; null when it could not be read. */
+  submitCount: number | null;
 }
 export interface LmsActivities {
   course: number;

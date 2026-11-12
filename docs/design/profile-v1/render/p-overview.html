@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../layout-v2/render/v2.css"><link rel="stylesheet" href="profile.css">
+</head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="profile"></aside>
+  <main class="main">
+    <header class="ph" data-app="profile" data-s="概览" data-meta="更新于 今天 09:20"><span class="btn sm">刷新</span></header>
+    <div class="content">
+      <div class="cols ov">
+        <div class="panel id span3">
+          <div class="avatar">李</div>
+          <div class="who"><b>李同学</b><span>计算机科学与技术 · 计算机 2201<br>2022 级本科 · 大三 · 学号 2234567890</span></div>
+          <div class="kpi"><span class="k2">总 GPA</span><span class="v">3.62<small>/ 4.3</small></span><span class="d"><span class="up">↑ 0.12</span> 较上学期</span></div>
+          <div class="kpi"><span class="k2">已修学分</span><span class="v">118.5</span><span class="d">6 个学期 · 52 门课</span></div>
+          <div class="kpi"><span class="k2">校园卡余额</span><span class="v">¥ 236.40</span><span class="d">近 30 天支出 ¥ 684.50</span></div>
+          <div class="kpi"><span class="k2">体测总分</span><span class="v">82.6</span><span class="d"><span class="badge ok" style="height:18px">良好</span> 2025-2026</span></div>
+        </div>
+
+        <div class="panel pad chart">
+          <div class="ph2"><b>学业</b><span class="meta">学期 GPA</span><span class="more">成绩 →</span></div>
+          <svg viewBox="0 0 300 136">
+            <line class="gl" x1="30" x2="296" y1="10" y2="10"/><line class="gl" x1="30" x2="296" y1="35" y2="35"/>
+            <line class="gl" x1="30" x2="296" y1="60" y2="60"/><line class="gl" x1="30" x2="296" y1="85" y2="85"/>
+            <line class="base" x1="30" x2="296" y1="110" y2="110"/>
+            <text x="24" y="13" text-anchor="end">4.0</text><text x="24" y="63" text-anchor="end">3.6</text><text x="24" y="113" text-anchor="end">3.2</text>
+            <polyline class="ln" points="44,83.8 91,66.3 138,60 185,46.3 232,52.5 279,37.5"/>
+            <circle class="dot" cx="44" cy="83.8" r="4"/><circle class="dot" cx="91" cy="66.3" r="4"/><circle class="dot" cx="138" cy="60" r="4"/>
+            <circle class="dot" cx="185" cy="46.3" r="4"/><circle class="dot" cx="232" cy="52.5" r="4"/><circle class="dot" cx="279" cy="37.5" r="4"/>
+            <text class="val" x="279" y="26" text-anchor="middle">3.78</text>
+            <text x="44" y="128" text-anchor="middle">22 秋</text><text x="91" y="128" text-anchor="middle">23 春</text><text x="138" y="128" text-anchor="middle">23 秋</text>
+            <text x="185" y="128" text-anchor="middle">24 春</text><text x="232" y="128" text-anchor="middle">24 秋</text><text x="279" y="128" text-anchor="middle">25 春</text>
+          </svg>
+          <div class="blkh sec" style="font-size:11.5px;border-top:1px solid var(--divider);padding-top:10px">已修学分 · 按课程性质</div>
+          <div class="meters">
+            <div class="meter"><span>必修</span><span class="bar"><i style="width:100%"></i></span><span class="n">86.0</span></div>
+            <div class="meter"><span>选修</span><span class="bar"><i style="width:26%"></i></span><span class="n">22.5</span></div>
+            <div class="meter"><span>通识</span><span class="bar"><i style="width:11.6%"></i></span><span class="n">10.0</span></div>
+          </div>
+          <div class="blkh sec" style="font-size:11.5px;border-top:1px solid var(--divider);padding-top:10px">成绩分布 · 52 门</div>
+          <div class="meters">
+            <div class="meter"><span>优秀 ≥90</span><span class="bar"><i style="width:100%"></i></span><span class="n">21</span></div>
+            <div class="meter"><span>良好 80–89</span><span class="bar"><i style="width:85.7%"></i></span><span class="n">18</span></div>
+            <div class="meter"><span>中等 70–79</span><span class="bar"><i style="width:47.6%"></i></span><span class="n">10</span></div>
+            <div class="meter"><span>及格 60–69</span><span class="bar"><i style="width:14.3%"></i></span><span class="n">3</span></div>
+          </div>
+        </div>
+
+        <div class="panel pad chart">
+          <div class="ph2"><b>消费</b><span class="meta">近 30 天 · 按商户归类</span><span class="more">校园卡 →</span></div>
+          <div class="donut">
+            <svg viewBox="0 0 132 132">
+              <g transform="rotate(-90 66 66)" fill="none" stroke-width="16">
+                <circle cx="66" cy="66" r="52" stroke="var(--v1)" stroke-dasharray="242.4 326.7" stroke-dashoffset="0"/>
+                <circle cx="66" cy="66" r="52" stroke="var(--v2)" stroke-dasharray="44.1 326.7" stroke-dashoffset="-244.4"/>
+                <circle cx="66" cy="66" r="52" stroke="var(--v3)" stroke-dasharray="20.9 326.7" stroke-dashoffset="-290.5"/>
+                <circle cx="66" cy="66" r="52" stroke="var(--v-other)" stroke-dasharray="11.4 326.7" stroke-dashoffset="-313.3"/>
+              </g>
+              <text class="c" x="66" y="66" text-anchor="middle">¥ 684.5</text>
+              <text class="cs2" x="66" y="82" text-anchor="middle">日均 ¥ 22.8</text>
+            </svg>
+            <div class="lg">
+              <div><i style="background:var(--v1)"></i><span>餐饮</span><span class="n">512.30</span><span class="p">74.8%</span></div>
+              <div><i style="background:var(--v2)"></i><span>超市</span><span class="n">96.20</span><span class="p">14.1%</span></div>
+              <div><i style="background:var(--v3)"></i><span>热水 · 浴室</span><span class="n">48.00</span><span class="p">7.0%</span></div>
+              <div><i style="background:var(--v-other)"></i><span>其他</span><span class="n">28.00</span><span class="p">4.1%</span></div>
+            </div>
+          </div>
+          <div class="blkh sec" style="font-size:11.5px;border-top:1px solid var(--divider);padding-top:10px">用餐习惯 · 刷卡时间中位数</div>
+          <div class="stats">
+            <div class="stat"><div class="k2">早餐</div><div class="v">07:38<small>18 天</small></div></div>
+            <div class="stat"><div class="k2">午餐</div><div class="v">12:06<small>27 天</small></div></div>
+            <div class="stat"><div class="k2">晚餐</div><div class="v">18:14<small>25 天</small></div></div>
+            <div class="stat"><div class="k2">最常去</div><div class="v" style="font-size:14px">康桥苑餐厅<small>41 次</small></div></div>
+          </div>
+          <div class="blkh sec" style="font-size:11.5px;border-top:1px solid var(--divider);padding-top:10px">按星期 · 日均支出</div>
+          <div class="wkv"><span>24</span><span>23</span><span>26</span><span>22</span><span>25</span><span>17</span><span>14</span></div>
+          <div class="wk"><i style="height:86%"></i><i style="height:82%"></i><i class="on" style="height:100%"></i><i style="height:79%"></i><i style="height:89%"></i><i style="height:61%"></i><i style="height:50%"></i></div>
+          <div class="wkl"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        </div>
+        <div class="panel pad">
+          <div class="ph2"><b>健康</b><span class="meta">2025-2026 体测</span><span class="more">体测 →</span></div>
+          <div class="body">
+            <svg viewBox="0 0 120 200">
+              <line class="dim" x1="10" x2="10" y1="12" y2="186"/><line class="dim" x1="6" x2="14" y1="12" y2="12"/><line class="dim" x1="6" x2="14" y1="186" y2="186"/>
+              <text x="20" y="104" transform="rotate(-90 20 100)" text-anchor="middle">176.2 cm</text>
+              <circle class="sil" cx="72" cy="26" r="13"/>
+              <rect class="sil" x="52" y="44" width="40" height="64" rx="12"/>
+              <rect class="sil" x="39" y="48" width="11" height="56" rx="5.5"/>
+              <rect class="sil" x="94" y="48" width="11" height="56" rx="5.5"/>
+              <rect class="sil" x="54" y="106" width="16" height="80" rx="7"/>
+              <rect class="sil" x="74" y="106" width="16" height="80" rx="7"/>
+            </svg>
+            <div class="stats" style="grid-template-columns:1fr">
+              <div class="stat"><div class="k2">身高 / 体重</div><div class="v">176.2<small>cm</small> · 66.0<small>kg</small></div></div>
+              <div class="stat"><div class="k2">BMI</div><div class="v">21.3<small>正常</small></div></div>
+              <div>
+                <div class="range"><i style="background:#e3e7ee"></i><i style="background:#cfe6d8"></i><i style="background:#f6e3c6"></i><i style="background:#f5d3cf"></i><span class="pin" style="left:47%"></span></div>
+                <div class="rl" style="margin-top:4px"><span>偏瘦</span><span>正常</span><span>超重</span><span>肥胖</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="blkh sec" style="font-size:11.5px;border-top:1px solid var(--divider);padding-top:10px">体测单项 · 换算分</div>
+          <div class="meters">
+            <div class="meter"><span>肺活量</span><span class="bar"><i style="width:85%"></i></span><span class="n">85</span></div>
+            <div class="meter"><span>50 米</span><span class="bar"><i style="width:80%"></i></span><span class="n">80</span></div>
+            <div class="meter"><span>立定跳远</span><span class="bar"><i style="width:85%"></i></span><span class="n">85</span></div>
+            <div class="meter"><span>1000 米</span><span class="bar"><i style="width:72%"></i></span><span class="n">72</span></div>
+          </div>
+          <div class="stats" style="border-top:1px solid var(--divider);padding-top:10px">
+            <div class="stat"><div class="k2">视力 左 / 右</div><div class="v">4.8 / 4.9</div></div>
+            <div class="stat"><div class="k2">乐跑 本学期</div><div class="v">21<small>次</small> 68.4<small>km</small></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

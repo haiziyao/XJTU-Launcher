@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.wrap { display: grid; grid-template-columns: 1fr 228px; gap: 16px; flex: 1; min-height: 0; }
+.left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.card .h { display: flex; align-items: center; gap: 7px; }
+.card .h b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.card .h .real { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.card .cnt { font-size: 11.5px; color: var(--text-secondary); padding-left: 15px; }
+.card ul { list-style: none; margin: 0; padding: 0 0 0 15px; display: flex; flex-direction: column; gap: 2px; }
+.card li { font-size: 12px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.card li .ft { width: 24px; height: 14px; font-size: 8.5px; }
+.card li span { overflow: hidden; text-overflow: ellipsis; }
+.recent .thead, .recent .tr { grid-template-columns: 1fr 84px 64px 80px 96px; }
+.tree { border-left: 1px solid var(--border); padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 1px; }
+.tree .th { display: flex; font-size: 11.5px; color: var(--text-tertiary); height: 24px; align-items: center; }
+.node { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.node .tw { width: 8px; color: var(--text-tertiary); font-size: 9px; }
+.node .real { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.node .ct { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.node.on { background: var(--nav-active); color: var(--nav-active-text); font-weight: 500; }
+.node.d1 { padding-left: 20px; }
+.tree .tf { margin-top: auto; border-top: 1px solid var(--divider); padding: 8px 6px; font-size: 12px; color: var(--accent-text); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="workbench"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>工作台</h1>
+      <span class="term">2026-2027 秋季学期</span>
+      <div class="right"><span class="sample">示例数据</span><span class="search">搜索文件</span></div>
+    </div>
+    <nav class="sub">
+      <span class="sec" style="font-size:12px">13 门课程 · 128 个文件 · <span class="due-soon">1 项未交</span> · 同步于 10 分钟前</span>
+      <div class="tools">
+        <span class="btn">新建文件夹</span>
+        <span class="btn">添加文件</span>
+        <span class="btn">同步</span>
+      </div>
+    </nav>
+
+    <div class="content" style="padding-bottom:14px">
+      <div class="wrap">
+        <div class="left">
+          <div class="sh"><h2>课程文件夹</h2><span class="meta">按思源学堂课程自动建立 · 可改名</span></div>
+          <div class="cards">
+            <div class="card"><div class="h"><i class="cs c1"></i><b>计组</b><span class="real">计算机组成</span><span class="badge warn">1 未交</span></div><div class="cnt">24 文件 · 4 作业</div><ul><li><i class="ft">PPT</i><span>Chapter7 控制器.pptx</span></li><li><i class="ft">PDF</i><span>第4次作业_存储层次.pdf</span></li></ul></div>
+            <div class="card"><div class="h"><i class="cs c2"></i><b>计网</b><span class="real">计算机网络原理</span></div><div class="cnt">18 文件 · 2 作业</div><ul><li><i class="ft">PPT</i><span>第2章 网络体系结构.pptx</span></li><li><i class="ft">PDF</i><span>实验一 Wireshark.pdf</span></li></ul></div>
+            <div class="card"><div class="h"><i class="cs c3"></i><b>操作系统原理</b></div><div class="cnt">12 文件 · 3 作业</div><ul><li><i class="ft">PDF</i><span>进程与线程.pdf</span></li><li><i class="ft">PDF</i><span>实验指导书.pdf</span></li></ul></div>
+            <div class="card"><div class="h"><i class="cs c6"></i><b>人工智能</b></div><div class="cnt">9 文件 · 2 作业</div><ul><li><i class="ft">PDF</i><span>搜索算法.pdf</span></li><li><i class="ft">PDF</i><span>课程大纲.pdf</span></li></ul></div>
+            <div class="card"><div class="h"><i class="cs c1"></i><b>自然语言处理</b></div><div class="cnt">7 文件 · 1 作业</div><ul><li><i class="ft">PDF</i><span>注意力机制.pdf</span></li><li><i class="ft">MD</i><span>读书笔记.md</span></li></ul></div>
+            <div class="card"><div class="h"><i class="cs c4"></i><b>文学经典</b><span class="real">文学经典与热点透视</span></div><div class="cnt">3 文件 · 0 作业</div><ul><li><i class="ft">DOC</i><span>期末论文要求.docx</span></li><li><i class="ft">DOC</i><span>论文初稿.docx</span></li></ul></div>
+          </div>
+          <div class="sh" style="margin-top:4px"><h2>最近改动</h2><span class="meta">跨课程 · 按修改时间</span><span class="more">全部文件 ›</span></div>
+          <div class="panel recent">
+            <div class="thead"><span>文件</span><span>课程</span><span class="r">大小</span><span class="r">修改</span><span>绑定</span></div>
+            <div class="tr"><span class="c"><i class="ft">PDF</i><span class="ellip">第4次作业_存储层次.pdf</span></span><span class="sec">计组</span><span class="r num muted">386 KB</span><span class="r num muted">今天 10:12</span><span class="ellip">第四章作业</span></div>
+            <div class="tr"><span class="c"><i class="ft">PPT</i><span class="ellip">Chapter7 控制器.pptx</span></span><span class="sec">计组</span><span class="r num muted">4.1 MB</span><span class="r num muted">昨天 14:02</span><span class="muted">—</span></div>
+            <div class="tr"><span class="c"><i class="ft">PDF</i><span class="ellip">实验一 Wireshark.pdf</span></span><span class="sec">计网</span><span class="r num muted">1.8 MB</span><span class="r num muted">11-10</span><span class="ellip">实验一</span></div>
+            <div class="tr"><span class="c"><i class="ft">MD</i><span class="ellip">读书笔记.md</span></span><span class="sec">自然语言处理</span><span class="r num muted">8 KB</span><span class="r num muted">11-09</span><span class="muted">—</span></div>
+            <div class="tr"><span class="c"><i class="ft">DOC</i><span class="ellip">论文初稿.docx</span></span><span class="sec">文学经典</span><span class="r num muted">52 KB</span><span class="r num muted">11-08</span><span class="muted">—</span></div>
+          </div>
+        </div>
+
+        <div class="tree">
+          <div class="th">文件</div>
+          <div class="node on"><span class="tw">▾</span><i class="folder"></i>2026-2027 秋季学期<span class="ct">128</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>计组<span class="real">计算机组成</span><span class="ct">24</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>计网<span class="real">计算机网络原理</span><span class="ct">18</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>操作系统原理<span class="ct">12</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>人工智能<span class="ct">9</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>自然语言处理<span class="ct">7</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>文学经典<span class="real">文学经典与…</span><span class="ct">3</span></div>
+          <div class="node d1"><span class="tw">›</span><i class="folder"></i>期末复习<span class="real">自建</span><span class="ct">6</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2025-2026 春季学期<span class="ct">96</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2025-2026 秋季学期<span class="ct">84</span></div>
+          <div class="node"><span class="tw">›</span><i class="folder"></i>2024-2025 春季学期<span class="ct">71</span></div>
+          <div class="tf">在访达中打开</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

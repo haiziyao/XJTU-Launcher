@@ -21,10 +21,10 @@
 | `core/`                    | `config`、`storage`、`cache`、`network`、`vault`：路径、持久化与传输 |
 | `identity/`                | `accounts`、`auth`：账号文件、登录与校园会话                         |
 | `campus/`                  | `campus`（课表与校园协议）、`browser`、`timetable_custom`、`tool_names` |
-| `school/`                  | 校园业务服务：查询、LMS、评教、图书馆、场馆等                        |
+| `school/`                  | 校园业务服务：查询、LMS、评教、图书馆、场馆；`sports/` 与 `portal/` 存放按域名分类的接口适配器 |
 | `agent/`                   | Agent 运行时，以及 `providers`、`mcp`、`expose` 三个模型接入模块     |
 | `plugins/`                 | `manifest`（内置插件清单）、`settings`（插件设置）、`capture`（回放截取） |
-| `features/`                | `community`、`fonts`、`icons`、`personal_image`、`pet_desktop`、`updates` |
+| `features/`                | `community`、`fonts`、`icons`、`personal_image`、`pet_desktop`、`resources`、`updates` |
 | `workbench/`               | 工作台目录、文件绑定与提交                                           |
 
 `lib.rs` 把这批模块以 `pub(crate) use` 重新导出为 `crate::config`、`crate::auth` 等旧路径，命令层和其他模块无需跟着改调用点。新代码可以直接写真实路径（如 `crate::core::config`），也可以沿用根路径；同一个模块不要在两处各写一份逻辑。
@@ -83,7 +83,7 @@ commands/*  →  领域模块（agent / campus / school / workbench / identity /
 | `features/agent/`      | Agent 对话、历史、角色 / Skill / 任务、模型厂商、MCP 设置与暴露设置  |
 | `features/appearance/` | 主页主题、字体美化、桌面宠物页，以及 `theme.ts` / `fonts.ts`         |
 | `features/campus/`     | 畅行校园、课表、`components/` 下的校园子页面，以及登录 / 会话 / 预取 |
-| `features/community/`  | 社区广场页面与搜索逻辑                                               |
+| `features/community/`  | 社区广场、我的收藏、资源站点页与搜索逻辑                             |
 | `features/home/`       | 主页与入口链接页                                                     |
 | `features/personal/`   | 个人页、可编辑文本、图片裁剪                                         |
 | `features/plugins/`    | 插件中心、回放截取页、`capture/` 截取流水线与 `pluginGlyph.ts`       |
@@ -98,7 +98,7 @@ commands/*  →  领域模块（agent / campus / school / workbench / identity /
 | `src/components/ui/`                                        | 通用控件：按钮、标签页、设置列表、弹窗、空状态等                  |
 | `src/components/*.vue`                                      | 仍被多个功能共用的组件，如 `SidebarPet`、`PetArt`、`UpdateDialog` |
 | `src/types/<domain>.ts`                                     | IPC 与页面的领域类型；`src/types/index.ts` 统一转出               |
-| `src/shared/`                                               | 跨功能逻辑：`bridge`、`cache`、`domain`、`icons`、`markdown`、`notices`、`pets`、`updates` |
+| `src/shared/`                                               | 跨功能逻辑：`bridge`、`cache`、`clipboard`、`domain`、`icons`、`markdown`、`notices`、`pets`、`updates` |
 | `src/composables/`                                          | 跨页面组合式函数：侧栏拖拽、滑动指示器                            |
 | `src/styles/`                                               | 全局 token、控件、页面、壁纸与桌宠样式                            |
 | `src/dev/`                                                  | 仅开发期使用的图标对比页，不进入产品导航                          |

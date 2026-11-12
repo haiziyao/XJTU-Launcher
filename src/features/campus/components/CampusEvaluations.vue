@@ -2,14 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { ClipboardCheck } from 'lucide-vue-next';
-import SettingGroup from '../../../components/ui/SettingGroup.vue';
-import SettingRow from '../../../components/ui/SettingRow.vue';
-import EmptyState from '../../../components/ui/EmptyState.vue';
-import MenuSelect from '../../../components/ui/MenuSelect.vue';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import { bridge } from '../../../shared/bridge';
 import type { EvaluationList, EvaluationOutcome, EvaluationPreview } from '../../../types';
 
-import UiButton from '../../../components/ui/UiButton.vue';
 const list = ref<EvaluationList | null>(null);
 const selected = ref<string[]>([]);
 const rank = ref('2');
@@ -28,6 +24,22 @@ const allSelected = computed(
   () => !!list.value?.rows.length && selected.value.length === list.value.rows.length,
 );
 const courseCount = computed(() => preview.value?.courses.length ?? 0);
+const meta = computed(() =>
+  list.value ? `${selected.value.length} / ${list.value.rows.length} 份已选` : '',
+);
+const answerRows = computed(
+  () =>
+    preview.value?.courses.flatMap((course) =>
+      course.answers.map((answer, index) => ({
+        key: `${course.questionnaire.id}:${answer.id}`,
+        course: course.questionnaire.course,
+        teacher: course.questionnaire.teacher,
+        index: index + 1,
+        question: answer.question,
+        answer: answer.answer,
+      })),
+    ) ?? [],
+);
 
 async function load() {
   loading.value = true;
@@ -112,6 +124,14 @@ const statusLabel = (status: string) =>
     cancelled: '已取消',
     unknown: '结果不明',
   })[status] ?? status;
+const statusTone = (status: string) =>
+  status === 'submitted'
+    ? 'ok'
+    : status === 'failed'
+      ? 'danger'
+      : status === 'unknown'
+        ? 'warn'
+        : 'muted';
 
 onMounted(load);
 onBeforeUnmount(() => {
@@ -120,140 +140,242 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <p v-if="error" class="notice" role="alert">{{ error }}</p>
-  <SettingGroup v-if="!preview" title="待评问卷">
-    <EmptyState v-if="loading && !list" compact title="正在读取评教问卷…" />
-    <EmptyState
-      v-else-if="!list?.rows.length"
-      compact
-      :icon="ClipboardCheck"
-      title="没有待评问卷"
-      description="学校开放新的评教后，这里会显示对应课程。"
-    />
-    <template v-else>
-      <label class="eval-row eval-head">
-        <input
-          type="checkbox"
-          :checked="allSelected"
-          aria-label="全选待评问卷"
-          @change="toggleAll"
-        />
-        <span class="campus-record-main">
-          <strong>{{ selected.length }} / {{ list.rows.length }} 份问卷</strong>
-          <small>勾选要评的课程；预览不会提交</small>
-        </span>
-      </label>
-      <label v-for="row in list.rows" :key="row.id" class="eval-row">
-        <input v-model="selected" type="checkbox" :value="row.id" />
-        <span class="campus-record-main">
-          <strong>{{ row.course }}</strong>
-          <small>{{
-            [row.teacher, row.term, row.deadline && `截止 ${row.deadline}`]
-              .filter(Boolean)
-              .join(' · ')
-          }}</small>
-        </span>
-      </label>
-      <SettingRow title="评分模板" description="1 为最高档，预览会显示实际选项">
-        <MenuSelect
-          :model-value="rank"
-          :options="rankOptions"
-          label="评分模板"
-          @update:model-value="rank = $event"
-        />
-      </SettingRow>
-      <SettingRow title="文字意见" description="可选；必填文字题为空时不能提交">
-        <textarea
-          v-model="comment"
-          class="text-field eval-comment"
-          maxlength="4000"
-          aria-label="文字意见"
-        ></textarea>
-      </SettingRow>
-      <div class="campus-form-actions">
-        <UiButton variant="primary" :disabled="loading || !selected.length" @click="prepare">
-          {{ loading ? '生成预览…' : '预览答案' }}
-        </UiButton>
-      </div>
-    </template>
-  </SettingGroup>
+  <CampusHeaderSlot slot="meta">
+    <span v-if="meta">{{ meta }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <button type="button" class="cv-btn" :disabled="loading" @click="load">刷新</button>
+  </CampusHeaderSlot>
 
-  <template v-else>
-    <SettingGroup :title="`提交预览 · ${courseCount} 份`">
-      <p class="eval-hint">预览不会提交。确认答案无误后，再点击“提交评教”；提交由你手动触发。</p>
-      <div v-for="course in preview.courses" :key="course.questionnaire.id" class="eval-course">
-        <strong>{{ course.questionnaire.course }} · {{ course.questionnaire.teacher }}</strong>
-        <div v-for="answer in course.answers" :key="answer.id" class="eval-answer">
-          <span>{{ answer.question }}</span>
-          <span>{{ answer.answer }}</span>
+  <div
+    class="cv-cols lcr"
+    style="grid-template-columns: minmax(200px, 230px) minmax(0, 1fr) minmax(240px, 280px)"
+  >
+    <div class="cv-panel cv-list">
+      <template v-if="!preview">
+        <div class="cv-lh">
+          待评 {{ list?.rows.length ?? 0 }}
+          <button type="button" class="cv-link" style="margin-left: auto" @click="toggleAll">
+            {{ allSelected ? '全不选' : '全选' }}
+          </button>
+        </div>
+        <div v-if="loading && !list" class="cv-lh">正在读取评教问卷…</div>
+        <div v-else-if="!list?.rows.length" class="cv-empty" style="min-height: 140px">
+          <ClipboardCheck :size="20" /><b>没有待评问卷</b>
+          <span>学校开放新的评教后，这里会显示对应课程。</span>
+        </div>
+        <label v-for="row in list?.rows ?? []" :key="row.id" class="ev-item">
+          <input v-model="selected" type="checkbox" :value="row.id" />
+          <b>{{ row.course }}</b>
+          <span class="s">
+            {{
+              [row.teacher, row.term, row.deadline && `截止 ${row.deadline}`]
+                .filter(Boolean)
+                .join(' · ')
+            }}
+          </span>
+        </label>
+      </template>
+      <template v-else>
+        <div class="cv-lh">预览 {{ courseCount }} 份</div>
+        <div v-for="course in preview.courses" :key="course.questionnaire.id" class="ev-item done">
+          <b>{{ course.questionnaire.course }}</b>
+          <span class="s">{{ course.questionnaire.teacher }} · 预览答案</span>
+        </div>
+      </template>
+    </div>
+
+    <div class="cv-center">
+      <template v-if="preview">
+        <div class="cv-ch">
+          <b>预览答案</b>
+          <span class="meta">{{ courseCount }} 份课程 · {{ answerRows.length }} 题</span>
+        </div>
+        <div class="cv-panel cv-tbl">
+          <div class="cv-thead" style="--cols: 28px 1fr 128px">
+            <span>#</span><span>题目</span><span class="cv-r">答案</span>
+          </div>
+          <template v-for="course in preview.courses" :key="course.questionnaire.id">
+            <div class="cv-grp">
+              {{ course.questionnaire.course }}
+              <span class="n">{{ course.questionnaire.teacher }}</span>
+            </div>
+            <div
+              v-for="(answer, index) in course.answers"
+              :key="answer.id"
+              class="cv-tr"
+              style="--cols: 28px 1fr 128px"
+            >
+              <span class="cv-muted cv-num">{{ index + 1 }}</span>
+              <span class="cv-ellip">{{ answer.question }}</span>
+              <span class="cv-r cv-sec cv-ellip">{{ answer.answer }}</span>
+            </div>
+          </template>
+        </div>
+      </template>
+      <template v-else>
+        <div class="cv-ch">
+          <b>待评问卷</b>
+          <span class="meta">预览不会提交</span>
+        </div>
+        <div v-if="!list?.rows.length" class="cv-empty">
+          <ClipboardCheck :size="20" /><b>没有待评问卷</b>
+          <span>学校开放新的评教后，这里会显示对应课程。</span>
+        </div>
+        <div v-else class="cv-panel cv-tbl">
+          <div class="cv-thead" style="--cols: 1fr 92px 92px 96px">
+            <span>课程</span><span>教师</span><span>学期</span><span class="cv-r">截止</span>
+          </div>
+          <div
+            v-for="row in list.rows"
+            :key="row.id"
+            class="cv-tr"
+            style="--cols: 1fr 92px 92px 96px"
+            :class="{ 'cv-muted': !selected.includes(row.id) }"
+          >
+            <span class="cv-ellip">{{ row.course }}</span>
+            <span class="cv-sec cv-ellip">{{ row.teacher || '—' }}</span>
+            <span class="cv-muted cv-ellip">{{ row.term || '—' }}</span>
+            <span class="cv-r cv-num cv-muted">{{ row.deadline || '—' }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="outcomes?.length" class="cv-panel" style="margin-top: 2px">
+        <div class="cv-grp" style="position: static; top: auto">提交结果</div>
+        <div
+          v-for="row in outcomes"
+          :key="row.questionnaireId"
+          class="cv-tr"
+          style="--cols: 1fr auto; height: auto; padding: 6px 12px"
+        >
+          <span class="cv-tt">
+            <span class="cv-ellip">{{ row.course }}</span>
+            <small>{{ row.message }}</small>
+          </span>
+          <span class="cv-badge" :class="statusTone(row.status)">{{
+            statusLabel(row.status)
+          }}</span>
         </div>
       </div>
-      <div class="campus-form-actions">
-        <UiButton :disabled="submitting" @click="cancelPreview">取消预览</UiButton>
-        <UiButton variant="primary" :disabled="submitting" @click="submit">
-          {{ submitting ? '提交中…' : '提交评教' }}
-        </UiButton>
-      </div>
-    </SettingGroup>
-  </template>
-
-  <SettingGroup v-if="outcomes?.length" title="提交结果">
-    <div v-for="row in outcomes" :key="row.questionnaireId" class="campus-record two">
-      <span class="campus-record-main">
-        <strong>{{ row.course }}</strong>
-        <small>{{ row.message }}</small>
-      </span>
-      <span class="badge" :class="{ accent: row.status === 'submitted' }">{{
-        statusLabel(row.status)
-      }}</span>
     </div>
-  </SettingGroup>
+
+    <div class="cv-panel cv-detail">
+      <template v-if="!preview">
+        <div class="cv-type">评教设置</div>
+        <dl class="cv-kv">
+          <dt>已选</dt>
+          <dd>{{ selected.length }} 门课程</dd>
+          <dt>评分</dt>
+          <dd>
+            <select v-model="rank" class="cv-select" aria-label="评分模板">
+              <option v-for="option in rankOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </dd>
+        </dl>
+        <div class="cv-blk">
+          <h4>文字意见</h4>
+          <textarea
+            v-model="comment"
+            class="ev-ta"
+            maxlength="4000"
+            placeholder="可选；必填文字题为空时不能提交"
+            aria-label="文字意见"
+          ></textarea>
+        </div>
+        <div class="cv-blk">
+          <p>预览会显示实际选项，但不会提交。提交由你手动触发，提交后不能在应用内撤回。</p>
+        </div>
+        <div class="cv-foot">
+          <button
+            type="button"
+            class="cv-btn primary"
+            :disabled="loading || !selected.length"
+            @click="prepare"
+          >
+            {{ loading ? '生成预览…' : `预览 ${selected.length} 门` }}
+          </button>
+        </div>
+      </template>
+      <template v-else>
+        <div class="cv-type">
+          提交预览
+          <span class="cv-badge accent">未提交</span>
+        </div>
+        <h3>{{ courseCount }} 门课程</h3>
+        <dl class="cv-kv">
+          <dt>评分</dt>
+          <dd>{{ rankOptions.find((option) => option.value === rank)?.label }}</dd>
+          <dt>文字</dt>
+          <dd>{{ comment.trim() || '未填写' }}</dd>
+        </dl>
+        <div class="cv-blk">
+          <p>提交后不能在应用内撤回。结果不明时不会自动重试，请到评教系统核对。</p>
+        </div>
+        <div class="cv-foot">
+          <button type="button" class="cv-btn primary" :disabled="submitting" @click="submit">
+            {{ submitting ? '提交中…' : `确认提交 ${courseCount} 门` }}
+          </button>
+          <button type="button" class="cv-btn" :disabled="submitting" @click="cancelPreview">
+            取消预览
+          </button>
+        </div>
+      </template>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.eval-row {
-  display: flex;
+.ev-item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 8px;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  padding: 6px 8px;
+  border-radius: 6px;
   cursor: pointer;
 }
-.eval-row input {
+.ev-item:hover {
+  background: var(--surface-hover);
+}
+.ev-item input {
   margin: 0;
   accent-color: var(--accent);
 }
-.eval-head {
-  cursor: default;
+.ev-item b {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.eval-comment {
-  height: 72px;
+.ev-item .s {
+  grid-column: 2;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ev-item.done {
+  cursor: default;
+  opacity: 0.7;
+}
+.ev-ta {
+  height: 74px;
   padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
   resize: vertical;
 }
-.eval-hint {
-  padding: 12px 16px;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-}
-.eval-course {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px;
-}
-.eval-course strong {
-  font-size: 13px;
-  font-weight: 500;
-}
-.eval-answer {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-}
-.eval-answer span:last-child {
-  color: var(--text);
-  text-align: right;
+.ev-ta:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 </style>

@@ -502,6 +502,10 @@ describe('attendance stats', () => {
   });
 });
 
+it('ships the pet and font tools off by default', () => {
+  expect(defaultConfig().disabledPlugins).toEqual(['cn.xjtu.desktop-pet', 'cn.xjtu.font-beautify']);
+});
+
 it('shows enabled plugins and ignores the legacy hidden list', () => {
   const plugins = [{ id: 'local.one' }, { id: 'local.two' }] as Plugin[];
   const config = { ...defaultConfig(), hiddenPlugins: ['local.one'] };

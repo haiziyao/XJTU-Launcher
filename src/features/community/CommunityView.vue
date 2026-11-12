@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { CSSProperties } from 'vue';
-import { ArrowLeft, Search } from 'lucide-vue-next';
+import { ArrowLeft, Search, Star } from 'lucide-vue-next';
 import { bridge } from '../../shared/bridge';
-import { AGENT_REASON_TEXT, COMMUNITY_SECTIONS, searchSections } from './community';
-import type { CommunitySection } from './community';
-import type { AgentSearchReason, AgentSearchStatus } from '../../types';
+import {
+  AGENT_REASON_TEXT,
+  COMMUNITY_FAVORITES_KEY,
+  COMMUNITY_SECTIONS,
+  parseFavoriteIds,
+  searchSections,
+  toggleFavoriteId,
+} from './community';
+import type { CommunitySection, CommunitySectionId } from './community';
+import ResourceSitesView from './ResourceSitesView.vue';
+import type { AgentSearchReason, AgentSearchStatus, ResourceCatalog } from '../../types';
 import PageHeader from '../../components/ui/PageHeader.vue';
 import UiButton from '../../components/ui/UiButton.vue';
 import UiIconButton from '../../components/ui/UiIconButton.vue';
@@ -19,7 +27,20 @@ type SearchPanel =
 /** A successful reachability probe is reused for a minute. */
 const PROBE_TTL = 60_000;
 
+/** Compact favorites tile measurements, matched by the reference sheet. */
+const FAVORITE_TILE = 84;
+const FAVORITE_MIN_GAP = 8;
+const FAVORITE_MAX_WIDTH = 280;
+
 const activeSection = ref<CommunitySection | null>(null);
+const favorites = ref<CommunitySectionId[]>([]);
+const hoveredFavorite = ref<CommunitySectionId | null>(null);
+const favoriteRow = ref<HTMLElement | null>(null);
+const favoriteOpenWidth = ref(FAVORITE_MAX_WIDTH);
+const resourceCatalog = ref<ResourceCatalog | null>(null);
+const resourceLoading = ref(false);
+const resourceError = ref('');
+let resourceRequested = false;
 const query = ref('');
 const mode = ref<SearchMode>('normal');
 const panel = ref<SearchPanel | null>(null);
@@ -32,6 +53,11 @@ let probeSucceededAt = 0;
 /** Ignores an Agent answer that finishes after the user changed the search. */
 let searchGeneration = 0;
 
+const favoriteSections = computed(() =>
+  favorites.value
+    .map((id) => COMMUNITY_SECTIONS.find((section) => section.id === id))
+    .filter((section): section is CommunitySection => Boolean(section)),
+);
 const modeLabel = computed(() => (mode.value === 'agent' ? 'Agent' : '普通'));
 const agentDisabled = computed(() => !agentAvailable.value || agentChecking.value);
 const agentStatusText = computed(() => {
@@ -44,6 +70,50 @@ function sectionStyle(section: CommunitySection): CSSProperties {
     '--section-accent': section.accent,
     '--section-soft': section.accentSoft,
   };
+}
+
+function favoriteStyle(section: CommunitySection): CSSProperties {
+  return { ...sectionStyle(section), '--favorite-open-width': `${favoriteOpenWidth.value}px` };
+}
+
+function readFavorites() {
+  try {
+    favorites.value = parseFavoriteIds(localStorage.getItem(COMMUNITY_FAVORITES_KEY));
+  } catch {
+    favorites.value = [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(COMMUNITY_FAVORITES_KEY, JSON.stringify(favorites.value));
+  } catch {
+    // Favorites only affect this device; a full storage quota is not an error.
+  }
+}
+
+function toggleFavorite(id: CommunitySectionId) {
+  favorites.value = toggleFavoriteId(favorites.value, id);
+  saveFavorites();
+  if (hoveredFavorite.value && !favorites.value.includes(hoveredFavorite.value)) {
+    hoveredFavorite.value = null;
+  }
+}
+
+/**
+ * Expands one tile up to 280px, but never wider than the room the row has once
+ * every compact tile and the minimum gaps are accounted for.
+ */
+function openFavorite(id: CommunitySectionId) {
+  const count = favorites.value.length;
+  const compactWidth = count * FAVORITE_TILE + Math.max(0, count - 1) * FAVORITE_MIN_GAP;
+  const available = favoriteRow.value?.clientWidth ?? 0;
+  const width = Math.max(
+    FAVORITE_TILE,
+    Math.min(FAVORITE_MAX_WIDTH, available - compactWidth + FAVORITE_TILE),
+  );
+  favoriteOpenWidth.value = width;
+  hoveredFavorite.value = width > FAVORITE_TILE ? id : null;
 }
 
 function applyAgentStatus(status: AgentSearchStatus) {
@@ -103,10 +173,10 @@ function submitSearch() {
   }
 }
 
-function errorText(error: unknown): string {
+function errorText(error: unknown, fallback = 'Agent 搜索失败'): string {
   if (typeof error === 'string' && error.trim()) return error.trim();
   if (error instanceof Error && error.message) return error.message;
-  return 'Agent 搜索失败';
+  return fallback;
 }
 
 async function runAgentSearch(value: string) {
@@ -136,8 +206,25 @@ async function runAgentSearch(value: string) {
   }
 }
 
+async function loadResourceSites() {
+  if (resourceRequested) return;
+  resourceRequested = true;
+  resourceLoading.value = true;
+  resourceError.value = '';
+  try {
+    resourceCatalog.value = await bridge.resourceSites();
+  } catch (error) {
+    // Retry on the next entry so a transient read failure is not sticky.
+    resourceRequested = false;
+    resourceError.value = errorText(error, '无法读取资源站点');
+  } finally {
+    resourceLoading.value = false;
+  }
+}
+
 function openSection(section: CommunitySection) {
   activeSection.value = section;
+  if (section.id === 'links') void loadResourceSites();
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -145,6 +232,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  readFavorites();
   // Local checks only; opening the page must not request the model service.
   void fetchAgentStatus(false);
   window.addEventListener('keydown', onKeydown);
@@ -156,7 +244,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-if="activeSection" class="desktop-page community-page">
+  <ResourceSitesView
+    v-if="activeSection?.id === 'links'"
+    :catalog="resourceCatalog"
+    :loading="resourceLoading"
+    :error="resourceError"
+    @back="activeSection = null"
+  />
+
+  <section v-else-if="activeSection" class="desktop-page community-page">
     <UiButton variant="ghost" class="back-button" @click="activeSection = null">
       <ArrowLeft :size="15" />返回社区广场
     </UiButton>
@@ -173,46 +269,103 @@ onBeforeUnmount(() => {
   <section v-else class="desktop-page community-page">
     <PageHeader title="社区广场" />
 
-    <nav class="community-grid" aria-label="社区板块">
-      <button
-        v-for="section in COMMUNITY_SECTIONS"
-        :key="section.id"
-        type="button"
-        class="community-card"
-        :style="sectionStyle(section)"
-        @click="openSection(section)"
+    <section class="community-block" aria-label="我的收藏">
+      <h2 class="community-block-label">我的收藏</h2>
+      <div
+        v-if="favoriteSections.length"
+        ref="favoriteRow"
+        class="favorite-row"
+        :class="{ 'has-open': hoveredFavorite }"
       >
-        <span class="community-card-body">
-          <span class="community-card-heading">
-            <span class="community-card-icon" aria-hidden="true">
-              <component :is="section.icon" :size="15" :stroke-width="1.9" />
+        <div
+          v-for="section in favoriteSections"
+          :key="section.id"
+          class="favorite-tile"
+          :class="{ 'is-open': hoveredFavorite === section.id }"
+          :style="favoriteStyle(section)"
+          role="button"
+          tabindex="0"
+          :aria-label="`${section.title}，已收藏`"
+          @click="openSection(section)"
+          @keydown.enter.prevent="openSection(section)"
+          @keydown.space.prevent="openSection(section)"
+          @mouseenter="openFavorite(section.id)"
+          @mouseleave="hoveredFavorite = null"
+          @focusin="openFavorite(section.id)"
+          @focusout="hoveredFavorite = null"
+        >
+          <span class="favorite-badge" aria-hidden="true">
+            <component :is="section.icon" :size="19" :stroke-width="1.8" />
+          </span>
+          <span class="favorite-name">{{ section.title }}</span>
+          <span class="favorite-desc">{{ section.description }}</span>
+          <button
+            type="button"
+            class="community-star is-on favorite-star"
+            :aria-label="`取消收藏 ${section.title}`"
+            @click.stop="toggleFavorite(section.id)"
+          >
+            <Star :size="13" fill="currentColor" />
+          </button>
+        </div>
+      </div>
+      <p v-else class="favorite-empty">
+        还没有收藏。点击下方板块右上角的星标，收藏后会出现在这里。
+      </p>
+    </section>
+
+    <section class="community-block" aria-label="全部板块">
+      <h2 class="community-block-label">全部板块</h2>
+      <nav class="community-grid">
+        <div
+          v-for="section in COMMUNITY_SECTIONS"
+          :key="section.id"
+          class="community-card-shell"
+          :style="sectionStyle(section)"
+        >
+          <button type="button" class="community-card" @click="openSection(section)">
+            <span class="community-card-body">
+              <span class="community-card-heading">
+                <span class="community-card-icon" aria-hidden="true">
+                  <component :is="section.icon" :size="15" :stroke-width="1.9" />
+                </span>
+                <strong>{{ section.title }}</strong>
+              </span>
+              <span class="community-card-description">{{ section.description }}</span>
             </span>
-            <strong>{{ section.title }}</strong>
-          </span>
-          <span class="community-card-description">{{ section.description }}</span>
-        </span>
-        <span class="community-media" aria-hidden="true">
-          <span class="community-media-layer is-a">
-            <span class="community-media-glow"></span>
-            <component
-              :is="section.icon"
-              :size="38"
-              :stroke-width="1.25"
-              class="community-media-icon"
-            />
-          </span>
-          <span class="community-media-layer is-b">
-            <span class="community-media-glow"></span>
-            <component
-              :is="section.icon"
-              :size="38"
-              :stroke-width="1.25"
-              class="community-media-icon"
-            />
-          </span>
-        </span>
-      </button>
-    </nav>
+            <span class="community-media" aria-hidden="true">
+              <span class="community-media-layer is-a">
+                <span class="community-media-glow"></span>
+                <component
+                  :is="section.icon"
+                  :size="38"
+                  :stroke-width="1.25"
+                  class="community-media-icon"
+                />
+              </span>
+              <span class="community-media-layer is-b">
+                <span class="community-media-glow"></span>
+                <component
+                  :is="section.icon"
+                  :size="38"
+                  :stroke-width="1.25"
+                  class="community-media-icon"
+                />
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            class="community-star"
+            :class="{ 'is-on': favorites.includes(section.id) }"
+            :aria-label="`${favorites.includes(section.id) ? '取消收藏' : '收藏'} ${section.title}`"
+            @click="toggleFavorite(section.id)"
+          >
+            <Star :size="14" :fill="favorites.includes(section.id) ? 'currentColor' : 'none'" />
+          </button>
+        </div>
+      </nav>
+    </section>
 
     <section class="community-search" aria-label="社区搜索">
       <form class="community-search-form" role="search" @submit.prevent="submitSearch">
@@ -293,6 +446,138 @@ onBeforeUnmount(() => {
   padding-bottom: 8px;
 }
 
+.community-block + .community-block {
+  margin-top: 26px;
+}
+.community-block-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Favorites strip: compact squares keep their width, the hovered one grows,
+   and the row's gaps close so both sides move outward. */
+.favorite-row {
+  --favorite-spring: cubic-bezier(0.28, 1.12, 0.42, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  min-height: 96px;
+  padding: 6px 0 10px;
+  transition: gap 340ms var(--ease-out);
+}
+.favorite-row.has-open {
+  gap: 8px;
+}
+
+.favorite-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel, var(--surface));
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  outline: none;
+  transition:
+    width 340ms var(--ease-out),
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.favorite-tile.is-open {
+  width: var(--favorite-open-width, 280px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+.favorite-tile:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+/* One icon and one label morph from the stacked compact layout into the
+   horizontal expanded layout. No second copy, no cross-fade. */
+.favorite-badge {
+  position: absolute;
+  top: 25px;
+  left: 20px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--section-soft);
+  color: var(--section-accent);
+  transform: translate(5px, -12px);
+  transition: transform 340ms var(--favorite-spring);
+}
+.favorite-tile.is-open .favorite-badge {
+  transform: none;
+}
+
+.favorite-name {
+  position: absolute;
+  top: 22px;
+  left: 68px;
+  overflow: hidden;
+  max-width: 72px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translate(calc(-50% - 26px), 32px);
+  transition:
+    transform 340ms var(--favorite-spring),
+    max-width 340ms var(--ease-out);
+}
+.favorite-tile.is-open .favorite-name {
+  max-width: none;
+  transform: none;
+}
+
+.favorite-desc {
+  position: absolute;
+  top: 45px;
+  right: 20px;
+  left: 68px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 17px;
+  opacity: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-10px);
+  transition:
+    opacity 120ms ease,
+    transform 200ms var(--ease-out);
+}
+.favorite-tile.is-open .favorite-desc {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 180ms ease 110ms,
+    transform 300ms var(--ease-out) 110ms;
+}
+
+.favorite-empty {
+  display: grid;
+  place-items: center;
+  min-height: 84px;
+  margin: 0 0 8px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+
 /* Cards: 3 + 2 at full width, then 2 and 1 column as the window narrows. */
 .community-grid {
   display: grid;
@@ -300,11 +585,18 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
+.community-card-shell {
+  position: relative;
+  display: grid;
+}
+
 .community-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  height: 100%;
   min-height: 128px;
   padding: 16px 16px 16px 18px;
   border: 1px solid var(--border);
@@ -317,6 +609,46 @@ onBeforeUnmount(() => {
     border-color var(--duration-fast) ease,
     box-shadow var(--duration-fast) ease,
     transform var(--duration-fast) var(--ease-out);
+}
+
+/* Star in the card's top-right corner, above the decorative media block. */
+.community-star {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-tertiary);
+  opacity: 0.75;
+  backdrop-filter: blur(4px);
+  transition:
+    opacity 150ms ease,
+    color 150ms ease,
+    background 150ms ease,
+    transform 150ms var(--ease-out);
+}
+.community-star:hover {
+  background: #fff;
+  color: var(--text-secondary);
+  opacity: 1;
+}
+.community-star.is-on {
+  color: #c98a12;
+  opacity: 1;
+}
+.community-star:active {
+  transform: scale(0.85);
+}
+.favorite-star {
+  top: 4px;
+  right: 4px;
 }
 .community-card:hover {
   border-color: var(--border-strong);
@@ -629,8 +961,17 @@ onBeforeUnmount(() => {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .community-card:active {
+  .community-card:active,
+  .community-star:active {
     transform: none;
+  }
+  .favorite-row,
+  .favorite-tile,
+  .favorite-badge,
+  .favorite-name,
+  .favorite-desc {
+    transition-duration: 0.01ms;
+    transition-delay: 0ms;
   }
   .community-media-layer {
     animation: none;

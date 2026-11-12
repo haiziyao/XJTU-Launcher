@@ -64,6 +64,11 @@ pub fn read(app: &AppHandle, key: &str) -> Option<Value> {
     read_at(&cache_dir(app).ok()?, &active_scope(app), key)
 }
 
+/// A stored answer for one account, even when it is no longer the active one.
+pub fn read_for(app: &AppHandle, scope: &str, key: &str) -> Option<Value> {
+    read_at(&cache_dir(app).ok()?, scope, key)
+}
+
 fn read_fresh_at(base: &Path, scope: &str, key: &str, max_age: Duration) -> Option<Value> {
     check_key(key).ok()?;
     let path = entry_path_in(base, scope, key);

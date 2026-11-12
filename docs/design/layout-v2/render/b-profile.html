@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.id { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.photo { width: 84px; height: 108px; border-radius: 8px; background: linear-gradient(#e9ecf0, #dde1e6); margin-bottom: 6px; }
+.id b { font-size: 16px; font-weight: 600; }
+.id .no { font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.id .tag { font-size: 11.5px; color: var(--text-tertiary); }
+.groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.g { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.g h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.g .kv { grid-template-columns: 72px 1fr; row-gap: 7px; font-size: 12.5px; }
+.g.wide { grid-column: 1 / 3; }
+.g.wide .kv { grid-template-columns: 72px 1fr 72px 1fr; }
+.fit .thead, .fit .tr { grid-template-columns: 1fr 80px 70px; }
+.fit .tr { height: 32px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="生活" data-s="学籍档案"><span class="btn">复制学号</span></header>
+    <div class="content">
+      <div class="cols l-c" style="grid-template-columns: 200px 1fr; align-content:start">
+        <div class="panel id">
+          <div class="photo"></div>
+          <b>李同学</b>
+          <span class="no">2234567890</span>
+          <span class="tag">计算机科学与技术 · 计算机 2201</span>
+          <span class="tag">兴庆校区 · 2022 级</span>
+        </div>
+
+        <div class="center">
+          <div class="groups">
+            <div class="panel g">
+              <h4>学籍</h4>
+              <dl class="kv" style="margin:0">
+                <dt>年级</dt><dd>2022 级</dd>
+                <dt>学制</dt><dd>4 年</dd>
+                <dt>入学日期</dt><dd class="num">2022-09-01</dd>
+                <dt>校区</dt><dd>兴庆校区</dd>
+              </dl>
+            </div>
+            <div class="panel g">
+              <h4>院系</h4>
+              <dl class="kv" style="margin:0">
+                <dt>学院</dt><dd>电子与信息学部</dd>
+                <dt>系</dt><dd>计算机科学与技术学院</dd>
+                <dt>专业</dt><dd>计算机科学与技术</dd>
+                <dt>班级</dt><dd>计算机 2201</dd>
+              </dl>
+            </div>
+            <div class="panel g">
+              <h4>个人</h4>
+              <dl class="kv" style="margin:0">
+                <dt>性别</dt><dd>男</dd>
+                <dt>出生日期</dt><dd class="num">2004-05-16</dd>
+                <dt>证件号</dt><dd class="num">6101 **** **** **12 <span class="link" style="font-size:11.5px">显示</span></dd>
+              </dl>
+            </div>
+            <div class="panel g">
+              <h4>班主任与辅导员</h4>
+              <dl class="kv" style="margin:0">
+                <dt>班主任</dt><dd>周老师 <span class="muted num">138 **** 2201</span></dd>
+                <dt>辅导员</dt><dd>吴老师 <span class="muted num">139 **** 6603</span></dd>
+                <dt>办公室</dt><dd>东 2 楼 312</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

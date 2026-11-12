@@ -29,6 +29,7 @@ export type SchoolQuery =
   | { type: 'evaluations'; finished: boolean }
   | { type: 'fitness' }
   | { type: 'fitnessScore'; year: string }
+  | { type: 'fitnessItem'; item: number; year: string }
   | { type: 'profile' }
   | { type: 'lmsCourses' }
   | { type: 'lmsActivities'; course: number }
@@ -90,6 +91,8 @@ export interface AttendanceRecord {
   week: string;
   place: string;
   teacher: string;
+  /** Matched from the timetable by weekday, week and sections; empty if unknown. */
+  course?: string;
   status: 'pending' | 'normal' | 'late' | 'absent' | 'leave' | 'notRequired' | 'unknown';
 }
 export interface AttendanceRecords {
@@ -201,6 +204,8 @@ export interface FitnessItem {
   key: string;
   name: string;
   score: string;
+  /** 换算分（平台 `*_score2`），没有时为空。 */
+  converted: string;
   grade: string;
 }
 export interface FitnessScore {
@@ -216,6 +221,20 @@ export interface FitnessScore {
 }
 export interface FitnessYears {
   rows: FitnessYear[];
+}
+/**
+ * One fitness item's raw measurement and history, keeping the platform shape:
+ * `info.value_1` / `info.value_2` are the raw values (item 1 is height in cm
+ * and weight in kg), `info.photo_url` exists for some items, `list` is the
+ * history. History row fields are not part of the adapter yet.
+ */
+export interface FitnessItemDetail {
+  info: {
+    value_1?: string | number;
+    value_2?: string | number;
+    photo_url?: string;
+  } | null;
+  list: Record<string, unknown>[];
 }
 export interface EvaluationOutcome {
   questionnaireId: string;

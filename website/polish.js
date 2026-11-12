@@ -1,4 +1,4 @@
-// Pointer polish for the homepage: carousel tilt/sheen and download-card edge light.
+// Pointer polish for the homepage: carousel tilt and download-card edge light.
 // Skipped on touch devices and when the visitor asks for reduced motion.
 (() => {
   const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -7,7 +7,7 @@
 
   const clamp = (v) => Math.min(1, Math.max(0, v));
 
-  // Carousel: tilt and sheen follow the pointer over the active window.
+  // Carousel: the active window tilts toward the pointer.
   const stage = document.querySelector('#carousel .stage');
   if (stage) {
     let raf = 0;
@@ -18,8 +18,6 @@
       stage.querySelectorAll('.window').forEach((w) => {
         w.style.removeProperty('--rx');
         w.style.removeProperty('--ry');
-        w.style.removeProperty('--mx');
-        w.style.removeProperty('--my');
       });
       win = null;
     };
@@ -40,8 +38,6 @@
       const y = clamp((point.y - r.top) / r.height);
       win.style.setProperty('--ry', ((x - 0.5) * 6).toFixed(2) + 'deg');
       win.style.setProperty('--rx', ((0.5 - y) * 4).toFixed(2) + 'deg');
-      win.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
-      win.style.setProperty('--my', (y * 100).toFixed(1) + '%');
     };
 
     stage.addEventListener('pointermove', (event) => {

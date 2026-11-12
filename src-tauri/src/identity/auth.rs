@@ -27,6 +27,9 @@ use zeroize::Zeroizing;
 
 const CAS: &str = "https://login.xjtu.edu.cn";
 const VPN_LOGIN: &str = "https://webvpn.xjtu.edu.cn/login?cas_login=true";
+/// Returned when a WebVPN-mapped request lands on the portal login page: the
+/// saved portal session expired even though the service cookies may not have.
+pub(crate) const PORTAL_EXPIRED: &str = "WebVPN 会话已失效，请重新登录校园账号";
 const YWTB: &str = "https://login.xjtu.edu.cn/cas/login?service=https%3A%2F%2Fywtb.xjtu.edu.cn%2F%3Fpath%3Dhttps%253A%252F%252Fywtb.xjtu.edu.cn%252Fmain.html%2523%252FIndex";
 const TTL: Duration = Duration::from_secs(15 * 60);
 
@@ -298,6 +301,61 @@ pub async fn direct_login(
     .await
 }
 
+/// Direct login for services whose first pass can stop on an OAuth
+/// intermediate page. The caller gets the cookie jar and the landing page, so
+/// it can tell whether the target service was actually reached and ask again
+/// now that the CAS cookies are in the jar.
+pub(crate) async fn direct_login_landing(
+    service: &str,
+    username: &str,
+    password: &str,
+    visitor: &str,
+) -> Result<(Transport, Page), String> {
+    service_login_landing(
+        service,
+        AccessMode::Direct,
+        None,
+        username,
+        password,
+        visitor,
+    )
+    .await
+}
+
+/// The same login for a service that may be reached through WebVPN. `saved`
+/// seeds the portal session so the mapped service page does not bounce back to
+/// the VPN login screen.
+pub(crate) async fn service_login_landing(
+    service: &str,
+    mode: AccessMode,
+    saved: Option<&str>,
+    username: &str,
+    password: &str,
+    visitor: &str,
+) -> Result<(Transport, Page), String> {
+    direct_login_page(service, mode, saved, username, password, visitor).await
+}
+
+/// Signs in to the WebVPN portal itself and returns its cookie jar. The portal
+/// session is stored separately from each service, so it can expire while the
+/// saved service cookies still look present.
+pub(crate) async fn portal_login(
+    username: &str,
+    password: &str,
+    visitor: &str,
+) -> Result<String, String> {
+    let (transport, _) = direct_login_page(
+        VPN_LOGIN,
+        AccessMode::Direct,
+        None,
+        username,
+        password,
+        visitor,
+    )
+    .await?;
+    transport.snapshot()
+}
+
 /// Signs in to a service through the mode the account already uses. In WebVPN
 /// mode `saved` seeds the transport with the portal session, so the mapped
 /// service page does not bounce to the VPN login screen.
@@ -335,14 +393,24 @@ async fn direct_login_page(
     let transport = Transport::new(saved)?;
     let mut page = transport.page(&service, mode, degree).await?;
     if page.url.host_str() != Some("login.xjtu.edu.cn") {
+        if mode == AccessMode::Webvpn && network::webvpn_host(&page.url) {
+            return Err(PORTAL_EXPIRED.into());
+        }
         // A seeded WebVPN jar may still hold a CAS session, in which case the
         // service lands directly on its own page instead of the login form.
-        if page.url.host_str() == service.host_str() && page.status.is_success() {
+        // An OAuth service can also hand the session to another host: the
+        // venue login ends on the booking site, the profile one on hello, and
+        // neither is the address the flow started from. A successful landing
+        // is the end of the chain; the caller still verifies the page it needs.
+        if page.status.is_success() {
             return Ok((transport, page));
         }
         // Without the CAS page there is nothing to submit; do not keep a
         // service session that cannot authenticate the user.
-        return Err("无法自动登录该校园服务，请稍后重试".into());
+        return Err(format!(
+            "无法自动登录该校园服务（停留在 {}），请稍后重试",
+            page.url.host_str().unwrap_or("未知页面")
+        ));
     }
     let first = parse_form(&page.html).ok_or("校园认证页面格式发生变化，请手动登录")?;
     let response = transport
@@ -413,6 +481,9 @@ async fn direct_login_page(
             .map_err(|_| "校园登录提交失败，请检查网络")?;
         page = transport.follow(response, mode, degree).await?;
         if page.url.host_str() != Some("login.xjtu.edu.cn") {
+            if mode == AccessMode::Webvpn && network::webvpn_host(&page.url) {
+                return Err(PORTAL_EXPIRED.into());
+            }
             return Ok((transport, page));
         }
         if has_error(&page.html) {

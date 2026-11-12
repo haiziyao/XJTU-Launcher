@@ -1,8 +1,9 @@
 //! Tauri commands for the school domain.
 
-use super::session::renew_lms_session;
+use super::session::{renew_fitness_session, renew_lms_session, renew_venue_session};
 use super::workbench::{load_sync, run_workbench, sync_state_path};
 use crate::*;
+use sha2::Digest;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use tauri::{Emitter, WebviewWindow};
@@ -13,10 +14,23 @@ pub(crate) fn school_catalog(window: WebviewWindow) -> Result<Vec<school::Featur
     Ok(school::catalog())
 }
 
+/// Feature ids predate the split into 畅行校园 / 预约中心 / 个人画像, so they
+/// do not equal the plugin ids. Map each query to the plugin that owns its
+/// page; otherwise disabling a campus plugin would not stop its background
+/// queries.
+fn plugin_for_feature(feature: &str) -> &'static str {
+    match feature {
+        "card" | "fitness" | "profile" => "cn.xjtu.campus-profile",
+        "library" | "venues" => "cn.xjtu.campus-reservations",
+        "timetable" => "cn.xjtu.timetable",
+        _ => "cn.xjtu.campus",
+    }
+}
+
 pub(crate) fn require_school_feature(app: &tauri::AppHandle, feature: &str) -> Result<(), String> {
     if config::load(&config_path(app)?)?
         .disabled_plugins
-        .contains(&format!("cn.xjtu.{feature}"))
+        .contains(&plugin_for_feature(feature).to_string())
     {
         return Err("请先启用此校园插件".into());
     }
@@ -60,6 +74,149 @@ pub(crate) async fn save_school_session(
     accounts::save(&path, &book)
 }
 
+/// Attendance rows carry no course name. Fill it from the timetable this
+/// account last synced, so the page never has to guess one in the frontend.
+fn with_attendance_courses(
+    app: &tauri::AppHandle,
+    account_id: &str,
+    mut data: serde_json::Value,
+) -> serde_json::Value {
+    let Some(value) = cache::read_for(app, account_id, "timetable") else {
+        return data;
+    };
+    let Ok(timetable) = serde_json::from_value::<crate::campus::Timetable>(value) else {
+        return data;
+    };
+    school::label_courses(&mut data, &timetable);
+    data
+}
+
+/// Calendar images live in the runtime cache, keyed by their published URL.
+/// They are never packaged with the app: the cache directory is per install
+/// and can be deleted at any time.
+const CALENDAR_IMAGE_MAX: u64 = 12 * 1024 * 1024;
+
+fn calendar_image_path(app: &tauri::AppHandle, url: &url::Url) -> Result<PathBuf, String> {
+    if !crate::network::campus_web_url(url) {
+        return Err("校历图片地址无效".into());
+    }
+    let path = url.path().to_ascii_lowercase();
+    let extension = if path.ends_with(".png") {
+        "png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "jpg"
+    } else {
+        return Err("校历图片格式不支持".into());
+    };
+    let name = hex::encode(sha2::Sha256::digest(url.as_str().as_bytes()));
+    Ok(crate::storage::path(app, "cache")?
+        .join("calendar")
+        .join(format!("{name}.{extension}")))
+}
+
+async fn fetch_calendar_image(url: &url::Url) -> Result<Vec<u8>, String> {
+    let transport =
+        crate::network::Transport::with_timeout(None, std::time::Duration::from_secs(20))?;
+    let response = transport
+        .client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(|_| "无法下载校历图片，请检查网络".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("校历图片返回 HTTP {}", response.status().as_u16()));
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size > CALENDAR_IMAGE_MAX)
+    {
+        return Err("校历图片超过大小限制".into());
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| "校历图片下载不完整".to_string())?;
+    if bytes.len() as u64 > CALENDAR_IMAGE_MAX {
+        return Err("校历图片超过大小限制".into());
+    }
+    Ok(bytes.to_vec())
+}
+
+fn write_calendar_image(path: &PathBuf, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| "无法创建校历缓存目录".to_string())?;
+    }
+    let temp = path.with_extension("tmp");
+    std::fs::write(&temp, bytes).map_err(|_| "无法写入校历缓存".to_string())?;
+    std::fs::rename(&temp, path).map_err(|_| "无法保存校历缓存".to_string())
+}
+
+/// Copies the published calendar images into the local cache in the
+/// background, so opening a year does not wait for the network. Best effort:
+/// a failed download is retried when the page asks for that image.
+fn prefetch_calendar_images(app: tauri::AppHandle, data: &serde_json::Value) {
+    let urls: Vec<String> = data
+        .get("rows")
+        .and_then(serde_json::Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| row.get("url").and_then(serde_json::Value::as_str))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    if urls.is_empty() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        for raw in urls {
+            let Ok(url) = url::Url::parse(&raw) else {
+                continue;
+            };
+            let Ok(path) = calendar_image_path(&app, &url) else {
+                continue;
+            };
+            if path.is_file() {
+                continue;
+            }
+            if let Ok(bytes) = fetch_calendar_image(&url).await {
+                let _ = write_calendar_image(&path, &bytes);
+            }
+        }
+    });
+}
+
+/// A calendar image as a data URL. Reads the local copy when present and
+/// downloads it once otherwise; the page never loads it from the network.
+#[tauri::command]
+pub(crate) async fn calendar_image(
+    app: tauri::AppHandle,
+    window: WebviewWindow,
+    url: String,
+) -> Result<String, String> {
+    main_only(&window)?;
+    let url = url::Url::parse(&url).map_err(|_| "校历图片地址无效".to_string())?;
+    let path = calendar_image_path(&app, &url)?;
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            let bytes = fetch_calendar_image(&url).await?;
+            write_calendar_image(&path, &bytes)?;
+            bytes
+        }
+    };
+    let mime = if path.extension().is_some_and(|ext| ext == "png") {
+        "png"
+    } else {
+        "jpeg"
+    };
+    use base64::Engine;
+    Ok(format!(
+        "data:image/{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
 /// Shared by the school_query command and the Agent's campus tools.
 pub(crate) async fn run_school_query(
     app: &tauri::AppHandle,
@@ -69,6 +226,7 @@ pub(crate) async fn run_school_query(
 ) -> Result<serde_json::Value, String> {
     require_school_feature(app, query.feature())?;
     query.validate()?;
+    let calendar = matches!(query, school::Query::Calendar);
     let state = app.state::<AppState>();
     let _service_guard = state.school_lock.lock().await;
     if matches!(
@@ -84,6 +242,9 @@ pub(crate) async fn run_school_query(
                 if let Some(data) =
                     cache::read_fresh(app, &scope, key, std::time::Duration::from_secs(ttl))
                 {
+                    if calendar {
+                        prefetch_calendar_images(app.clone(), &data);
+                    }
                     return Ok(data);
                 }
             }
@@ -93,16 +254,34 @@ pub(crate) async fn run_school_query(
             // Public data still goes under the current account so reads line up.
             cache::write_for(app, &scope, key, &data);
         }
+        if calendar {
+            prefetch_calendar_images(app.clone(), &data);
+        }
         return Ok(data);
     }
     let (mut account, mut generation) = school_account(app, &state).await?;
     let account_id = account.id.clone();
+    let attendance = matches!(query, school::Query::AttendanceRecords { .. });
+    let fitness = matches!(
+        query,
+        school::Query::Fitness
+            | school::Query::FitnessScore { .. }
+            | school::Query::FitnessItem { .. }
+    );
+    let venue = matches!(
+        query,
+        school::Query::VenueList | school::Query::VenueSlots { .. } | school::Query::VenueOrders
+    );
     if !force {
         if let (Some(key), Some(ttl)) = (cache_key, query.cache_ttl()) {
             if let Some(data) =
                 cache::read_fresh(app, &account_id, key, std::time::Duration::from_secs(ttl))
             {
-                return Ok(data);
+                return Ok(if attendance {
+                    with_attendance_courses(app, &account_id, data)
+                } else {
+                    data
+                });
             }
         }
     }
@@ -121,9 +300,48 @@ pub(crate) async fn run_school_query(
         }
         account = next;
         generation = next_generation;
+        outcome = school::query(Some(account), query.clone()).await;
+    }
+    if fitness
+        && outcome
+            .as_ref()
+            .err()
+            .is_some_and(|error| error == school::sports::IDLE)
+    {
+        // The fitness platform's H5 session is separate from the direct CAS
+        // jar. Rebuild it from the launch tokens and retry this read once.
+        renew_fitness_session(app, &state).await?;
+        let (next, next_generation) = school_account(app, &state).await?;
+        if next.id != account_id {
+            return Err("校园账号已切换，请重新查询".into());
+        }
+        account = next;
+        generation = next_generation;
+        outcome = school::query(Some(account), query.clone()).await;
+    }
+    if venue
+        && outcome.as_ref().err().is_some_and(|error| {
+            error.contains("场馆登录已失效") || error.contains("请先完成场馆系统登录")
+        })
+    {
+        // The venue OAuth session is short lived and is not part of the main
+        // CAS jar. Rebuild it once here so reopening the app or asking from the
+        // Agent does not depend on the user visiting the page first.
+        renew_venue_session(app, &state).await?;
+        let (next, next_generation) = school_account(app, &state).await?;
+        if next.id != account_id {
+            return Err("校园账号已切换，请重新查询".into());
+        }
+        account = next;
+        generation = next_generation;
         outcome = school::query(Some(account), query).await;
     }
     let (data, cookies) = outcome?;
+    let data = if attendance {
+        with_attendance_courses(app, &account_id, data)
+    } else {
+        data
+    };
     if let Some(cookies) = cookies {
         save_school_session(app, &state, &account_id, generation, cookies).await?;
     }

@@ -7,7 +7,7 @@
 3. [dev-docs/README.md](dev-docs/README.md)：开发文档索引。
 4. [dev-docs/CONVENTIONS.md](dev-docs/CONVENTIONS.md)：**唯一规则来源**。本文件与它冲突时，以约定手册为准。
 
-产品面向西安交通大学学生，技术栈固定为 **Rust + Tauri 2 + Vue 3 + TypeScript**，优先 macOS，其次 Windows。当前版本 **0.6.6**（2026-11-10 发布）。
+产品面向西安交通大学学生，技术栈固定为 **Rust + Tauri 2 + Vue 3 + TypeScript**，优先 macOS，其次 Windows。当前版本 **0.7.0**（2026-11-13 发布）。
 
 ## 环境
 
@@ -53,6 +53,7 @@ cargo 不在 PATH 时先执行 `source "$HOME/.cargo/env"`。普通本地构建�
 | `src-tauri/src/features/` | 社区、字体、图标、个人图片、桌宠与更新                   |
 | `src-tauri/src/workbench/` | 工作台文件与提交服务                                    |
 | `plugins/`                | 随应用发布的内置插件清单                                 |
+| `resources/`              | 随应用发布的静态资源，见 [说明](resources/README.md)      |
 | `tools/`                  | 发布、官网、OSS 下载网关脚本                             |
 | `website/`                | `xjtu-launcher.cn` 静态官网，无构建步骤                  |
 | `docs/`                   | 面向使用者与产品：README、设计稿、版本记录、截图与宣传图 |

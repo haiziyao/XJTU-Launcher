@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.query { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.periods { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius-sm); height: 28px; }
+.periods span { width: 24px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; color: var(--text-secondary); border-radius: 4px; font-variant-numeric: tabular-nums; }
+.periods span.on { background: var(--accent); color: #fff; font-weight: 600; }
+.periods span.on.mid { border-radius: 0; }
+.qlabel { font-size: 12px; color: var(--text-tertiary); }
+.bld { display: flex; flex-direction: column; gap: 8px; }
+.bld .sh h2 { font-size: 13px; }
+.rooms { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.room { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; display: flex; flex-direction: column; gap: 1px; }
+.room b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.room span { font-size: 11px; color: var(--text-tertiary); }
+.room.big { border-color: var(--accent-tint, #cfe0fb); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>畅行校园</h1>
+      <nav class="ptabs">
+        <span class="ptab">待办<span class="n">9</span></span>
+        <span class="ptab">通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab">学习</span>
+        <span class="ptab on">学业</span>
+        <span class="ptab">生活</span>
+      </nav>
+      <div class="right"><span class="sample">示例数据</span></div>
+    </div>
+    <nav class="sub">
+      <span class="stab">成绩</span><span class="stab">考试</span><span class="stab">评教</span><span class="stab on">空闲教室</span><span class="stab">全校课程</span><span class="stab">校历</span>
+    </nav>
+
+    <div class="content">
+      <div class="query">
+        <span class="select"><span class="k">校区</span>兴庆</span>
+        <span class="select"><span class="k">楼宇</span>全部</span>
+        <span class="seg"><span class="on">今天</span><span>明天</span><span>后天</span><span>11月15日</span></span>
+        <span class="qlabel" style="margin-left:6px">节次</span>
+        <span class="periods"><span>1</span><span>2</span><span class="on">3</span><span class="on mid">4</span><span class="on">5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span></span>
+        <span class="sec" style="margin-left:auto;font-size:12px">3–5 节空闲 · 46 间</span>
+      </div>
+
+      <div class="bld">
+        <div class="sh"><h2>主楼 A</h2><span class="meta">12 间</span></div>
+        <div class="rooms">
+          <div class="room"><b>A-201</b><span>多媒体 · 120 座</span></div>
+          <div class="room"><b>A-203</b><span>多媒体 · 80 座</span></div>
+          <div class="room"><b>A-205</b><span>多媒体 · 80 座</span></div>
+          <div class="room"><b>A-301</b><span>阶梯 · 180 座</span></div>
+          <div class="room"><b>A-306</b><span>多媒体 · 60 座</span></div>
+          <div class="room"><b>A-308</b><span>多媒体 · 60 座</span></div>
+          <div class="room"><b>A-402</b><span>研讨 · 40 座</span></div>
+          <div class="room"><b>A-404</b><span>研讨 · 40 座</span></div>
+          <div class="room"><b>A-411</b><span>多媒体 · 100 座</span></div>
+          <div class="room"><b>A-503</b><span>多媒体 · 80 座</span></div>
+          <div class="room"><b>A-507</b><span>机房 · 64 座</span></div>
+          <div class="room"><b>A-512</b><span>多媒体 · 80 座</span></div>
+        </div>
+      </div>
+      <div class="bld">
+        <div class="sh"><h2>中 2 楼</h2><span class="meta">8 间</span></div>
+        <div class="rooms">
+          <div class="room"><b>中2-1101</b><span>阶梯 · 200 座</span></div>
+          <div class="room"><b>中2-1203</b><span>多媒体 · 90 座</span></div>
+          <div class="room"><b>中2-2105</b><span>多媒体 · 90 座</span></div>
+          <div class="room"><b>中2-2210</b><span>多媒体 · 60 座</span></div>
+          <div class="room"><b>中2-3102</b><span>多媒体 · 90 座</span></div>
+          <div class="room"><b>中2-3215</b><span>研讨 · 36 座</span></div>
+          <div class="room"><b>中2-4104</b><span>多媒体 · 90 座</span></div>
+          <div class="room"><b>中2-4220</b><span>多媒体 · 60 座</span></div>
+        </div>
+      </div>
+      <div class="bld">
+        <div class="sh"><h2>西 2 楼</h2><span class="meta">6 间</span><span class="more">还有 4 栋楼 · 20 间 ›</span></div>
+        <div class="rooms">
+          <div class="room"><b>西2-101</b><span>多媒体 · 72 座</span></div>
+          <div class="room"><b>西2-105</b><span>多媒体 · 72 座</span></div>
+          <div class="room"><b>西2-203</b><span>阶梯 · 150 座</span></div>
+          <div class="room"><b>西2-208</b><span>多媒体 · 72 座</span></div>
+          <div class="room"><b>西2-301</b><span>多媒体 · 72 座</span></div>
+          <div class="room"><b>西2-306</b><span>研讨 · 30 座</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

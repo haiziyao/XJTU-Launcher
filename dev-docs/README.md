@@ -41,6 +41,7 @@
 | [代码结构](architecture/CODE_STRUCTURE.md)   | Rust 命令层、领域模块与 Vue 功能目录     |
 | [按钮与通用控件](reference/UI_COMPONENTS.md) | `UiButton` / `UiIconButton` 的变体与用法 |
 | [自定义入口图标](reference/ICONS.md)         | 用户自备图标目录、`icons.json` 映射规则  |
+| [校园数据接口储备](reference/CAMPUS_DATA_SOURCES.md) | 体育平台、移动交通大学的接口、字段与 Rust 实现位置 |
 
 ### 功能实现
 
@@ -87,4 +88,4 @@
 - 实现状态变化同步 [DEVELOPMENT.md](DEVELOPMENT.md) 的「当前可用与未完成项」。
 - 移动或重命名本文档时，同步更新根目录 README、`dev.md`、`AGENTS.md` 和所有交叉链接。
 
-更新日期：2026-11-11。
+更新日期：2026-11-12。

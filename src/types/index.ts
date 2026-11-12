@@ -8,6 +8,7 @@ export * from './accounts';
 export * from './timetable';
 export * from './providers';
 export * from './campus';
+export * from './community';
 export * from './lms';
 export * from './workbench';
 export * from './personal';

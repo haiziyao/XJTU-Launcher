@@ -10,15 +10,19 @@ use url::Url;
 
 pub const TIMETABLE_ID: &str = "cn.xjtu.timetable";
 pub const CAMPUS_ID: &str = "cn.xjtu.campus";
+pub const CAMPUS_RESERVATIONS_ID: &str = "cn.xjtu.campus-reservations";
+pub const CAMPUS_PROFILE_ID: &str = "cn.xjtu.campus-profile";
 pub const AGENT_ID: &str = "cn.xjtu.agent-settings";
 pub const HOME_THEME_ID: &str = "cn.xjtu.home-theme";
 pub const PPT_CAPTURE_ID: &str = "cn.xjtu.ppt-capture";
 pub const DESKTOP_PET_ID: &str = "cn.xjtu.desktop-pet";
 pub const FONT_BEAUTIFY_ID: &str = "cn.xjtu.font-beautify";
 
-const BUILTIN_IDS: [&str; 7] = [
+const BUILTIN_IDS: [&str; 9] = [
     TIMETABLE_ID,
     CAMPUS_ID,
+    CAMPUS_RESERVATIONS_ID,
+    CAMPUS_PROFILE_ID,
     AGENT_ID,
     HOME_THEME_ID,
     PPT_CAPTURE_ID,
@@ -107,6 +111,15 @@ fn valid_version(text: &str) -> bool {
     }
 }
 
+/// The two focused campus plugins. Each opens only its own sections so the
+/// sidebar entry does not duplicate the whole 畅行校园 tab set.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CampusPreset {
+    Reservations,
+    Profile,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Page {
@@ -114,7 +127,12 @@ pub enum Page {
     Links {
         links: Vec<Link>,
     },
-    Campus,
+    /// Campus workspace. `preset` narrows it to one slice; without it the
+    /// plugin opens the full 畅行校园 page.
+    Campus {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preset: Option<CampusPreset>,
+    },
     #[serde(rename = "agentSettings")]
     AgentSettings,
     #[serde(rename = "homeTheme")]
@@ -232,6 +250,14 @@ pub fn list() -> Result<PluginList, String> {
             "内置畅行校园插件损坏",
         )?,
         builtin(
+            include_str!("../../../plugins/cn.xjtu.campus-reservations/plugin.json"),
+            "内置预约中心插件损坏",
+        )?,
+        builtin(
+            include_str!("../../../plugins/cn.xjtu.campus-profile/plugin.json"),
+            "内置个人画像插件损坏",
+        )?,
+        builtin(
             include_str!("../../../plugins/cn.xjtu.desktop-pet/plugin.json"),
             "内置桌面宠物插件损坏",
         )?,
@@ -273,6 +299,36 @@ mod tests {
             assert!(!plugin.license.trim().is_empty());
             assert!(valid_version(&plugin.version));
         }
+    }
+
+    #[test]
+    fn focused_campus_plugins_carry_their_preset() {
+        let result = list().unwrap();
+        let preset = |id: &str| {
+            let plugin = result.plugins.iter().find(|p| p.id == id).unwrap();
+            match &plugin.page {
+                Page::Campus { preset } => preset.clone(),
+                _ => panic!("{id} should open the campus workspace"),
+            }
+        };
+        assert!(matches!(
+            preset(CAMPUS_RESERVATIONS_ID),
+            Some(CampusPreset::Reservations)
+        ));
+        assert!(matches!(
+            preset(CAMPUS_PROFILE_ID),
+            Some(CampusPreset::Profile)
+        ));
+        assert!(preset(CAMPUS_ID).is_none());
+        let json = serde_json::to_value(&result.plugins).unwrap();
+        let page = json
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == CAMPUS_ID)
+            .unwrap()["page"]
+            .clone();
+        assert_eq!(page, serde_json::json!({"type": "campus"}));
     }
 
     #[test]

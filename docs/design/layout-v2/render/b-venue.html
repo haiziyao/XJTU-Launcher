@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.day { height: 40px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; color: var(--text-secondary); background: var(--surface-subtle); line-height: 1.3; }
+.day b { font-size: 12.5px; color: var(--text); font-weight: 500; }
+.day.on { background: var(--nav-active); color: var(--nav-active-text); }
+.day.on b { color: var(--nav-active-text); font-weight: 600; }
+.day.off { opacity: 0.45; }
+.matrix { display: grid; grid-template-columns: 76px repeat(6, 1fr); gap: 3px; padding: 10px 12px; font-size: 11.5px; }
+.matrix .h { color: var(--text-tertiary); text-align: center; height: 22px; }
+.matrix .t { color: var(--text-tertiary); display: flex; align-items: center; font-variant-numeric: tabular-nums; }
+.matrix .s { height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.s.ok { background: var(--success-soft); color: var(--success-text); font-weight: 600; }
+.s.no { background: var(--surface-sunken); color: var(--text-tertiary); }
+.s.pick { background: var(--accent); color: #fff; font-weight: 600; }
+.order { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--divider); font-size: 12px; }
+.order:last-child { border-bottom: 0; }
+.order .l1 { display: flex; align-items: center; gap: 6px; }
+.order .l1 b { font-weight: 500; }
+.order .l1 .badge { margin-left: auto; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="生活" data-s="场馆"><span class="search">搜索场馆</span></header>
+    <div class="content">
+      <div class="cols l-c-r" style="grid-template-columns: 196px 1fr 248px">
+        <div class="panel clist">
+          <div class="lh">羽毛球</div>
+          <div class="citem plain on"><b>兴庆 体育馆</b><span class="n">提前 3 天</span></div>
+          <div class="citem plain"><b>创新港 风雨球馆</b><span class="n">3 天</span></div>
+          <div class="lh">乒乓球</div>
+          <div class="citem plain"><b>兴庆 乒乓球馆</b><span class="n">2 天</span></div>
+          <div class="lh">网球</div>
+          <div class="citem plain"><b>兴庆 网球场</b><span class="n">3 天</span></div>
+          <div class="citem plain"><b>雁塔 网球场</b><span class="n">3 天</span></div>
+          <div class="lh">游泳</div>
+          <div class="citem plain"><b>兴庆 游泳馆</b><span class="n">1 天</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>兴庆 体育馆</b><span class="meta">羽毛球 · 兴庆校区东区 · ¥ 20 / 时段</span></div>
+          <div class="days">
+            <div class="day"><b>今天</b>11-12</div><div class="day"><b>周五</b>11-13</div><div class="day"><b>周六</b>11-14</div><div class="day on"><b>周日</b>11-15</div>
+            <div class="day off"><b>周一</b>11-16</div><div class="day off"><b>周二</b>11-17</div><div class="day off"><b>周三</b>11-18</div>
+          </div>
+          <div class="panel matrix">
+            <span></span><span class="h">1 号</span><span class="h">2 号</span><span class="h">3 号</span><span class="h">4 号</span><span class="h">5 号</span><span class="h">6 号</span>
+            <span class="t">14:00–15:00</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s ok">空</span><span class="s no">满</span><span class="s no">满</span>
+            <span class="t">15:00–16:00</span><span class="s no">满</span><span class="s ok">空</span><span class="s no">满</span><span class="s ok">空</span><span class="s no">满</span><span class="s no">满</span>
+            <span class="t">16:00–17:00</span><span class="s ok">空</span><span class="s ok">空</span><span class="s no">满</span><span class="s no">满</span><span class="s ok">空</span><span class="s no">满</span>
+            <span class="t">17:00–18:00</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span>
+            <span class="t">18:00–19:00</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span>
+            <span class="t">19:00–20:00</span><span class="s no">满</span><span class="s no">满</span><span class="s ok">空</span><span class="s no">满</span><span class="s no">满</span><span class="s no">满</span>
+            <span class="t">20:00–21:00</span><span class="s ok">空</span><span class="s no">满</span><span class="s ok">空</span><span class="s ok">空</span><span class="s no">满</span><span class="s ok">空</span>
+            <span class="t">21:00–22:00</span><span class="s pick">选</span><span class="s ok">空</span><span class="s ok">空</span><span class="s ok">空</span><span class="s ok">空</span><span class="s ok">空</span>
+          </div>
+          <div class="muted" style="font-size:11.5px">已选 11月15日 周日 21:00–22:00 · 1 号场 · 空位实时查询，提交后才能确定是否订到。</div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">预约场地<span class="badge accent">待确认</span></div>
+          <h3>兴庆 体育馆 · 1 号场</h3>
+          <dl class="kv" style="margin:0">
+            <dt>项目</dt><dd>羽毛球</dd>
+            <dt>日期</dt><dd class="num">11月15日 周日</dd>
+            <dt>时段</dt><dd class="num">21:00–22:00</dd>
+            <dt>费用</dt><dd class="num">¥ 20.00</dd>
+          </dl>
+          <div class="blk"><h4>规则</h4><p>可提前 3 天预订。</p></div>
+          <div class="foot" style="margin-top:0"><span class="btn primary">确认预约</span><span class="btn">取消</span></div>
+          <div class="blk"><h4>我的预订<span>3 条</span></h4>
+            <div class="order"><div class="l1"><b>兴庆 体育馆 3 号</b><span class="badge ok">已预订</span></div><span class="sec num">11月14日 周六 19:00–20:00</span><span class="muted">¥ 20.00 · 11-11 下单</span></div>
+            <div class="order"><div class="l1"><b>兴庆 网球场 2 号</b><span class="badge muted">已使用</span></div><span class="sec num">11月8日 周六 16:00–17:00</span><span class="muted">¥ 30.00</span></div>
+            <div class="order"><div class="l1"><b>兴庆 体育馆 5 号</b><span class="badge muted">已取消</span></div><span class="sec num">11月2日 周日 20:00–21:00</span><span class="muted">¥ 20.00</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

@@ -1,24 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { ExternalLink } from 'lucide-vue-next';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import SplitView from '../../../components/ui/SplitView.vue';
-import ListItem from '../../../components/ui/ListItem.vue';
-import FilterBar from '../../../components/ui/FilterBar.vue';
-import SegmentedTabs from '../../../components/ui/SegmentedTabs.vue';
-import InlineAlert from '../../../components/ui/InlineAlert.vue';
-import Skeleton from '../../../components/ui/Skeleton.vue';
-import UiButton from '../../../components/ui/UiButton.vue';
-import MoreMenu, { type MoreItem } from '../../../components/ui/MoreMenu.vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { BellOff, ExternalLink, Search } from 'lucide-vue-next';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import { bridge } from '../../../shared/bridge';
 import { applyCached, cacheName } from '../../../shared/cache';
+import { campusDateKey, updatedInfo } from '../../../shared/domain';
 import type { NoticeChannels, NoticeList } from '../../../types';
+import { campusNoticeCount } from '../campusNav';
 
 /**
- * 通知 (LAYOUT §9.10): the seven public notice boards in one list. Only the
- * list page is fetched — the article body needs a per-article request the
- * backend does not make yet — so the reader pane summarises the entry and
- * offers the campus window for the rest.
+ * 通知 (layout v2): the public notice boards in one table, filtered by channel
+ * on the left and read in the right column. Only the list page is fetched — the
+ * article body needs a per-article request the backend does not make yet — so
+ * the reader summarises the entry and offers the campus window for the rest.
  */
 interface NoticeRow {
   key: string;
@@ -29,23 +23,24 @@ interface NoticeRow {
   channel: string;
   channelName: string;
 }
+interface DayGroup {
+  id: string;
+  title: string;
+  items: NoticeRow[];
+}
 const LIMIT = 30;
 const channels = ref<NoticeChannels['channels']>([]);
 const channel = ref('all');
 const rows = ref<NoticeRow[]>([]);
-const selected = ref<NoticeRow | null>(null);
+const channelCounts = ref<Record<string, number>>({});
+const selectedKey = ref<string | null>(null);
 const query = ref('');
-const listWidth = ref(320);
 const loading = ref(true);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
 const partial = ref('');
-const moreItems: MoreItem[] = [{ id: 'open', label: '在校园网页中打开', icon: ExternalLink }];
+const now = ref(Date.now());
 
-const tabs = computed(() => [
-  { id: 'all', title: '全部' },
-  ...channels.value.map((item) => ({ id: item.id, title: item.name })),
-]);
 const visible = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   if (!keyword) return rows.value;
@@ -56,11 +51,31 @@ const visible = computed(() => {
       row.channelName.toLowerCase().includes(keyword),
   );
 });
-const subtitle = computed(() =>
-  channel.value === 'all'
-    ? `${channels.value.length} 个栏目 · ${rows.value.length} 条`
-    : `${rows.value.length} 条`,
-);
+
+function dayId(date: string): { id: string; title: string } {
+  const today = campusDateKey(now.value);
+  const yesterday = campusDateKey(now.value - 86_400_000);
+  if (date === today) return { id: 'today', title: '今天' };
+  if (date === yesterday) return { id: 'yesterday', title: '昨天' };
+  if (date && date >= today.slice(0, 8) + '01') return { id: 'month', title: '本月' };
+  return { id: 'earlier', title: '更早' };
+}
+const dayGroups = computed<DayGroup[]>(() => {
+  const order = ['today', 'yesterday', 'month', 'earlier'];
+  const map = new Map<string, DayGroup>();
+  for (const row of visible.value) {
+    const { id, title } = dayId(row.date);
+    const group = map.get(id);
+    if (group) group.items.push(row);
+    else map.set(id, { id, title, items: [row] });
+  }
+  return order.map((id) => map.get(id)).filter((group): group is DayGroup => Boolean(group));
+});
+const selected = computed(() => visible.value.find((row) => row.key === selectedKey.value) ?? null);
+const meta = computed(() => {
+  const updated = loadedAt.value ? ` · ${updatedInfo(loadedAt.value, now.value)}` : '';
+  return `${channels.value.length || '—'} 个栏目 · ${rows.value.length} 条${updated}`;
+});
 
 function toRows(list: NoticeList[]): NoticeRow[] {
   const items: NoticeRow[] = [];
@@ -118,12 +133,18 @@ async function load(force = false) {
         )
         .map((result) => result.value);
       rows.value = toRows(lists);
+      channelCounts.value = Object.fromEntries(
+        lists.map((list) => [list.channel, list.items.length]),
+      );
       const failed = results.length - lists.length;
       if (!lists.length) error.value = '通知栏目暂时都无法读取，请稍后重试';
       else if (failed) partial.value = `${failed} 个栏目暂时无法读取，已显示其余栏目。`;
+      campusNoticeCount.value = rows.value.length;
     } else {
       const list = await fetchChannel(channel.value, force);
       rows.value = toRows([list]);
+      channelCounts.value = { ...channelCounts.value, [channel.value]: list.items.length };
+      campusNoticeCount.value = rows.value.length;
     }
     loadedAt.value = Date.now();
   } catch (e) {
@@ -135,8 +156,9 @@ async function load(force = false) {
 }
 
 function changeChannel(id: string) {
+  if (channel.value === id) return;
   channel.value = id;
-  selected.value = null;
+  selectedKey.value = null;
   query.value = '';
   void load();
 }
@@ -145,121 +167,120 @@ function openExternal(row: NoticeRow | null) {
   if (row) void bridge.openUrl(row.url);
 }
 
-function onMore(id: string) {
-  if (id === 'open') openExternal(selected.value);
-}
+watch(
+  visible,
+  (list) => {
+    if (!list.some((row) => row.key === selectedKey.value))
+      selectedKey.value = list[0]?.key ?? null;
+  },
+  { immediate: true },
+);
 
 onMounted(() => void load());
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="通知"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="load(true)"
-    >
-      <template #more
-        ><MoreMenu :items="moreItems" :disabled="!selected" @select="onMore"
-      /></template>
-    </SectionHeader>
-
-    <div class="notice-channels">
-      <SegmentedTabs
-        :model-value="channel"
-        compact
-        :tabs="tabs"
-        label="通知栏目"
-        @update:model-value="changeChannel"
+  <CampusHeaderSlot slot="meta">
+    <span v-if="meta">{{ meta }}</span>
+    <span v-if="partial" class="cv-due-soon">· {{ partial }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <label class="cv-search">
+      <Search :size="13" aria-hidden="true" />
+      <input
+        v-model="query"
+        type="search"
+        placeholder="搜索标题"
+        aria-label="搜索通知"
+        spellcheck="false"
       />
+    </label>
+    <button type="button" class="cv-btn" :disabled="loading" @click="load(true)">刷新</button>
+  </CampusHeaderSlot>
+
+  <div class="cv-cols lcr">
+    <div class="cv-panel cv-list">
+      <div class="cv-lh">频道<span>条数</span></div>
+      <button
+        type="button"
+        class="cv-item plain"
+        :class="{ on: channel === 'all' }"
+        @click="changeChannel('all')"
+      >
+        <b>全部</b><span class="cv-k accent">{{ rows.length }}</span>
+      </button>
+      <button
+        v-for="item in channels"
+        :key="item.id"
+        type="button"
+        class="cv-item plain"
+        :class="{ on: channel === item.id }"
+        @click="changeChannel(item.id)"
+      >
+        <b>{{ item.name }}</b>
+        <span class="cv-n">{{ channelCounts[item.id] ?? '—' }}</span>
+      </button>
     </div>
 
-    <InlineAlert v-if="error" tone="error" :title="error" />
-    <InlineAlert v-if="partial" tone="partial" :title="partial" />
-
-    <FilterBar v-model:query="query" placeholder="搜索标题、分类或栏目" label="搜索通知" />
-
-    <SplitView v-model:width="listWidth" :detail-open="Boolean(selected)" @back="selected = null">
-      <template #list>
-        <Skeleton v-if="loading && !rows.length" :lines="8" height="18px" label="正在读取通知" />
-        <p v-else-if="!visible.length" class="notice-empty">
-          {{ rows.length ? '没有符合搜索条件的通知' : '这些栏目暂时没有通知' }}
-        </p>
-        <div v-else class="notice-list" role="listbox" aria-label="通知列表">
-          <ListItem
-            v-for="row in visible"
+    <div class="cv-center">
+      <div v-if="loading && !rows.length" class="cv-empty">
+        <BellOff :size="22" /><b>正在读取通知…</b>
+      </div>
+      <div v-else-if="!visible.length" class="cv-empty">
+        <BellOff :size="22" />
+        <b>{{ rows.length ? '没有符合搜索条件的通知' : '这些栏目暂时没有通知' }}</b>
+      </div>
+      <div v-else class="cv-panel cv-tbl">
+        <div class="cv-thead" style="--cols: 1fr 96px 74px">
+          <span>标题</span><span>频道</span><span class="cv-r">日期</span>
+        </div>
+        <template v-for="group in dayGroups" :key="group.id">
+          <div class="cv-grp">
+            {{ group.title }}<span class="n">{{ group.items.length }}</span>
+          </div>
+          <button
+            v-for="row in group.items"
             :key="row.key"
-            :title="row.title"
-            :subtitle="[row.channelName, row.category].filter(Boolean).join(' · ')"
-            :selected="selected?.key === row.key"
-            @select="selected = row"
+            type="button"
+            class="cv-tr"
+            style="--cols: 1fr 96px 74px"
+            :class="{ sel: selectedKey === row.key }"
+            @click="selectedKey = row.key"
           >
-            <template #meta>{{ row.date || '—' }}</template>
-          </ListItem>
-        </div>
-      </template>
+            <span class="cv-ellip">{{ row.title }}</span>
+            <span class="cv-sec cv-ellip">{{ row.channelName }}</span>
+            <span class="cv-r cv-num cv-muted">{{ row.date }}</span>
+          </button>
+        </template>
+      </div>
+    </div>
 
-      <template #detail>
-        <article v-if="selected" class="notice-detail">
-          <header>
-            <p class="notice-meta">
-              {{ selected.channelName }}
-              <template v-if="selected.category"> · {{ selected.category }}</template>
-              <template v-if="selected.date"> · {{ selected.date }}</template>
-            </p>
-            <h3>{{ selected.title }}</h3>
-          </header>
-          <InlineAlert notice-id="notice-body" tone="info" title="正文需要在校园网页中查看">
-            当前只读取通知的标题、分类和日期；正文与附件请打开校园网页。
-          </InlineAlert>
-          <UiButton variant="primary" size="sm" @click="openExternal(selected)">
-            <ExternalLink :size="14" />在校园网页中打开
-          </UiButton>
-        </article>
-        <div v-else class="notice-placeholder">
-          <p>选择左侧的一则通知查看来源和日期。</p>
+    <div class="cv-panel cv-detail">
+      <template v-if="selected">
+        <div class="cv-type">
+          {{ selected.channelName }}
+          <template v-if="selected.category"> · {{ selected.category }}</template>
+        </div>
+        <h3>{{ selected.title }}</h3>
+        <dl class="cv-kv">
+          <dt>日期</dt>
+          <dd class="cv-num">{{ selected.date || '—' }}</dd>
+          <dt>栏目</dt>
+          <dd>{{ selected.channelName }}</dd>
+          <dt>分类</dt>
+          <dd>{{ selected.category || '—' }}</dd>
+        </dl>
+        <div class="cv-blk">
+          <h4>正文</h4>
+          <p>当前只读取通知的标题、分类和日期；正文与附件在校园网页中查看。</p>
+        </div>
+        <div class="cv-foot">
+          <button type="button" class="cv-btn primary" @click="openExternal(selected)">
+            <ExternalLink :size="13" />在校园网页中打开
+          </button>
         </div>
       </template>
-    </SplitView>
-  </section>
+      <div v-else class="cv-placeholder">选择左侧的一则通知查看来源和日期。</div>
+    </div>
+  </div>
 </template>
-
-<style scoped>
-.notice-channels {
-  margin-bottom: 12px;
-}
-.notice-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-.notice-empty,
-.notice-placeholder {
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-  text-align: center;
-}
-.notice-detail {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 4px 2px;
-}
-.notice-meta {
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-}
-.notice-detail h3 {
-  margin-top: 4px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-</style>

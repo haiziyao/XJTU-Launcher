@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.courses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.course { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 9px; display: flex; flex-direction: column; gap: 3px; background: #fff; min-width: 0; }
+.course.hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.course .h { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.course .h b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.course .who { font-size: 11.5px; color: var(--text-tertiary); padding-left: 15px; }
+.course .next { font-size: 12px; color: var(--text-secondary); padding-left: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.course .next .muted { font-size: 11.5px; }
+.lower { display: grid; grid-template-columns: 1.45fr 1fr; gap: 14px; min-height: 0; flex: 1; }
+.col { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.due .thead, .due .tr { grid-template-columns: 1fr 108px 86px 58px; }
+.recent .thead, .recent .tr { grid-template-columns: 1fr 84px 40px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>畅行校园</h1>
+      <nav class="ptabs">
+        <span class="ptab">待办<span class="n">9</span></span>
+        <span class="ptab">通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab on">学习</span>
+        <span class="ptab">学业</span>
+        <span class="ptab">生活</span>
+      </nav>
+      <div class="right"><span class="sample">示例数据</span></div>
+    </div>
+    <nav class="sub">
+      <span class="stab on">思源学堂</span>
+      <span class="stab">课程资料</span>
+      <div class="tools">
+        <span class="select">2026-2027 秋季学期</span>
+        <span class="search">搜索课程或活动</span>
+      </div>
+    </nav>
+
+    <div class="content">
+      <div class="sh"><h2>我的课程</h2><span class="meta">11 门 · 9 项未交 · 更新于 刚刚</span></div>
+      <div class="courses">
+        <div class="course hover"><div class="h"><i class="cs c1"></i><b>计算机组成</b><span class="badge danger">3 未交</span></div><div class="who">王老师 · COMP3021 · 3 学分</div><div class="next"><span class="due-today">今天 23:59</span> 第四章作业（第一次）</div></div>
+        <div class="course"><div class="h"><i class="cs c2"></i><b>计算机网络原理</b><span class="badge warn">2 未交</span></div><div class="who">李老师 · COMP3013 · 3 学分</div><div class="next"><span class="due-soon">周日 23:59</span> 第二章作业</div></div>
+        <div class="course"><div class="h"><i class="cs c5"></i><b>计算机组成与结构专题实验</b><span class="badge warn">1 未交</span></div><div class="who">王老师 · COMP3022 · 2 学分</div><div class="next"><span class="due-soon">周六 23:59</span> 实验二</div></div>
+        <div class="course"><div class="h"><i class="cs c3"></i><b>操作系统设计专题实验</b><span class="badge accent">1 未交</span></div><div class="who">张老师 · COMP3081 · 2 学分</div><div class="next">11月18日 23:59 实验报告</div></div>
+        <div class="course"><div class="h"><i class="cs c4"></i><b>文学经典与热点透视</b><span class="badge accent">1 未交</span></div><div class="who">刘老师 · GE2041 · 2 学分</div><div class="next">11月18日 23:59 第三次作业</div></div>
+        <div class="course"><div class="h"><i class="cs c6"></i><b>人工智能</b><span class="badge accent">1 未交</span></div><div class="who">赵老师 · COMP5516 · 3 学分</div><div class="next">11月25日 23:59 搜索算法练习</div></div>
+        <div class="course"><div class="h"><i class="cs c1"></i><b>自然语言处理</b></div><div class="who">孙老师 · COMP5015 · 2 学分</div><div class="next"><span class="muted">暂无待交 · 新资料 2</span></div></div>
+        <div class="course"><div class="h"><i class="cs c2"></i><b>概率论与数理统计</b></div><div class="who">周老师 · MATH2031 · 3 学分</div><div class="next"><span class="muted">暂无待交 · 新回放 1</span></div></div>
+        <div class="course"><div class="h"><i class="cs c3"></i><b>思想道德与法治</b></div><div class="who">陈老师 · GE1012 · 3 学分</div><div class="next"><span class="muted">暂无待交</span></div></div>
+        <div class="course"><div class="h"><i class="cs c4"></i><b>大学英语（四）</b></div><div class="who">Emily · ENGL1004 · 2 学分</div><div class="next"><span class="muted">暂无待交</span></div></div>
+        <div class="course"><div class="h"><i class="cs c5"></i><b>体育（四）</b></div><div class="who">吴老师 · PE1004 · 1 学分</div><div class="next"><span class="muted">暂无待交</span></div></div>
+      </div>
+
+      <div class="lower">
+        <div class="col">
+          <div class="sh"><h2>即将截止</h2><span class="meta">按截止时间</span><span class="more">全部待办 ›</span></div>
+          <div class="panel due">
+            <div class="thead"><span>作业</span><span>课程</span><span class="r">截止</span><span class="r">剩余</span></div>
+            <div class="tr"><span class="c"><i class="cs c1"></i><span class="ellip">第四章作业（第一次）</span></span><span class="sec ellip">计算机组成</span><span class="r num due-today">今天 23:59</span><span class="r num due-today">9 小时</span></div>
+            <div class="tr"><span class="c"><i class="cs c1"></i><span class="ellip">第四章作业（第二次）</span></span><span class="sec ellip">计算机组成</span><span class="r num due-today">今天 23:59</span><span class="r num due-today">9 小时</span></div>
+            <div class="tr"><span class="c"><i class="cs c5"></i><span class="ellip">实验二</span></span><span class="sec ellip">组成与结构实验</span><span class="r num due-soon">周六 23:59</span><span class="r num due-soon">3 天</span></div>
+            <div class="tr"><span class="c"><i class="cs c2"></i><span class="ellip">第二章作业</span></span><span class="sec ellip">计算机网络原理</span><span class="r num due-soon">周日 23:59</span><span class="r num due-soon">4 天</span></div>
+            <div class="tr"><span class="c"><i class="cs c2"></i><span class="ellip">Wireshark 抓包实验</span></span><span class="sec ellip">计算机网络原理</span><span class="r num">11月18日</span><span class="r num muted">6 天</span></div>
+            <div class="tr"><span class="c"><i class="cs c3"></i><span class="ellip">实验报告</span></span><span class="sec ellip">操作系统专题实验</span><span class="r num">11月18日</span><span class="r num muted">6 天</span></div>
+            <div class="tr"><span class="c"><i class="cs c4"></i><span class="ellip">第三次作业</span></span><span class="sec ellip">文学经典与热点透视</span><span class="r num">11月18日</span><span class="r num muted">6 天</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="sh"><h2>最近更新</h2><span class="meta">资料与回放</span></div>
+          <div class="panel recent">
+            <div class="thead"><span>内容</span><span>课程</span><span class="r">日期</span></div>
+            <div class="tr"><span class="c"><i class="ft">PPT</i><span class="ellip">Chapter7 控制器</span></span><span class="sec ellip">计算机组成</span><span class="r num muted">11-11</span></div>
+            <div class="tr"><span class="c"><i class="ft">PDF</i><span class="ellip">注意力机制讲义</span></span><span class="sec ellip">自然语言处理</span><span class="r num muted">11-10</span></div>
+            <div class="tr"><span class="c"><i class="ft">回放</i><span class="ellip">第 10 周 周二 3–4 节</span></span><span class="sec ellip">概率论</span><span class="r num muted">11-10</span></div>
+            <div class="tr"><span class="c"><i class="ft">PDF</i><span class="ellip">实验二 指导书</span></span><span class="sec ellip">组成实验</span><span class="r num muted">11-09</span></div>
+            <div class="tr"><span class="c"><i class="ft">PPT</i><span class="ellip">第2章 网络体系结构</span></span><span class="sec ellip">计算机网络</span><span class="r num muted">11-08</span></div>
+            <div class="tr"><span class="c"><i class="ft">PDF</i><span class="ellip">Transformer 补充阅读</span></span><span class="sec ellip">自然语言处理</span><span class="r num muted">11-07</span></div>
+            <div class="tr"><span class="c"><i class="ft">回放</i><span class="ellip">第 9 周 周四 1–2 节</span></span><span class="sec ellip">计算机组成</span><span class="r num muted">11-06</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

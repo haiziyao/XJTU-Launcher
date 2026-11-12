@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.campus-reservations",
+  "name": "预约中心",
+  "version": "0.1.0",
+  "category": "campus",
+  "author": "haiziyao",
+  "license": "MIT",
+  "description": "图书馆与场馆的预约和记录查询",
+  "details": "从畅行校园独立出来的预约入口：图书馆楼层、区域与座位，场馆开放信息与预约记录。账号隔离与缓存规则与畅行校园一致。",
+  "enabledByDefault": true,
+  "icon": "calendar-check",
+  "page": { "type": "campus", "preset": "reservations" },
+  "widget": false
+}

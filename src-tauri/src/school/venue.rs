@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use url::Url;
 
 const BASE: &str = "http://202.117.17.144:8080";
+pub(crate) const HOME_URL: &str = "http://202.117.17.144:8080/web/index.html";
 pub(crate) const LOGIN_URL: &str = "https://org.xjtu.edu.cn/openplatform/oauth/authorize?responseType=code&scope=user_info&appId=1659&state=1&redirectUri=http%3A%2F%2F202.117.17.144%3A8080%2Fweb%2Fcas%2Foauth2url.html";
 const STATUS: [(i64, &str); 3] = [(0, "预订中"), (1, "预订成功"), (2, "预订取消")];
 
@@ -35,8 +36,22 @@ fn integer(value: Option<&Value>) -> i64 {
     }
 }
 
+/// The venue endpoints are older than the frontend wrapper: some return the
+/// page as a bare array, others wrap it in `object`/`rows`. Accept both rather
+/// than rejecting a reply that carries the rows we need.
+fn rows_of(value: &Value) -> Option<&[Value]> {
+    if let Some(rows) = value.as_array() {
+        return Some(rows);
+    }
+    ["object", "rows", "data", "list"]
+        .iter()
+        .find_map(|key| value.get(key).and_then(Value::as_array).map(Vec::as_slice))
+}
+
 /// The site answers notices (for example "not in booking hours") with an HTML
-/// page, so JSON parsing alone cannot tell success from failure.
+/// page, so JSON parsing alone cannot tell success from failure. An expired
+/// session can also answer 200 with a login page; that must report an expired
+/// session so the caller renews the login instead of showing the page title.
 fn notice(bytes: &[u8]) -> Option<String> {
     let body = String::from_utf8_lossy(bytes);
     let trimmed = body.trim_start();
@@ -48,17 +63,129 @@ fn notice(bytes: &[u8]) -> Option<String> {
         .and_then(|(_, rest)| rest.split_once("</title>"))
         .map(|(title, _)| title.trim().to_string())
         .filter(|title| !title.is_empty());
-    Some(title.unwrap_or_else(|| "场馆系统暂时无法处理请求".into()))
+    if title
+        .as_deref()
+        .is_some_and(|title| title.contains("登录") || title.contains("认证"))
+        || trimmed.contains("oauth2url")
+        || trimmed.contains("cas/login")
+        || trimmed.contains("统一身份")
+    {
+        return Some("场馆登录已失效，请重新登录".into());
+    }
+    // Outside 8:40–21:40 the site closes every endpoint and answers with its
+    // own "not a booking time" page. That is the service being off for the
+    // evening, not a network or account problem, so say so plainly.
+    if title.as_deref().is_some_and(|title| title.contains("预订")) || trimmed.contains("再来预订")
+    {
+        return Some("晚上服务不可用（预约开放 8:40–21:40）".into());
+    }
+    Some(title.unwrap_or_else(|| "场馆系统返回了无法识别的页面".into()))
+}
+
+/// The venue home page fills a hidden `userno` input with the logged-in user.
+/// A cookie alone proves nothing: the anonymous landing page also sets
+/// `SESSION`, so this is the only reliable signal that the OAuth chain reached
+/// the venue and issued a usable session.
+pub(crate) fn index_logged_in(html: &str) -> bool {
+    let Some((_, rest)) = html.split_once("userno") else {
+        return false;
+    };
+    let window = &rest[..rest.len().min(200)];
+    let Some((_, after)) = window.split_once("value=\"") else {
+        return false;
+    };
+    !after
+        .split('"')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+}
+
+async fn fetch(
+    transport: &Transport,
+    mode: AccessMode,
+    path: &str,
+    params: &[(&str, String)],
+) -> Result<Value, String> {
+    if !path.starts_with("/web/") || path.contains("..") {
+        return Err("场馆接口路径无效".into());
+    }
+    let url =
+        Url::parse_with_params(&format!("{BASE}{path}"), params).map_err(|_| "场馆接口地址无效")?;
+    let mut response = send(transport, mode, &url).await?;
+    // The venue answers a closed booking window (and some other notices) with
+    // a redirect to its own notice page instead of JSON. Follow on-site
+    // redirects so that notice reaches the user; a redirect anywhere else is
+    // the CAS bounce that means the session expired.
+    for _ in 0..3 {
+        if !response.status().is_redirection() {
+            break;
+        }
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .ok_or("场馆登录已失效，请重新登录")?;
+        let next = response
+            .url()
+            .join(location)
+            .map_err(|_| "场馆跳转地址无效")?;
+        let logical = crate::network::original_url(&next)?;
+        if logical.origin() != Url::parse(BASE).unwrap().origin() {
+            return Err("场馆登录已失效，请重新登录".into());
+        }
+        response = send(transport, mode, &logical).await?;
+    }
+    let status = response.status();
+    if status.is_redirection() || matches!(status.as_u16(), 401 | 403) {
+        return Err("场馆登录已失效，请重新登录".into());
+    }
+    if !status.is_success() {
+        return Err(format!("场馆系统暂不可用（HTTP {}）", status.as_u16()));
+    }
+    let bytes = crate::network::limited_bytes(response, 4 * 1024 * 1024).await?;
+    if let Some(notice) = notice(&bytes) {
+        return Err(notice);
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "场馆系统返回了非预期数据".into())
+}
+
+async fn send(
+    transport: &Transport,
+    mode: AccessMode,
+    url: &Url,
+) -> Result<reqwest::Response, String> {
+    let address = Transport::address(url, mode)?;
+    transport
+        .client
+        .get(address)
+        .header("Referer", format!("{BASE}/web/index.html"))
+        .send()
+        .await
+        .map_err(|_| "无法连接场馆系统，请检查网络后重试".into())
+}
+
+/// Name the fields of an unexpected reply; venue data is public, and this is
+/// what tells a shape change apart from an error page during联调.
+fn list_shape_error(label: &str, value: &Value) -> String {
+    let keys = value
+        .as_object()
+        .map(|object| object.keys().cloned().collect::<Vec<_>>().join(", "))
+        .unwrap_or_else(|| "非对象".into());
+    format!("{label}没有返回可识别的数据（字段：{keys}）")
 }
 
 pub struct Client {
     transport: Transport,
+    mode: AccessMode,
 }
 
 impl Client {
     pub fn connect(account: &Account) -> Result<Self, String> {
-        // The venue site is public plain HTTP with its own CAS login, so it is
-        // attempted directly in both network modes rather than through WebVPN.
+        // The venue is plain HTTP on the campus network. Off campus the same
+        // origin is reachable through the WebVPN port mapping (`http-8080`),
+        // so the account's current mode decides how each request is addressed.
         let site = account.sites.get("venue").ok_or("请先完成场馆系统登录")?;
         let cookies = site
             .cookies
@@ -67,38 +194,12 @@ impl Client {
             .ok_or("请先完成场馆系统登录")?;
         Ok(Self {
             transport: Transport::new(Some(cookies))?,
+            mode: account.mode,
         })
     }
 
     async fn get(&self, path: &str, params: &[(&str, String)]) -> Result<Value, String> {
-        if !path.starts_with("/web/") || path.contains("..") {
-            return Err("场馆接口路径无效".into());
-        }
-        let url = Url::parse_with_params(&format!("{BASE}{path}"), params)
-            .map_err(|_| "场馆接口地址无效")?;
-        let address = Transport::address(&url, AccessMode::Direct)?;
-        let response = self
-            .transport
-            .client
-            .get(address)
-            .header("Referer", format!("{BASE}/web/index.html"))
-            .header("Accept", "application/json, text/javascript, */*; q=0.01")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .send()
-            .await
-            .map_err(|_| "无法连接场馆系统，请检查校园网后重试")?;
-        let status = response.status();
-        if status.is_redirection() || matches!(status.as_u16(), 401 | 403) {
-            return Err("场馆登录已失效，请刷新后重试".into());
-        }
-        if !status.is_success() {
-            return Err(format!("场馆系统暂不可用（HTTP {}）", status.as_u16()));
-        }
-        let bytes = crate::network::limited_bytes(response, 4 * 1024 * 1024).await?;
-        if let Some(notice) = notice(&bytes) {
-            return Err(notice);
-        }
-        serde_json::from_slice(&bytes).map_err(|_| "场馆系统返回了非预期数据".into())
+        fetch(&self.transport, self.mode, path, params).await
     }
 
     pub async fn venues(&self) -> Result<Value, String> {
@@ -115,7 +216,7 @@ impl Client {
                     ],
                 )
                 .await?;
-            let rows = value.as_array().ok_or("场馆列表格式已变化")?;
+            let rows = rows_of(&value).ok_or_else(|| list_shape_error("场馆列表", &value))?;
             venues.extend(rows.iter().filter_map(venue));
             if rows.len() < 8 {
                 break;
@@ -297,5 +398,52 @@ mod tests {
             Some("当前不在开放时间".into())
         );
         assert_eq!(notice(br#"{"object": []}"#), None);
+        assert_eq!(
+            notice(
+                "<html><head><title>未到可预订时间</title></head>\
+                 <body>请到8:40-21:40再来预订！</body></html>"
+                    .as_bytes()
+            ),
+            Some("晚上服务不可用（预约开放 8:40–21:40）".into())
+        );
+    }
+
+    #[test]
+    fn login_pages_are_reported_as_expired_sessions() {
+        assert_eq!(
+            notice("<html><head><title>统一身份认证</title></head></html>".as_bytes()),
+            Some("场馆登录已失效，请重新登录".into())
+        );
+        assert_eq!(
+            notice(
+                br#"<html><script src="http://202.117.17.144:8080/web/cas/oauth2url.html?code=x"></script></html>"#
+            ),
+            Some("场馆登录已失效，请重新登录".into())
+        );
+        assert_eq!(
+            notice("<html><body>场馆系统暂时无法处理请求</body></html>".as_bytes()),
+            Some("场馆系统返回了无法识别的页面".into())
+        );
+    }
+
+    #[test]
+    fn list_replies_accept_plain_and_wrapped_arrays() {
+        let plain = json!([{"id": 1}, {"id": 2}]);
+        let wrapped = json!({"object": [{"id": 1}], "total": 1});
+        assert_eq!(rows_of(&plain).map(<[Value]>::len), Some(2));
+        assert_eq!(rows_of(&wrapped).map(<[Value]>::len), Some(1));
+        assert_eq!(rows_of(&json!({"code": 0})), None);
+        assert!(list_shape_error("场馆列表", &json!({"code": 0})).contains("code"));
+    }
+
+    #[test]
+    fn home_page_userno_proves_login() {
+        assert!(index_logged_in(
+            r#"<input id="userno" name="userno" type="hidden" value="3124000000" />"#
+        ));
+        assert!(!index_logged_in(
+            r#"<input id="userno" name="userno" type="hidden" value="" />"#
+        ));
+        assert!(!index_logged_in("<html><title>场馆系统</title></html>"));
     }
 }

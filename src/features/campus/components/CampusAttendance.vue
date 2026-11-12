@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import PageTabs from '../../../components/ui/PageTabs.vue';
-import StatRow from '../../../components/ui/StatRow.vue';
-import StatTile from '../../../components/ui/StatTile.vue';
-import SegmentedTabs from '../../../components/ui/SegmentedTabs.vue';
-import DataTable, { type DataColumn, type DataSort } from '../../../components/ui/DataTable.vue';
-import StatusBadge, { type StatusTone } from '../../../components/ui/StatusBadge.vue';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import InlineAlert from '../../../components/ui/InlineAlert.vue';
-import UiButton from '../../../components/ui/UiButton.vue';
 import { bridge } from '../../../shared/bridge';
 import { applyCached, cacheName } from '../../../shared/cache';
-import { attendanceStats, campusDateKey, campusTimestamp, percent } from '../../../shared/domain';
-import type {
-  AttendanceRecord,
-  AttendanceRecords,
-  AttendanceStream,
-  AttendanceStreams,
-} from '../../../types';
+import {
+  attendanceStats,
+  campusDateKey,
+  campusTimestamp,
+  percent,
+  updatedInfo,
+} from '../../../shared/domain';
+import type { AttendanceRecord, AttendanceRecords, AttendanceStreams } from '../../../types';
 
 /**
- * 考勤 (LAYOUT §9.12): course records for the last 30 days with their rates,
- * plus the swipe-stream table. The attendance service does not return a course
- * name, so the per-course view stays unavailable instead of guessing one.
+ * 考勤 (layout v2): course records for the last 30 days with their rates in the
+ * left column, the record table in the centre, and the swipe stream behind the
+ * same header switch. The attendance service has no course name; the backend
+ * fills it from the synced timetable by weekday, week and sections.
  */
 const TABS = [
   { id: 'records', title: '明细' },
@@ -36,7 +31,7 @@ const filter = ref('all');
 const loading = ref(false);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
-const sort = ref<DataSort | null>({ key: 'date', dir: 'desc' });
+const sort = ref<{ key: 'date'; dir: 'asc' | 'desc' } | null>({ key: 'date', dir: 'desc' });
 
 const range = computed(() => {
   const end = campusTimestamp(`${campusDateKey(Date.now())} 00:00`);
@@ -47,38 +42,32 @@ const range = computed(() => {
 });
 const recordRows = computed<AttendanceRecord[]>(() => records.value?.rows ?? []);
 const stats = computed(() => attendanceStats(recordRows.value));
+const exceptionCount = computed(
+  () =>
+    recordRows.value.filter(
+      (row) => row.status === 'late' || row.status === 'absent' || row.status === 'leave',
+    ).length,
+);
 const visible = computed(() =>
   recordRows.value.filter((row) => {
     if (filter.value === 'all') return true;
     return row.status === 'late' || row.status === 'absent' || row.status === 'leave';
   }),
 );
-const tableRows = computed<Record<string, unknown>[]>(() =>
-  visible.value.map((row) => ({ ...row })),
-);
-const columns: DataColumn[] = [
-  { key: 'date', label: '日期', sortable: true },
-  { key: 'sections', label: '节次' },
-  { key: 'place', label: '地点' },
-  { key: 'teacher', label: '教师' },
-  { key: 'status', label: '状态' },
-];
-const streamColumns: DataColumn[] = [
-  { key: 'time', label: '时间', sortable: true },
-  { key: 'place', label: '地点', sortable: true },
-  { key: 'valid', label: '结果' },
-];
-const streamRows = computed<Record<string, unknown>[]>(() =>
-  (streams.value?.rows ?? []).map((row) => ({ ...row })),
-);
-const STATUS: Record<AttendanceRecord['status'], { tone: StatusTone; label: string }> = {
-  normal: { tone: 'done', label: '正常' },
-  late: { tone: 'near', label: '迟到' },
-  absent: { tone: 'urgent', label: '缺勤' },
-  leave: { tone: 'neutral', label: '请假' },
-  pending: { tone: 'active', label: '未记录' },
-  notRequired: { tone: 'neutral', label: '无需考勤' },
-  unknown: { tone: 'neutral', label: '未知' },
+const sortedRecords = computed(() => {
+  const active = sort.value;
+  if (!active) return visible.value;
+  const factor = active.dir === 'asc' ? 1 : -1;
+  return [...visible.value].sort((left, right) => left.date.localeCompare(right.date) * factor);
+});
+const STATUS: Record<AttendanceRecord['status'], { tone: string; label: string }> = {
+  normal: { tone: 'ok', label: '正常' },
+  late: { tone: 'warn', label: '迟到' },
+  absent: { tone: 'danger', label: '缺勤' },
+  leave: { tone: 'muted', label: '请假' },
+  pending: { tone: 'accent', label: '未记录' },
+  notRequired: { tone: 'muted', label: '无需考勤' },
+  unknown: { tone: 'muted', label: '未知' },
 };
 const rateNote = computed(() => `按本页 ${recordRows.value.length} 条记录统计`);
 const streamsTotal = computed(() => streams.value?.total ?? 0);
@@ -88,15 +77,24 @@ const moreStreams = computed(() => states.value.streams * 50 < streamsTotal.valu
 const subtitle = computed(() =>
   tab.value === 'records' ? `${range.value.start} 至 ${range.value.end}` : '',
 );
+const meta = computed(() =>
+  [subtitle.value, loadedAt.value ? `更新于 ${updatedInfo(loadedAt.value)}` : '']
+    .filter(Boolean)
+    .join(' · '),
+);
 
 function statusOf(status: unknown) {
   return STATUS[String(status) as AttendanceRecord['status']] ?? STATUS.unknown;
 }
-function sections(row: Record<string, unknown>) {
+function sections(row: AttendanceRecord) {
   const start = row.start;
   const end = row.end;
   if (start == null && end == null) return '—';
   return `${start ?? '?'}–${end ?? '?'} 节`;
+}
+function sortBy(key: 'date') {
+  const dir = sort.value?.key === key && sort.value.dir === 'asc' ? 'desc' : 'asc';
+  sort.value = { key, dir };
 }
 
 async function loadRecords(force = false) {
@@ -160,115 +158,201 @@ onMounted(() => void load());
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="考勤"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="load(true)"
-    />
+  <CampusHeaderSlot slot="meta">
+    <span v-if="meta">{{ meta }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <button type="button" class="cv-btn" :disabled="loading" @click="load(true)">刷新</button>
+  </CampusHeaderSlot>
 
-    <PageTabs v-model="tab" :tabs="TABS" label="考勤视图" />
+  <InlineAlert v-if="error" tone="error" :title="error" />
 
-    <template v-if="tab === 'records'">
-      <StatRow label="考勤概况">
-        <StatTile
-          label="到课率"
-          :value="percent(stats.rate)"
-          :loading="loading && !records"
-          :note="rateNote"
-        />
-        <StatTile
-          label="准时率"
-          :value="percent(stats.onTimeRate)"
-          :loading="loading && !records"
-        />
-        <StatTile label="迟到" :value="stats.late" :loading="loading && !records" />
-        <StatTile label="缺勤" :value="stats.absent" :loading="loading && !records" />
-        <StatTile label="请假" :value="stats.leave" :loading="loading && !records" />
-      </StatRow>
-
-      <InlineAlert v-if="error" tone="error" :title="error" />
-      <InlineAlert notice-id="attendance-summary" tone="info" title="按课程汇总暂不可用">
-        考勤接口目前只返回日期、节次和地点，没有课程名称，这里先按记录展示。
-      </InlineAlert>
-
-      <SegmentedTabs
-        v-model="filter"
-        compact
-        :tabs="[
-          { id: 'all', title: '全部' },
-          { id: 'odd', title: '只看异常' },
-        ]"
-        label="考勤筛选"
-      />
-
-      <DataTable
-        v-model:sort="sort"
-        :columns="columns"
-        :rows="tableRows"
-        row-key="id"
-        :loading="loading && !records"
-        :empty-text="recordRows.length ? '没有异常记录' : '这段时间没有考勤记录'"
-        label="考勤明细"
-      >
-        <template #cell-date="{ row }">{{ row.date || '—' }}</template>
-        <template #cell-sections="{ row }">{{ sections(row) }}</template>
-        <template #cell-place="{ row }">{{ row.place || '—' }}</template>
-        <template #cell-teacher="{ row }">{{ row.teacher || '—' }}</template>
-        <template #cell-status="{ row }">
-          <StatusBadge :status="statusOf(row.status).tone" :label="statusOf(row.status).label" />
-        </template>
-      </DataTable>
-
-      <div class="campus-pager">
-        <UiButton size="sm" :disabled="states.records <= 1 || loading" @click="turn(-1)">
-          上一页
-        </UiButton>
-        <span>第 {{ records?.page ?? states.records }} 页 · 共 {{ recordsTotal }} 条</span>
-        <UiButton size="sm" :disabled="loading || !moreRecords" @click="turn(1)">下一页</UiButton>
+  <div class="cv-cols lc">
+    <div class="cv-panel cv-list">
+      <div class="cv-figs">
+        <div class="cv-fig">
+          <span class="k2">到课率</span>
+          <span class="v">{{ percent(stats.rate) }}</span>
+        </div>
+        <div class="cv-fig">
+          <span class="k2">准时率</span>
+          <span class="v">{{ percent(stats.onTimeRate) }}</span>
+        </div>
+        <div class="cv-fig">
+          <span class="k2">迟到</span>
+          <span class="v">{{ stats.late }}</span>
+        </div>
+        <div class="cv-fig">
+          <span class="k2">缺勤 · 请假</span>
+          <span class="v"
+            >{{ stats.absent }}<small>· {{ stats.leave }}</small></span
+          >
+        </div>
       </div>
-    </template>
+      <div class="cv-lh">{{ rateNote }}</div>
+      <div class="cv-hr"></div>
+      <template v-if="tab === 'records'">
+        <div class="cv-lh">筛选<span>条数</span></div>
+        <button
+          type="button"
+          class="cv-item plain"
+          :class="{ on: filter === 'all' }"
+          @click="filter = 'all'"
+        >
+          <b>全部记录</b><span class="cv-n">{{ recordRows.length }}</span>
+        </button>
+        <button
+          type="button"
+          class="cv-item plain"
+          :class="{ on: filter === 'odd' }"
+          @click="filter = 'odd'"
+        >
+          <b>只看异常</b>
+          <span :class="['cv-k', exceptionCount ? 'danger' : 'muted']">{{ exceptionCount }}</span>
+        </button>
+      </template>
+    </div>
 
-    <template v-else>
-      <InlineAlert v-if="error" tone="error" :title="error" />
-      <DataTable
-        :columns="streamColumns"
-        :rows="streamRows"
-        row-key="id"
-        :loading="loading && !streams"
-        :empty-text="'还没有刷卡流水'"
-        label="刷卡流水"
-      >
-        <template #cell-time="{ row }">{{ row.time || '—' }}</template>
-        <template #cell-place="{ row }">{{ row.place || '未知地点' }}</template>
-        <template #cell-valid="{ row }">
-          <StatusBadge
-            :status="row.valid ? 'done' : 'neutral'"
-            :label="row.valid ? '有效' : '无效'"
-          />
-        </template>
-      </DataTable>
-
-      <div class="campus-pager">
-        <UiButton size="sm" :disabled="states.streams <= 1 || loading" @click="turn(-1)">
-          上一页
-        </UiButton>
-        <span>第 {{ streams?.page ?? states.streams }} 页 · 共 {{ streamsTotal }} 条</span>
-        <UiButton size="sm" :disabled="loading || !moreStreams" @click="turn(1)">下一页</UiButton>
+    <div class="cv-center">
+      <div class="cv-ch">
+        <b>{{ tab === 'records' ? '刷卡记录' : '门禁流水' }}</b>
+        <span v-if="tab === 'records'" class="meta">
+          {{ recordRows.length }} 条 · 异常 {{ exceptionCount }} 条
+        </span>
+        <span v-else class="meta">{{ streamsTotal }} 条</span>
+        <span class="end">
+          <span class="cv-seg">
+            <button
+              v-for="item in TABS"
+              :key="item.id"
+              type="button"
+              :class="{ on: tab === item.id }"
+              @click="tab = item.id"
+            >
+              {{ item.title }}
+            </button>
+          </span>
+        </span>
       </div>
-    </template>
-  </section>
+
+      <div v-if="tab === 'records'" class="cv-scroll">
+        <div v-if="loading && !records" class="cv-empty">正在读取考勤记录…</div>
+        <div v-else-if="!sortedRecords.length" class="cv-empty">
+          {{ recordRows.length ? '没有异常记录' : '这段时间没有考勤记录' }}
+        </div>
+        <div v-else class="cv-panel cv-tbl">
+          <div class="cv-thead" style="--cols: 92px 76px 1.4fr 1.1fr 84px 62px">
+            <button type="button" class="cv-th" @click="sortBy('date')">
+              日期<span v-if="sort?.key === 'date'" aria-hidden="true">{{
+                sort.dir === 'asc' ? '↑' : '↓'
+              }}</span>
+            </button>
+            <span>节次</span><span>课程</span><span>地点</span><span>教师</span
+            ><span class="cv-r">状态</span>
+          </div>
+          <div
+            v-for="row in sortedRecords"
+            :key="row.id"
+            class="cv-tr"
+            style="--cols: 92px 76px 1.4fr 1.1fr 84px 62px"
+          >
+            <span class="cv-num">{{ row.date || '—' }}</span>
+            <span class="cv-num cv-sec">{{ sections(row) }}</span>
+            <span class="cv-ellip">{{ row.course || '—' }}</span>
+            <span class="cv-ellip">{{ row.place || '—' }}</span>
+            <span class="cv-sec cv-ellip">{{ row.teacher || '—' }}</span>
+            <span class="cv-r">
+              <span class="cv-badge" :class="statusOf(row.status).tone">
+                {{ statusOf(row.status).label }}
+              </span>
+            </span>
+          </div>
+        </div>
+        <div class="cv-pager">
+          <button
+            type="button"
+            class="cv-btn sm"
+            :disabled="states.records <= 1 || loading"
+            @click="turn(-1)"
+          >
+            上一页
+          </button>
+          <span>第 {{ records?.page ?? states.records }} 页 · 共 {{ recordsTotal }} 条</span>
+          <button
+            type="button"
+            class="cv-btn sm"
+            :disabled="loading || !moreRecords"
+            @click="turn(1)"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+
+      <div v-else class="cv-scroll">
+        <div v-if="loading && !streams" class="cv-empty">正在读取刷卡流水…</div>
+        <div v-else-if="!streams?.rows.length" class="cv-empty">还没有刷卡流水</div>
+        <div v-else class="cv-panel cv-tbl">
+          <div class="cv-thead" style="--cols: 1fr 160px 74px">
+            <span>时间</span><span>地点</span><span class="cv-r">结果</span>
+          </div>
+          <div
+            v-for="row in streams?.rows ?? []"
+            :key="row.id"
+            class="cv-tr"
+            style="--cols: 1fr 160px 74px"
+          >
+            <span class="cv-num">{{ row.time || '—' }}</span>
+            <span class="cv-ellip">{{ row.place || '未知地点' }}</span>
+            <span class="cv-r">
+              <span class="cv-badge" :class="row.valid ? 'ok' : 'muted'">
+                {{ row.valid ? '有效' : '无效' }}
+              </span>
+            </span>
+          </div>
+        </div>
+        <div class="cv-pager">
+          <button
+            type="button"
+            class="cv-btn sm"
+            :disabled="states.streams <= 1 || loading"
+            @click="turn(-1)"
+          >
+            上一页
+          </button>
+          <span>第 {{ streams?.page ?? states.streams }} 页 · 共 {{ streamsTotal }} 条</span>
+          <button
+            type="button"
+            class="cv-btn sm"
+            :disabled="loading || !moreStreams"
+            @click="turn(1)"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.campus-pager {
+.cv-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+.cv-pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 2px;
+  padding: 2px 2px 0;
   color: var(--text-tertiary);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;

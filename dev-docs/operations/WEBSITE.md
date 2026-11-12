@@ -69,6 +69,17 @@ website/
 - 日志：`stats/likes.log` 每次投票一行（方向、累计票数、加盐哈希前 8 位；不含原始 IP），`stats/downloads.log` 每次计入的下载、更新检查（`manifest`）、拒绝的 Referer 与非法路径各一行，`stats/stats.log` 记服务启动、GitHub 抓取与快照。三个文件都按 5 MB 轮转、各留 5 个旧文件。
 - 备份：site-api 每 900 秒把 `likes.json` 与 `gateway-downloads.json` 复制到 `stats/backups/`，各保留最近 192 份（约两天）；点赞每次投票本来就已原子落盘，快照是额外兜底。份数与间隔可用 `STATS_SNAPSHOT_KEEP` / `STATS_SNAPSHOT_INTERVAL` 调整。
 
+## 反馈提交接口
+
+`/site/feedback/`（域名上线后 `/feedback/`）的表单提交到 site-api 的 `POST /feedback`：
+
+- 路由：IP 预览走 `/site/api/feedback`，域名走 `/api/feedback`，两个 nginx 位置都是精确匹配并反代到 `127.0.0.1:8788/feedback`；限流用单独的 `xjtu_feedback` zone（每 IP 60 次/分钟、burst 20），不和 `/api/` 的 `xjtu_site_api`（30 次/分钟）抢额度，因为校园 NAT 下几百人共用一个出口地址。
+- 存储：`/srv/xjtu-launcher/stats/feedback/YYYY-MM.jsonl`，一行一条，只追加并每行 `fsync`；联系方式可以为空；IP 只存加盐摘要前 8 位，Cookie 也只存摘要。
+- 配额与去重按浏览器 Cookie `xl_voter`（与点赞共用）在进程内计算：10 分钟 5 条，同一标题 + 正文 24 小时只入库一次并返回原编号；重启后配额与去重窗口清零，这是有意为之，前面还有 nginx 兜底。
+- 日志：`stats/feedback.log` 只记编号、类型、长度、`has_contact`、`maybe_secret` 与 Cookie 摘要前 8 位，**不写标题、正文、联系方式**；`stats.stats` 的 900 秒快照会把当月 jsonl 一起复制到 `backups/`。
+- 页面不再显示「草图」标记，成功态只显示编号（形如 `FB-20261111-7K3Q`，字母表去掉 `0 O 1 I S`）；失败保留已填内容并写明原因，不自动重试。
+- 应用内入口（「设置 → 反馈与建议」）等 HTTPS 就绪再做，见 `docs/design/feedback-v1/PLAN.md`。
+
 ## 部署到服务器
 
 ### 1. 上传文件
@@ -234,6 +245,7 @@ Tauri 更新器使用 reqwest，默认跟随重定向；**尚未用真实旧版�
 
 - 官网页面：已实现，本机用 Chrome 在 1440 px 和 390 px 宽度下检查过布局，没有横向溢出；第三轮改动在 1280×720 / 1280×800 / 1440×900 与 500×900 下截图核对，首屏仍能同时看到标签、标题、轮播与下载卡。第四轮改动（标签配色、三栏方向、点赞、关于、Q&A、下载量）在 1440 px 与真实 390 px 视口（CDP `Emulation.setDeviceMetricsOverride`）截图核对，`body.scrollWidth` 等于视口宽度。第五轮改动（标签去圆点加粗、右上角下载量、玻璃下载卡、Q&amp;A 侧边目录）在 1440 px、1280×800 与 390 px 下核对：首屏下载卡底边 741 px < 800，无横向溢出；Q&amp;A 目录默认高亮「常见问题」，点击问题会展开并定位到 `scroll-margin-top`，侧边目录在 390 px 下收成「目录」面板。**尚未经过用户验收。**
 - 点赞与下载量接口：代码、systemd 服务与 nginx 路由已部署，`xjtu-site-api` 与 `xjtu-oss-gateway` 均处于 active；`/site/api/stats` 与 `/api/stats`（带 `Host` 头）都返回真实数据。2026-11-08 验证：经 `127.0.0.1:8787` 和公网 `/download/` 各发一次不带 `Range` 的安装包 `GET`，`gateway-downloads.json` 与 `/site/api/stats` 的总数同步 +1（46 → 48）；`HEAD`、`Range`、`latest.json`、`.sig` 均不计数；验证后清掉 `gateway-downloads.json`，线上起算值为 GitHub 的 46。点赞：新浏览器配置下点击方向按钮返回「已支持」且计数与 localStorage 一致，服务端按加盐 IP 摘要去重；测试票已清，线上为 0/0/0。**尚未有真实访客数据，也未经过用户验收。**
+- 反馈页与接口：2026-11-11 已部署。页面 `/site/feedback/` 与 `feedback.js` 返回 200；四个页面的导航都有「反馈」入口，390 px 下顶栏不重叠（首页/preview 小屏隐藏 Q&amp;A，社区/Q&amp;A 页小屏隐藏「首页」）。接口经 `/site/api/feedback` 与 `Host: xjtu-launcher.cn` 的 `/api/feedback` 各真实提交一条，返回编号并在 `stats/feedback/2026-11.jsonl` 读到同一条，`feedback.log` 里没有正文与联系方式；验证后两条测试记录与其日志行已删除，线上计数为 0。`tools/site-api/test_feedback.py` 的 9 个用例在 Python 3.9 下通过（测试环境是 Python 3.9，**服务器是 3.6.8，未在 3.6 上跑过测试**；服务本身已在 3.6 上启动并通过真实请求）。**页面视觉与文案仍待用户验收。**
 - 社区广场：`/site/community/` 返回 200，首页与 Q&amp;A 导航已加「社区广场」；桌面单条约 327×600 px，390 px 下约 110×490 px，`body.scrollWidth` 等于视口宽度，390 px 导航保留「社区广场 / 下载 / GitHub」；`band-in`、`bar-float` 动画与 `prefers-reduced-motion` 关闭规则已用计算样式确认。**页面只有占位说明，尚未对接应用内社区内容，最新视觉尚未经过用户验收。**
 - Q&A 页面：`/site/doc/qa/` 与 `qa.js` 返回 200；左侧目录在桌面与 390 px 下均已截图核对，点击问题链接会展开并定位（`top` 约 76 px，与 `scroll-margin-top` 一致）。内容按 v0.5.2 编写，**未逐条与用户确认**。
 - 域名解析：**当前不可用**。备案期间阿里云不允许解析，权威 NS 无 A 记录，公共 DNS 均为空；带 `Host: xjtu-launcher.cn` 访问 IP 仍被 `Server: Beaver` 以未备案拦截（403）。备案通过后再恢复解析并申请证书。
@@ -244,6 +256,7 @@ Tauri 更新器使用 reqwest，默认跟随重定向；**尚未用真实旧版�
 - 2026-11-10 首页并入 `/preview/` 改版稿（用户指定）：`preview/preview.css` 的轮播指针倾斜 / 高光 / 强调色阴影、下载卡边缘光与推荐卡旋转描边，以及 `preview/direction.css` 的整行交替方向区（大号描边编号、`.path-body` 包裹、偶数行图在左）都搬进 `styles.css`；指针逻辑从 `preview/preview.js` 移到新的 `polish.js`（触屏与 `prefers-reduced-motion` 下不加载效果）。首页方向区标记改成和预览页一致，说明文字从「每张卡片下面有一个『支持』」改成「每个方向旁边」。资源版本号统一 `v=20261110c`。**`preview/` 目录现在和首页重复**（同一份样式与标记），以后再改样式要改两处，建议确认后删掉该目录和 `/site/preview/`。线上核对：1440 宽下方向区为交替整行、轮播窗口有倾斜矩阵与 `--accent` 阴影、推荐卡 `ring-turn` 动画在跑；390 宽下方向区单列堆叠，`body.scrollWidth` = 390 无横向溢出。
 - 2026-11-10 轮播交互（用户提出）：鼠标移到轮播区（`.stage`）时暂停自动播放并让当前截图放大 10%，移出恢复。暂停复用 `is-paused`（进度条 `dotfill` 一起停），触摸设备不触发（`pointerType` 判断 + `@media (hover: hover)` 限制放大）。放大是居中的，所以 `.carousel-foot` 的间距从 18 px 提到 30 px（短屏 22 / 18，窄屏 20），1440×900 下放大后窗口顶 306 px 仍在简介文字（298 px）之下、底 701 px 仍在说明文字（714 px）之上；1280×800 首屏下载卡底边 751 px < 800；390 宽 `body.scrollWidth` = 390。资源版本 `v=20261110g`。
 - 2026-11-10 上线 v0.6.6：`docs/releases/v0.6.6.md` 与 `website/downloads.json`（版本 0.6.6、日期 2026-11-10、`base_url` `/download/v0.6.6/`、三个包的真实大小与 SHA256）已随发版提交 `1477eba` 入库；站点重新打包上传（先传到 `site.new` 再整目录切换，旧目录留作 `site.old`），资源版本 `v=20261110h`。线上核对：首屏版本胶囊 `v0.6.6`、版本行「当前版本 0.6.6 · 2026-11-10」、三张卡片指向 `/download/v0.6.6/` 且大小 24.0 / 24.9 / 21.5 MB、三条 SHA256 明细；轮播五张、`.carousel-foot` 间距 30 px；Q&amp;A 的版本与日期由清单填入 `v0.6.6` / `2026-11-10`；`/download/v0.6.6/XJTU.Launcher_0.6.6_x64-setup.exe` 带 `Range` 请求返回 206 与真正的 PE 头，网关计数从 17 增到 18。整包完整下载仍未用浏览器走一遍。
+- 2026-11-11 反馈页上线：新增 `website/feedback/`（页面 + `feedback.js`），导航在首页、社区广场、Q&amp;A、preview 四处加「反馈」入口；页面提交到 site-api 的 `POST /feedback`。设计与计划书在 `docs/design/feedback-v1/`。数据在 `/srv/xjtu-launcher/stats/feedback/YYYY-MM.jsonl`，接口细节见 `tools/site-api/README.md`，nginx 用单独的 `xjtu_feedback` zone（每 IP 60 次/分钟）。
 - 2026-11-10 版本清单自动化（用户选定「流水线生成清单」）：新增 `tools/site-manifest.mjs` 与 `.github/workflows/site-manifest.yml`，`tools/upload-oss.mjs` 发版时顺带上传 `downloads.json`；网关与 nginx 的读法见上文「更新下载信息」。**本次上线的 0.6.6 走的仍是站内静态副本**——桶里还没有 `downloads.json`（网关实测 404，nginx 按设计退回静态文件），因为改动还没进 `main`，发版工作流跑的时候仓库里还没有这段代码。合并进 `main` 后，跑一次 `Site manifest`（输入 `0.6.6`）就能把 0.6.6 的清单补齐，之后每个版本自动更新；在此之前官网版本信息仍以 `website/downloads.json` 为准。
 - ICP 备案：**未完成**，域名被阿里云拦截（403 `Non-compliance ICP Filing`），这是域名上线的唯一阻塞项。
 - HTTPS：**未完成**，443 未监听；备案前无法完成 HTTP-01 验证。

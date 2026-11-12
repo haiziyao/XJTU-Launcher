@@ -1,6 +1,6 @@
 import type { Component } from 'vue';
 import { BookOpen, Compass, Link2, MapPin, Users } from 'lucide-vue-next';
-import type { AgentSearchReason } from '../../types';
+import type { AgentSearchReason, ResourceCatalog, ResourceSite } from '../../types';
 
 export type CommunitySectionId = 'clubs' | 'courses' | 'life' | 'career' | 'links';
 
@@ -55,14 +55,72 @@ export const COMMUNITY_SECTIONS: CommunitySection[] = [
   },
   {
     id: 'links',
-    title: '资源导航',
-    description: '官方与第三方资源站引用',
-    keywords: ['资源', '导航', '官网', '图书馆', '教务处', '正版软件', '开源工具', '外部链接'],
+    title: '资源站点',
+    description: '校园服务与常用网站入口',
+    keywords: [
+      '资源',
+      '站点',
+      '网站',
+      '网址',
+      '导航',
+      '官网',
+      '图书馆',
+      '教务处',
+      '教务系统',
+      '思源学堂',
+      '一卡通',
+      'WebVPN',
+      '外部链接',
+    ],
     icon: Link2,
     accent: '#566176',
     accentSoft: '#e4e8ef',
   },
 ];
+
+/** Local-only order of the sections the user starred. */
+export const COMMUNITY_FAVORITES_KEY = 'community.favorites:local';
+
+const SECTION_IDS = new Set<string>(COMMUNITY_SECTIONS.map((section) => section.id));
+
+/** Drops unknown, repeated or non-string ids from a stored favorites value. */
+export function parseFavoriteIds(value: string | null): CommunitySectionId[] {
+  if (!value) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const ids: CommunitySectionId[] = [];
+  for (const item of parsed) {
+    if (typeof item !== 'string' || !SECTION_IDS.has(item)) continue;
+    if (!ids.includes(item as CommunitySectionId)) ids.push(item as CommunitySectionId);
+  }
+  return ids;
+}
+
+export function toggleFavoriteId(
+  ids: readonly CommunitySectionId[],
+  id: CommunitySectionId,
+): CommunitySectionId[] {
+  return ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id];
+}
+
+/** Tabs shown on the resource page: 推荐 first, then the catalog's categories. */
+export function resourceTabs(catalog: ResourceCatalog | null): { id: string; title: string }[] {
+  const recommended = { id: 'recommended', title: '推荐' };
+  if (!catalog) return [recommended];
+  return [recommended, ...catalog.categories.map(({ id, title }) => ({ id, title }))];
+}
+
+export function sitesForTab(catalog: ResourceCatalog | null, tab: string): ResourceSite[] {
+  if (!catalog) return [];
+  return catalog.sites.filter((site) =>
+    tab === 'recommended' ? site.featured : site.categories.includes(tab),
+  );
+}
 
 /**
  * Local navigation search: every whitespace-separated token must occur in the

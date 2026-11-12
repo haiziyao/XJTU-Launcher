@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 1fr 96px 74px 44px; }
+.tbl .tr { height: 35px; }
+.unread { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.read { width: 6px; flex-shrink: 0; }
+.tr b { font-weight: 500; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="通知" data-meta="12 条未读 · 更新于 5 分钟前"><span class="btn">全部标为已读</span><span class="search">搜索标题</span></header>
+    <div class="content">
+      <div class="cols l-c">
+        <div class="panel clist">
+          <div class="lh">频道<span>未读</span></div>
+          <div class="citem plain on"><b>全部</b><span class="k accent">12</span></div>
+          <div class="citem plain"><b>教务处</b><span class="k accent">5</span></div>
+          <div class="citem plain"><b>学生工作部</b><span class="k accent">3</span></div>
+          <div class="citem plain"><b>计算机学院</b><span class="k accent">2</span></div>
+          <div class="citem plain"><b>图书馆</b><span class="k accent">1</span></div>
+          <div class="citem plain"><b>后勤保障部</b><span class="k accent">1</span></div>
+          <div class="citem plain"><b>国际合作与交流处</b><span class="n">0</span></div>
+          <div class="citem plain"><b>体育中心</b><span class="n">0</span></div>
+        </div>
+
+        <div class="center">
+          <div class="panel tbl">
+            <div class="thead"><span>标题</span><span>频道</span><span class="r">日期</span><span></span></div>
+            <div class="grp">今天<span class="n">4</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">关于 2026-2027 学年第一学期期末考试安排的通知</b></span><span class="sec ellip">教务处</span><span class="r num muted">09:40</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">2027 届本科毕业设计（论文）选题工作安排</b></span><span class="sec ellip">计算机学院</span><span class="r num muted">09:12</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">冬季学生宿舍安全检查通知</b></span><span class="sec ellip">学生工作部</span><span class="r num muted">08:30</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">钱学森图书馆 11 月 16 日闭馆维护</b></span><span class="sec ellip">图书馆</span><span class="r num muted">08:02</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="grp">本周<span class="n">6</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">关于开展 2026 年秋季学期学生评教工作的通知</b></span><span class="sec ellip">教务处</span><span class="r num muted">周二</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">大学英语四六级考试报名提醒</b></span><span class="sec ellip">教务处</span><span class="r num muted">周二</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="unread"></i><b class="ellip">2026 年国家奖学金评审结果公示</b></span><span class="sec ellip">学生工作部</span><span class="r num muted">周一</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="read"></i><span class="ellip sec">兴庆校区部分区域停水通知</span></span><span class="sec ellip">后勤保障部</span><span class="r num muted">周一</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="read"></i><span class="ellip sec">第十届校园程序设计竞赛报名</span></span><span class="sec ellip">计算机学院</span><span class="r num muted">周一</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="grp">更早</div>
+            <div class="tr"><span class="c"><i class="read"></i><span class="ellip sec">关于调整部分课程上课地点的通知</span></span><span class="sec ellip">教务处</span><span class="r num muted">11-07</span><span class="r link" style="font-size:12px">打开</span></div>
+            <div class="tr"><span class="c"><i class="read"></i><span class="ellip sec">2026 年秋季学期体质健康测试安排</span></span><span class="sec ellip">体育中心</span><span class="r num muted">11-05</span><span class="r link" style="font-size:12px">打开</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

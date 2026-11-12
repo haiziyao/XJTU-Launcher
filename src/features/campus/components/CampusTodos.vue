@@ -1,27 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ClipboardCheck, ExternalLink, Search } from 'lucide-vue-next';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import EmptyState from '../../../components/ui/EmptyState.vue';
-import InlineAlert from '../../../components/ui/InlineAlert.vue';
-import MoreMenu, { type MoreItem } from '../../../components/ui/MoreMenu.vue';
-import UiButton from '../../../components/ui/UiButton.vue';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import { bridge } from '../../../shared/bridge';
 import { loadLmsTodos } from '../campusOverview';
 import { applyCached } from '../../../shared/cache';
-import { campusTimestamp, dueInfo, todoBuckets } from '../../../shared/domain';
+import {
+  campusTimestamp,
+  courseHue,
+  dueInfo,
+  todoBuckets,
+  updatedInfo,
+} from '../../../shared/domain';
 import type { EvaluationList, LmsTodoItem, LmsTodos } from '../../../types';
 import { campusTodoCount } from '../campusNav';
 
 /**
- * 待办 (LAYOUT §9.2, version B): the homework the school's official todo list
- * still keeps open, grouped into one dense table. Submissions stay on the
- * campus website; this page only reads and groups what is due.
+ * 待办 (layout v2): the homework the school's official todo list still keeps
+ * open, in one dense table with a filter index on the left and the selected
+ * item on the right. Submissions stay on the campus website; this page only
+ * reads and groups what is due.
  */
 interface TodoRow extends LmsTodoItem {
   dueAt: number | null;
 }
-type Filter = 'all' | 'overdue' | 'today' | 'week';
+type Filter = 'all' | 'overdue' | 'today' | 'week' | 'later';
 type Tone = 'overdue' | 'today' | 'soon' | 'later';
 
 const emit = defineEmits<{ 'open-section': [id: string] }>();
@@ -34,15 +37,17 @@ const error = ref('');
 const now = ref(Date.now());
 const query = ref('');
 const filter = ref<Filter>('all');
+const courseFilter = ref<string | null>(null);
+const selectedId = ref<number | null>(null);
 const evaluationCount = ref<number | null>(null);
-const moreItems: MoreItem[] = [{ id: 'lms', label: '在思源学堂中打开', icon: ExternalLink }];
 
 const allBuckets = computed(() => todoBuckets(rows.value, now.value));
 const matched = computed(() => {
   const keyword = query.value.trim().toLowerCase();
-  if (!keyword) return rows.value;
-  return rows.value.filter((item) =>
-    `${item.title} ${item.course}`.toLowerCase().includes(keyword),
+  return rows.value.filter(
+    (item) =>
+      (!keyword || `${item.title} ${item.course}`.toLowerCase().includes(keyword)) &&
+      (!courseFilter.value || item.course === courseFilter.value),
   );
 });
 const visibleBuckets = computed(() => {
@@ -50,62 +55,35 @@ const visibleBuckets = computed(() => {
   if (filter.value === 'all') return groups;
   if (filter.value === 'week')
     return groups.filter((group) => ['today', 'tomorrow', 'week'].includes(group.id));
+  if (filter.value === 'later') return groups.filter((group) => group.id === 'later');
   return groups.filter((group) => group.id === filter.value);
 });
-const subtitle = computed(() =>
-  rows.value.length ? `${semester.value || '当前学期'} · ${rows.value.length} 项待交` : '',
-);
+const meta = computed(() => {
+  if (!rows.value.length) return semester.value || '';
+  const updated = loadedAt.value ? ` · ${updatedInfo(loadedAt.value, now.value)}` : '';
+  return `${semester.value || '当前学期'} · ${rows.value.length} 项未交${updated}`;
+});
 
-function countBucket(id: string): number {
-  return allBuckets.value.find((group) => group.id === id)?.items.length ?? 0;
+function countBucket(...ids: string[]): number {
+  return allBuckets.value
+    .filter((group) => ids.includes(group.id))
+    .reduce((total, group) => total + group.items.length, 0);
 }
 const todayCount = computed(() => countBucket('today'));
+const weekCount = computed(() => countBucket('today', 'tomorrow', 'week'));
+const laterCount = computed(() => countBucket('later', 'none'));
 const overdueCount = computed(() => countBucket('overdue'));
-const courseCount = computed(() => new Set(rows.value.map((item) => item.course)).size);
-const todaySub = computed(() => {
-  const first = allBuckets.value.find((group) => group.id === 'today')?.items[0];
-  return first ? dueInfo(first.dueAt, now.value).countdown : '今天没有截止';
+const courses = computed(() => {
+  const counts = new Map<string, number>();
+  for (const item of rows.value) {
+    const name = item.course || '未标注课程';
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 });
-const stats = computed(() => [
-  {
-    key: 'open' as const,
-    label: '未交',
-    value: rows.value.length,
-    sub: `${courseCount.value} 门课程`,
-    filter: 'all' as Filter,
-  },
-  {
-    key: 'today' as const,
-    label: '今天截止',
-    value: todayCount.value,
-    sub: todaySub.value,
-    filter: 'today' as Filter,
-    hot: todayCount.value > 0,
-  },
-  {
-    key: 'week' as const,
-    label: '本周',
-    value: todayCount.value + countBucket('tomorrow') + countBucket('week'),
-    sub: todayCount.value ? '含今天' : '本周内',
-    filter: 'week' as Filter,
-  },
-  {
-    key: 'overdue' as const,
-    label: '逾期',
-    value: overdueCount.value,
-    sub: overdueCount.value ? '已过截止时间' : '没有逾期',
-    filter: 'overdue' as Filter,
-    danger: overdueCount.value > 0,
-  },
-  {
-    key: 'evaluations' as const,
-    label: '待评教',
-    value: evaluationCount.value ?? '—',
-    sub: evaluationCount.value == null ? '未读取' : evaluationCount.value ? '未完成' : '全部完成',
-    section: 'evaluations',
-    link: true,
-  },
-]);
+const selected = computed(() => rows.value.find((item) => item.id === selectedId.value) ?? null);
 
 const tone = (id: string): Tone => {
   if (id === 'overdue') return 'overdue';
@@ -114,6 +92,7 @@ const tone = (id: string): Tone => {
   return 'later';
 };
 const due = (item: TodoRow) => dueInfo(item.dueAt, now.value);
+const courseClass = (name: string): string => `c${courseHue(name) + 1}`;
 const bandMeta = (group: { id: string; items: TodoRow[] }): string => {
   if (group.id === 'overdue') return '已过截止时间';
   if (group.id === 'today') return `最晚${due(group.items[group.items.length - 1]).text}`;
@@ -130,6 +109,14 @@ function toRows(list: LmsTodoItem[]): TodoRow[] {
   });
 }
 
+function pickFilter(next: Filter) {
+  filter.value = filter.value === next ? 'all' : next;
+}
+
+function pickCourse(name: string) {
+  courseFilter.value = courseFilter.value === name ? null : name;
+}
+
 async function loadEvaluations(force = false) {
   try {
     const list = (await bridge.schoolQuery(
@@ -139,7 +126,7 @@ async function loadEvaluations(force = false) {
     )) as EvaluationList;
     evaluationCount.value = list.rows.length;
   } catch (e) {
-    // The tile is a shortcut, not the page; a failed count must not hide 待办.
+    // The shortcut is not the page; a failed count must not hide 待办.
     console.error('[campus] todo evaluations', e);
     evaluationCount.value = null;
   }
@@ -170,27 +157,7 @@ async function load(force = false) {
   }
 }
 
-function onStat(stat: (typeof stats.value)[number]) {
-  if ('section' in stat && stat.section) {
-    emit('open-section', stat.section);
-    return;
-  }
-  if ('filter' in stat && stat.filter) {
-    filter.value = filter.value === stat.filter ? 'all' : stat.filter;
-  }
-}
-
-function clearFilters() {
-  filter.value = 'all';
-  query.value = '';
-}
-
-function onMore(id: string) {
-  if (id === 'lms') void bridge.openUrl('https://lms.xjtu.edu.cn');
-}
-
 async function openLms() {
-  error.value = '';
   try {
     await bridge.openUrl('https://lms.xjtu.edu.cn');
   } catch (e) {
@@ -198,6 +165,23 @@ async function openLms() {
     error.value = e instanceof Error ? e.message : String(e);
   }
 }
+
+// Keep one row selected so the detail column is never an empty third of the page.
+watch(
+  visibleBuckets,
+  (groups) => {
+    const first = groups.flatMap((group) => group.items)[0];
+    if (!first) {
+      selectedId.value = null;
+    } else if (
+      !selectedId.value ||
+      !groups.some((g) => g.items.some((i) => i.id === selectedId.value))
+    ) {
+      selectedId.value = first.id;
+    }
+  },
+  { immediate: true },
+);
 
 let clock = 0;
 onMounted(() => {
@@ -208,116 +192,219 @@ onUnmounted(() => window.clearInterval(clock));
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="待办"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="load(true)"
-    >
-      <template #filters>
-        <label class="field-shell search todo-search">
-          <Search :size="13" aria-hidden="true" />
-          <input
-            v-model="query"
-            type="search"
-            placeholder="搜索作业或课程"
-            aria-label="搜索待办"
-            spellcheck="false"
-          />
-        </label>
-        <UiButton v-if="filter !== 'all' || query" variant="ghost" size="sm" @click="clearFilters">
-          清除筛选
-        </UiButton>
-      </template>
-      <template #more><MoreMenu :items="moreItems" @select="onMore" /></template>
-    </SectionHeader>
+  <CampusHeaderSlot slot="meta">
+    <span v-if="meta">{{ meta }}</span>
+    <span v-if="failed" class="cv-due-soon">· {{ failed }} 个请求失败</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <label class="cv-search">
+      <Search :size="13" aria-hidden="true" />
+      <input
+        v-model="query"
+        type="search"
+        placeholder="搜索作业或课程"
+        aria-label="搜索待办"
+        spellcheck="false"
+      />
+    </label>
+    <button type="button" class="cv-btn" :disabled="loading" @click="load(true)">刷新</button>
+  </CampusHeaderSlot>
 
-    <InlineAlert v-if="error" tone="error" :title="error" />
-    <InlineAlert v-if="failed" tone="partial" title="部分内容未能读取">
-      {{ failed }} 个课程或作业请求失败，列表可能不完整；刷新可重试。
-    </InlineAlert>
-
-    <div v-if="rows.length" class="campus-stat-row">
+  <div class="cv-cols lcr">
+    <div class="cv-panel cv-list">
+      <div class="cv-lh">截止</div>
       <button
-        v-for="stat in stats"
-        :key="stat.key"
         type="button"
-        class="campus-stat"
-        :class="{
-          hot: 'hot' in stat && stat.hot,
-          danger: 'danger' in stat && stat.danger,
-          link: 'link' in stat && stat.link,
-          active: 'filter' in stat && stat.filter !== 'all' && filter === stat.filter,
-        }"
-        @click="onStat(stat)"
+        class="cv-item plain"
+        :class="{ on: filter === 'all' }"
+        @click="
+          filter = 'all';
+          courseFilter = null;
+        "
       >
-        <span class="k">{{ stat.label }}</span>
-        <span class="v">{{ stat.value }}</span>
-        <span class="s">{{ stat.sub }}</span>
+        <b>全部未交</b><span class="cv-k accent">{{ rows.length }}</span>
+      </button>
+      <button
+        type="button"
+        class="cv-item plain"
+        :class="{ on: filter === 'today' }"
+        @click="pickFilter('today')"
+      >
+        <b>今天</b>
+        <span :class="['cv-k', todayCount ? 'danger' : 'muted']">{{ todayCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="cv-item plain"
+        :class="{ on: filter === 'week' }"
+        @click="pickFilter('week')"
+      >
+        <b>本周</b>
+        <span :class="['cv-k', weekCount ? 'warn' : 'muted']">{{ weekCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="cv-item plain"
+        :class="{ on: filter === 'later' }"
+        @click="pickFilter('later')"
+      >
+        <b>以后</b><span class="cv-n n">{{ laterCount }}</span>
+      </button>
+      <button
+        type="button"
+        class="cv-item plain"
+        :class="{ on: filter === 'overdue' }"
+        @click="pickFilter('overdue')"
+      >
+        <b>逾期</b>
+        <span :class="['cv-k', overdueCount ? 'danger' : 'muted']">{{ overdueCount }}</span>
+      </button>
+
+      <div class="cv-lh">课程</div>
+      <button
+        v-for="course in courses"
+        :key="course.name"
+        type="button"
+        class="cv-item"
+        :class="{ on: courseFilter === course.name }"
+        @click="pickCourse(course.name)"
+      >
+        <i class="cv-cs" :class="courseClass(course.name)" aria-hidden="true"></i>
+        <b>{{ course.name }}</b>
+        <span class="cv-n">{{ course.count }}</span>
+      </button>
+
+      <div class="cv-lh">其他</div>
+      <button type="button" class="cv-item plain" @click="emit('open-section', 'evaluations')">
+        <b>待评教</b>
+        <span class="cv-link">{{ evaluationCount ?? '—' }} ›</span>
       </button>
     </div>
 
-    <EmptyState
-      v-if="loading && !rows.length"
-      :icon="ClipboardCheck"
-      compact
-      busy
-      title="正在读取思源学堂待办…"
-      description="直接使用学校的官方待办列表，之后会先使用缓存。"
-    />
-    <EmptyState
-      v-else-if="!rows.length && !error"
-      :icon="ClipboardCheck"
-      title="当前学期没有待交作业"
-      description="这里只显示尚未提交、且老师尚未截止的作业。"
-    />
-    <EmptyState
-      v-else-if="!visibleBuckets.length"
-      :icon="ClipboardCheck"
-      compact
-      title="没有符合筛选条件的待办"
-      description="清除筛选或换一个关键词试试。"
-    />
-
-    <div v-if="visibleBuckets.length" class="campus-table">
-      <div class="campus-table-head">
-        <span></span>
-        <span>作业</span>
-        <span>课程</span>
-        <span class="num">截止</span>
-        <span class="num remain">剩余</span>
-        <span class="num">操作</span>
+    <div class="cv-center">
+      <div v-if="loading && !rows.length" class="cv-empty">
+        <ClipboardCheck :size="22" /><b>正在读取思源学堂待办…</b>
+        <span>直接使用学校的官方待办列表，之后会先使用缓存。</span>
       </div>
-      <section
-        v-for="group in visibleBuckets"
-        :key="group.id"
-        class="campus-band"
-        :data-tone="tone(group.id)"
-      >
-        <div class="campus-band-head">
-          <span>{{ group.title }}</span>
-          <span class="campus-band-count">{{ group.items.length }}</span>
-          <span class="campus-band-meta">{{ bandMeta(group) }}</span>
+      <div v-else-if="error && !rows.length" class="cv-empty">
+        <ClipboardCheck :size="22" /><b>待办没有读取成功</b><span>{{ error }}</span>
+      </div>
+      <div v-else-if="!rows.length" class="cv-empty">
+        <ClipboardCheck :size="22" /><b>当前学期没有待交作业</b>
+        <span>这里只显示尚未提交、且老师尚未截止的作业。</span>
+      </div>
+      <div v-else-if="!visibleBuckets.length" class="cv-empty">
+        <ClipboardCheck :size="22" /><b>没有符合筛选条件的待办</b>
+        <span>换一个截止范围、课程或关键词试试。</span>
+      </div>
+
+      <div v-else class="cv-panel cv-tbl">
+        <div class="cv-thead" style="--cols: 1fr 96px 60px">
+          <span>作业</span><span class="cv-r">截止</span><span class="cv-r">剩余</span>
         </div>
-        <div v-for="item in group.items" :key="item.id" class="campus-row">
-          <span><i class="campus-dot" :data-tone="tone(group.id)" aria-hidden="true"></i></span>
-          <span class="name">{{ item.title }}</span>
-          <span class="course">{{ item.course || '未标注课程' }}</span>
-          <span class="num">{{ due(item).text }}</span>
-          <span class="num muted remain">{{ due(item).countdown || '—' }}</span>
-          <button type="button" class="row-action" title="在思源学堂网页打开" @click="openLms">
-            打开
+        <template v-for="group in visibleBuckets" :key="group.id">
+          <div
+            class="cv-grp"
+            :class="{
+              today: group.id === 'today' || group.id === 'overdue',
+              soon: group.id === 'tomorrow' || group.id === 'week',
+            }"
+          >
+            {{ group.title }}<span class="n">{{ group.items.length }}</span>
+            <span class="cv-muted" style="margin-left: auto; font-weight: 400">{{
+              bandMeta(group)
+            }}</span>
+          </div>
+          <button
+            v-for="item in group.items"
+            :key="item.id"
+            type="button"
+            class="cv-tr"
+            style="--cols: 1fr 96px 60px"
+            :class="{ sel: selectedId === item.id }"
+            @click="selectedId = item.id"
+          >
+            <span class="c">
+              <i
+                class="cv-cs"
+                :class="courseClass(item.course || '未标注课程')"
+                aria-hidden="true"
+              ></i>
+              <span class="cv-tt">
+                <span class="cv-ellip">{{ item.title }}</span>
+                <small>{{ item.course || '未标注课程' }}</small>
+              </span>
+            </span>
+            <span
+              class="cv-r cv-num"
+              :class="{
+                'cv-due-today': tone(group.id) === 'today' || tone(group.id) === 'overdue',
+                'cv-due-soon': tone(group.id) === 'soon',
+              }"
+            >
+              {{ due(item).text }}
+            </span>
+            <span
+              class="cv-r cv-num"
+              :class="{
+                'cv-due-today': tone(group.id) === 'today' || tone(group.id) === 'overdue',
+                'cv-due-soon': tone(group.id) === 'soon',
+                'cv-muted': tone(group.id) === 'later',
+              }"
+            >
+              {{ due(item).countdown || '—' }}
+            </span>
+          </button>
+        </template>
+      </div>
+    </div>
+
+    <div class="cv-panel cv-detail">
+      <template v-if="selected">
+        <div class="cv-type">
+          <i
+            class="cv-cs"
+            :class="courseClass(selected.course || '未标注课程')"
+            aria-hidden="true"
+          ></i>
+          {{ selected.course || '未标注课程' }} · 作业
+          <span class="cv-badge" :class="selected.state === 'overdue' ? 'danger' : 'accent'">
+            {{ selected.state === 'overdue' ? '已逾期' : '未交' }}
+          </span>
+        </div>
+        <h3>{{ selected.title }}</h3>
+        <div
+          style="font-size: 12px"
+          :class="
+            due(selected).countdown
+              ? selected.dueAt && selected.dueAt < now
+                ? 'cv-due-today'
+                : 'cv-sec'
+              : 'cv-muted'
+          "
+        >
+          {{ selected.dueAt ? `${due(selected).text} 截止` : '没有截止时间' }}
+          <template v-if="due(selected).countdown"> · 还剩 {{ due(selected).countdown }}</template>
+        </div>
+        <dl class="cv-kv">
+          <dt>学期</dt>
+          <dd>{{ selected.semester || semester || '—' }}</dd>
+          <dt>课程号</dt>
+          <dd class="cv-num">{{ selected.courseCode || '—' }}</dd>
+          <dt>截止</dt>
+          <dd class="cv-num">{{ selected.end || '—' }}</dd>
+        </dl>
+        <div class="cv-blk">
+          <h4>提交</h4>
+          <p>应用内只读。作业在思源学堂网页提交，提交后这里会自动更新。</p>
+        </div>
+        <div class="cv-foot">
+          <button type="button" class="cv-btn primary" @click="openLms">
+            <ExternalLink :size="13" />在思源学堂提交
           </button>
         </div>
-      </section>
+      </template>
+      <div v-else class="cv-placeholder">选择左侧的一项作业查看详情。</div>
     </div>
-  </section>
+  </div>
 </template>
-
-<style scoped>
-.todo-search {
-  width: 220px;
-}
-</style>

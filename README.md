@@ -51,10 +51,12 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 ### 社区广场
 
-- 五个板块：社团、课程攻略、校园生活、生涯分享、资源导航
-- 默认导航页用矩形板块卡展示，中下部分提供全局搜索框与「普通 / Agent」模式切换
+- 五个板块：社团、课程攻略、校园生活、生涯分享、资源站点
+- 默认导航页用矩形板块卡展示，右上角星标可收藏；「我的收藏」在页面顶部用紧凑方块做快捷入口，悬停横向展开
+- 资源站点页提供「推荐」与分类标签，收录教务系统、思源学堂、图书馆、一卡通等校园服务入口，可复制地址或交给系统浏览器打开；站点目录随应用发布，可本地覆盖
+- 中下部分提供全局搜索框与「普通 / Agent」模式切换
 - Agent 模式需要在 Agent 设置里开启「搜索服务 Agent」，并配置可用的模型；模型不可达时会置灰并说明原因
-- **当前边界**：板块页与详情页仍是「待开发」占位，内容包也还没落地；社区广场目前是导航页，不是已经有丰富内容的论坛
+- **当前边界**：除资源站点外的板块页与详情页仍是「待开发」占位，内容包也还没落地；社区广场不是已经有丰富内容的论坛
 
 <p align="center"><img src="website/assets/community.jpg" alt="社区广场：五个板块卡、搜索框与普通 / Agent 模式" width="900"></p>
 
@@ -111,7 +113,7 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 ## 当前状态与验收边界
 
-- **代码已实现、自动测试通过、待用户 / 真机验收**：内置插件中心、工作台 v2、社区广场默认页、字体库、壁纸三档、MCP 17 个工具、工作台提交后自动归档。
+- **代码已实现、自动测试通过、待用户 / 真机验收**：内置插件中心、工作台 v2、社区广场默认页与我的收藏、资源站点页、字体库、壁纸三档、MCP 17 个工具、工作台提交后自动归档。
 - **待真实账号验证**：字体真实下载与渲染、社区 Agent 回答、评教正式提交、思源学堂作业正式提交、图书馆 / 场馆页面、手机号与扫码登录。
 - **待部署**：官网改版重新部署、`xjtu-launcher.cn` 的 ICP 备案与 HTTPS。更新源目前仍是临时 HTTP 地址（P0）。
 - **未获准的设计**：畅行校园整体视觉重做、Agent / 评教页新稿、最小化桌宠设计。未获准前不按旧稿改视觉。
@@ -123,9 +125,9 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 先确认你的电脑，再点对应的链接，下载后直接安装即可：
 
-- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.6.6/XJTU.Launcher_0.6.6_aarch64.dmg)**
-- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.6.6/XJTU.Launcher_0.6.6_x64.dmg)**
-- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.6.6/XJTU.Launcher_0.6.6_x64-setup.exe)**
+- 🍎 **Mac，Apple 芯片**（M1 / M2 / M3 / M4，2020 年之后的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.7.0/XJTU.Launcher_0.7.0_aarch64.dmg)**
+- 🍎 **Mac，Intel 芯片**（2020 年之前的机型）→ **[点击下载 .dmg](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.7.0/XJTU.Launcher_0.7.0_x64.dmg)**
+- 🪟 **Windows 64 位**（Windows 10 / 11）→ **[点击下载 .exe](https://github.com/haiziyao/XJTU-Launcher/releases/download/v0.7.0/XJTU.Launcher_0.7.0_x64-setup.exe)**
 
 不确定自己是什么芯片？Mac 左上角 →「关于本机」，看“芯片”一栏：写着 Apple M 系列就选第一个，写着 Intel 就选第二个。
 
@@ -133,7 +135,7 @@ XJTU Launcher 是面向西安交通大学学生的桌面校园工作台。不用
 
 > **macOS 首次打开**：安装包做了 ad-hoc 签名，不会报“已损坏”，但还没有 Developer ID 与公证，可能提示“无法验证开发者”。右键 →「打开」，或到“系统设置 → 隐私与安全性”点「仍要打开」。Windows 可能出现 SmartScreen 提示（「更多信息」→「仍要运行」）。
 
-> **0.5.1 已撤回**：该版本的 macOS 包只有二进制签名，打开会提示“已损坏，无法打开”。请下载上面的 0.6.6 覆盖安装；已经装过 0.5.1 的用户也直接覆盖。
+> **0.5.1 已撤回**：该版本的 macOS 包只有二进制签名，打开会提示“已损坏，无法打开”。请下载上面的 0.7.0 覆盖安装；已经装过 0.5.1 的用户也直接覆盖。
 
 其他版本、更新说明和历史安装包都在 **[Releases 页面](https://github.com/haiziyao/XJTU-Launcher/releases)**。每个版本改了什么、验证到什么程度，见 [版本发布记录](docs/releases/README.md)。
 

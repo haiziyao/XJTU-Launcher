@@ -73,7 +73,7 @@ export interface Plugin {
   page:
     | { type: 'timetable' }
     | { type: 'links'; links: Link[] }
-    | { type: 'campus' }
+    | { type: 'campus'; preset?: 'reservations' | 'profile' }
     | { type: 'agentSettings' }
     | { type: 'homeTheme' }
     | { type: 'pptCapture' }

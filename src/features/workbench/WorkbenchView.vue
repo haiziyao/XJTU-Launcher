@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-vue-next';
 import { bridge } from '../../shared/bridge';
-import { displayCourseCode } from '../../shared/domain';
+import { courseHue, displayCourseCode } from '../../shared/domain';
 import type {
   LmsSubmitPreview,
   WorkbenchAssignment,
@@ -24,9 +24,7 @@ import type {
   WorkbenchFolder,
   WorkbenchOverview,
 } from '../../types';
-import EmptyState from '../../components/ui/EmptyState.vue';
 import InlineAlert from '../../components/ui/InlineAlert.vue';
-import UiButton from '../../components/ui/UiButton.vue';
 
 /**
  * 工作台 shows the user's own folders rather than a private file store: the
@@ -46,6 +44,8 @@ const files = ref<WorkbenchFile[]>([]);
 const filesLoading = ref(false);
 const search = ref('');
 const busy = ref(false);
+/** The file shown in the right inspector; separate from the folder selection. */
+const pickedFile = ref<WorkbenchFile | null>(null);
 
 const folderModal = ref(false);
 const folderName = ref('');
@@ -163,6 +163,31 @@ const visibleFiles = computed(() => {
   if (!needle) return files.value;
   return files.value.filter((file) => file.name.toLowerCase().includes(needle));
 });
+
+/** Folders directly below the selection, listed above its files. */
+const childFolders = computed(() => children.value.get(selected.value) ?? []);
+
+/** The assignment a picked file is bound to, when the course list has it. */
+const boundAssignment = computed(() => {
+  const title = pickedFile.value?.assignment;
+  if (!title) return null;
+  return courseAssignments.value.find((item) => item.title === title) ?? null;
+});
+
+const selectedKind = computed(() => {
+  const folder = selectedFolder.value;
+  if (!folder) return '';
+  if (folder.kind === 'term') return '学期文件夹';
+  return folder.course ? '课程文件夹' : '自定义文件夹';
+});
+
+function fileExt(name: string) {
+  return name.includes('.') ? name.split('.').pop()!.toUpperCase().slice(0, 4) : '文件';
+}
+
+function courseColor(folder: WorkbenchFolder) {
+  return `c${courseHue(folder.course?.name || folder.name) + 1}`;
+}
 
 const termCourses = computed(() => {
   if (!selected.value) return [];
@@ -297,6 +322,18 @@ watch(selected, () => {
   lastSubmit.value = '';
   loadFiles();
 });
+
+// Keep the inspector on a file that still exists; a new folder picks its first.
+watch(
+  visibleFiles,
+  (list) => {
+    const current = pickedFile.value;
+    if (!current || !list.some((file) => file.path === current.path)) {
+      pickedFile.value = list[0] ?? null;
+    }
+  },
+  { immediate: true },
+);
 
 async function sync() {
   busy.value = true;
@@ -513,9 +550,9 @@ async function refreshAfterSubmit() {
 }
 
 function statusOf(assignment: WorkbenchAssignment) {
-  if ((assignment.submitCount ?? 0) > 0) return { text: '已交', tone: 'ok' };
-  if (assignment.closed) return { text: '已截止 · 未交', tone: 'late' };
-  return { text: '未交', tone: 'due' };
+  if ((assignment.submitCount ?? 0) > 0) return { text: '已提交', tone: 'ok' };
+  if (assignment.closed) return { text: '已截止 · 未交', tone: 'muted' };
+  return { text: '未交', tone: 'warn' };
 }
 
 function sizeLabel(bytes: number) {
@@ -538,34 +575,48 @@ function shortDate(value: string) {
 
 onMounted(load);
 </script>
-
 <template>
-  <section class="workbench">
-    <header class="wb-head">
-      <div class="wb-title">
-        <h1>工作台</h1>
+  <section class="campus-v2 workbench">
+    <header class="cv-top">
+      <h1 class="cv-title">
+        工作台
         <span class="wb-term">{{ overview?.currentTerm || '尚未同步学期' }}</span>
-        <span class="wb-meta">
-          <b>{{ totals.courses }}</b> 门课程 · <b>{{ totals.files }}</b> 个文件 ·
-          <b>{{ totals.due }}</b> 个作业未交 · {{ syncedLabel }}
-        </span>
-      </div>
-      <div class="wb-actions">
-        <label class="wb-search">
+      </h1>
+      <div class="cv-top-right">
+        <label class="cv-search">
           <Search :size="13" aria-hidden="true" />
-          <input v-model="search" type="search" placeholder="搜索文件或课程" aria-label="搜索" />
+          <input
+            v-model="search"
+            type="search"
+            placeholder="搜索文件或课程"
+            aria-label="搜索文件或课程"
+            spellcheck="false"
+          />
         </label>
-        <UiButton size="sm" :disabled="busy" @click="openFolderModal">
-          <Plus :size="13" /> 新建文件夹
-        </UiButton>
-        <UiButton size="sm" :disabled="busy" @click="addFiles">
-          <Upload :size="13" /> 添加文件
-        </UiButton>
-        <UiButton size="sm" variant="primary" :disabled="busy" @click="sync">
-          <RefreshCw :size="13" :class="{ spinning: busy }" /> 刷新
-        </UiButton>
       </div>
     </header>
+
+    <div class="cv-sub">
+      <div class="cv-head-meta">
+        <span
+          >{{ totals.courses }} 门课程 · {{ totals.files }} 个文件 ·
+          {{ totals.due }} 个作业未交</span
+        >
+        <span class="cv-vsep" aria-hidden="true"></span>
+        <span>{{ syncedLabel }}</span>
+      </div>
+      <div class="cv-tools">
+        <button type="button" class="cv-btn" :disabled="busy" @click="openFolderModal">
+          <Plus :size="13" />新建文件夹
+        </button>
+        <button type="button" class="cv-btn" :disabled="busy" @click="addFiles">
+          <Upload :size="13" />添加文件
+        </button>
+        <button type="button" class="cv-btn primary" :disabled="busy" @click="sync">
+          <RefreshCw :size="13" :class="{ spinning: busy }" />同步
+        </button>
+      </div>
+    </div>
 
     <InlineAlert v-if="error" tone="error" title="操作没有完成" dismissible @dismiss="error = ''">
       {{ error }}
@@ -574,222 +625,336 @@ onMounted(load);
       notice
     }}</InlineAlert>
 
-    <div class="wb-body">
-      <main class="wb-pane">
-        <EmptyState v-if="loading" title="正在读取文件夹…" busy />
-        <template v-else-if="selectedFolder">
-          <div class="wb-crumb">
-            <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
-              <ChevronRight v-if="index > 0" :size="12" aria-hidden="true" />
-              <span v-if="index === breadcrumbs.length - 1">{{ crumb.name }}</span>
-              <button v-else type="button" class="crumb" @click="select(crumb)">
-                {{ crumb.name }}
-              </button>
-            </template>
-            <button type="button" class="crumb-action" @click="reveal(selectedFolder.path)">
-              <FolderSearch :size="12" /> 在访达中显示
+    <div class="cv-body">
+      <div class="cv-cols lcr wb-cols">
+        <aside class="cv-panel cv-list wb-tree" aria-label="文件树">
+          <div class="tree-head">
+            <span>文件夹</span>
+            <button
+              type="button"
+              class="icon"
+              title="新建文件夹"
+              aria-label="新建文件夹"
+              @click="openFolderModal"
+            >
+              <Plus :size="13" />
             </button>
           </div>
-
-          <template v-if="selectedFolder.kind === 'term'">
-            <div class="wb-section">
-              <h2>课程文件夹（{{ termCourses.length }}）</h2>
-              <span class="muted">按思源学堂课程自动建立 · 改名即可自定义</span>
-            </div>
-            <div v-if="termCourses.length" class="course-grid">
-              <button
-                v-for="folder in termCourses"
-                :key="folder.path"
-                type="button"
-                class="course-card"
-                @click="select(folder)"
+          <div class="tree-body">
+            <div v-for="item in visibleFolders" :key="item.folder.path">
+              <div
+                class="tree-node"
+                :class="{ active: item.folder.path === selected }"
+                :style="{ paddingLeft: `${2 + item.depth * 12}px` }"
               >
-                <strong>{{ folder.name }}</strong>
-                <span
-                  v-if="folder.course?.name && folder.course.name !== folder.name"
-                  class="alias"
+                <button
+                  v-if="item.folder.folders > 0"
+                  type="button"
+                  class="tw"
+                  @click="toggle(item.folder.path)"
+                  :aria-label="`${isExpanded(item.folder.path) ? '收起' : '展开'} ${item.folder.name}`"
                 >
-                  {{ folder.course.name }}
-                </span>
-                <span class="course-nums">
+                  <ChevronDown v-if="isExpanded(item.folder.path)" :size="11" />
+                  <ChevronRight v-else :size="11" />
+                </button>
+                <span v-else class="tw" aria-hidden="true"></span>
+                <button type="button" class="tree-main" @click="select(item.folder)">
+                  <FolderOpen
+                    v-if="isExpanded(item.folder.path) && item.folder.folders > 0"
+                    :size="14"
+                    class="fi"
+                  />
+                  <Folder v-else :size="14" class="fi" />
+                  <span class="nm">{{ item.folder.name }}</span>
                   <span
-                    ><b>{{ folder.files }}</b> 文件</span
+                    v-if="
+                      item.folder.course?.name &&
+                      item.folder.course.name !== item.folder.name &&
+                      item.depth > 0
+                    "
+                    class="real"
+                    >{{ item.folder.course.name }}</span
                   >
-                  <span
-                    ><b>{{ folder.folders }}</b> 文件夹</span
-                  >
-                  <span
-                    ><b>{{ courseFor(folder)?.assignments.length ?? 0 }}</b> 作业</span
-                  >
-                  <span v-if="courseDue(folder)" class="due">{{ courseDue(folder) }} 未交</span>
-                </span>
-                <span class="course-code">{{
-                  displayCourseCode(folder.course?.subjectCode || folder.course?.code)
-                }}</span>
-              </button>
+                  <span class="ct">{{ folderTotal(item.folder) }}</span>
+                </button>
+              </div>
             </div>
-            <EmptyState
-              v-else
-              :icon="Folder"
-              title="这个学期还没有课程文件夹"
-              description="点右上角「刷新」从思源学堂同步课程与作业清单。"
-            />
-          </template>
+            <p v-if="!visibleFolders.length && !loading" class="wb-tree-empty">还没有文件夹</p>
+          </div>
+          <button type="button" class="tree-foot" @click="reveal('')">打开文件文件夹</button>
+        </aside>
 
-          <template v-else>
-            <div class="wb-course-head" v-if="selectedMeta">
-              <div>
-                <h2>
-                  {{ selectedFolder.name }}
-                  <span v-if="selectedMeta.name && selectedMeta.name !== selectedFolder.name">
-                    {{ selectedMeta.name }}
-                  </span>
-                </h2>
-                <p>
-                  课程编号
-                  {{ displayCourseCode(selectedMeta.subjectCode || selectedMeta.code) || '未知' }}
-                  · {{ selectedCourseTerm }}
-                </p>
-              </div>
-            </div>
-            <div v-else class="wb-course-head">
-              <div>
-                <h2>{{ selectedFolder.name }}</h2>
-                <p>
-                  自定义文件夹 · {{ selectedFolder.files }} 个文件 ·
-                  {{ selectedFolder.folders }} 个子文件夹
-                </p>
-              </div>
+        <div class="cv-center">
+          <div v-if="loading" class="cv-empty"><FolderOpen :size="20" /><b>正在读取文件夹…</b></div>
+          <template v-else-if="selectedFolder">
+            <div class="wb-crumb">
+              <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
+                <ChevronRight v-if="index > 0" :size="11" aria-hidden="true" />
+                <span v-if="index === breadcrumbs.length - 1">{{ crumb.name }}</span>
+                <button v-else type="button" class="crumb" @click="select(crumb)">
+                  {{ crumb.name }}
+                </button>
+              </template>
             </div>
 
-            <template v-if="selectedMeta && courseAssignments.length">
-              <div class="wb-section">
-                <h2>作业（{{ courseAssignments.length }}）</h2>
-                <span class="muted">自动同步自习源学堂</span>
-                <span class="spacer"></span>
+            <template v-if="selectedFolder.kind === 'term'">
+              <div class="cv-ch">
+                <b>{{ selectedFolder.name }}</b>
+                <span class="meta">
+                  {{ termCourses.length }} 门课程 · {{ selectedFolder.files }} 个文件
+                </span>
+                <span class="end">
+                  <button type="button" class="cv-btn sm" @click="reveal(selectedFolder.path)">
+                    <FolderSearch :size="12" />在访达中显示
+                  </button>
+                </span>
               </div>
-              <div class="wb-table">
-                <div class="wb-row wb-th assign-row">
-                  <span>作业</span><span>截止</span><span>状态</span><span class="right">操作</span>
+              <div v-if="termCourses.length" class="cv-panel cv-tbl">
+                <div class="cv-thead" style="--cols: 1fr 64px 64px 84px">
+                  <span>课程</span><span class="cv-r">文件</span><span class="cv-r">作业</span
+                  ><span class="cv-r">未交</span>
                 </div>
-                <div
-                  v-for="assignment in courseAssignments"
-                  :key="assignment.id"
-                  class="wb-row assign-row"
+                <button
+                  v-for="folder in termCourses"
+                  :key="folder.path"
+                  type="button"
+                  class="cv-tr"
+                  style="--cols: 1fr 64px 64px 84px"
+                  @click="select(folder)"
                 >
-                  <span class="ellipsis">{{ assignment.title }}</span>
-                  <span class="muted">{{ shortDate(assignment.end) }}</span>
-                  <span :class="statusOf(assignment).tone">{{ statusOf(assignment).text }}</span>
-                  <span class="right">
-                    <button
-                      v-if="!assignment.closed"
-                      type="button"
-                      class="link"
-                      @click="openSubmit(assignment)"
-                    >
-                      {{ assignment.submitCount > 0 ? '重新提交' : '提交' }}
-                    </button>
-                    <span v-else class="muted">已截止</span>
+                  <span class="c">
+                    <i class="cv-cs" :class="courseColor(folder)" aria-hidden="true"></i>
+                    <span class="cv-tt">
+                      <span class="cv-ellip">{{ folder.name }}</span>
+                      <small>{{
+                        displayCourseCode(folder.course?.subjectCode || folder.course?.code) ||
+                        '课程文件夹'
+                      }}</small>
+                    </span>
                   </span>
-                </div>
+                  <span class="cv-r cv-num cv-muted">{{ folder.files }}</span>
+                  <span class="cv-r cv-num cv-muted">{{
+                    courseFor(folder)?.assignments.length ?? 0
+                  }}</span>
+                  <span class="cv-r">
+                    <span v-if="courseDue(folder)" class="cv-badge danger">
+                      {{ courseDue(folder) }}
+                    </span>
+                    <span v-else class="cv-muted">—</span>
+                  </span>
+                </button>
+              </div>
+              <div v-else class="cv-empty">
+                <Folder :size="20" /><b>这个学期还没有课程文件夹</b>
+                <span>点右上角「同步」从思源学堂同步课程与作业清单。</span>
               </div>
             </template>
 
-            <EmptyState
-              v-if="lastSubmit"
-              tone="success"
-              title="提交结果"
-              :description="lastSubmit"
-            />
-
-            <div class="wb-section">
-              <h2>文件（{{ visibleFiles.length }}）</h2>
-              <span class="muted">文件夹在本地磁盘上，可在访达里直接整理</span>
-            </div>
-            <div v-if="visibleFiles.length" class="wb-table">
-              <div class="wb-row wb-th file-row">
-                <span>文件名</span><span class="right">大小</span
-                ><span class="right">修改时间</span> <span>绑定</span
-                ><span class="right">操作</span>
-              </div>
-              <div v-for="file in visibleFiles" :key="file.path" class="wb-row file-row">
-                <span class="file-name"><FileText :size="13" />{{ file.name }}</span>
-                <span class="right muted">{{ sizeLabel(file.size) }}</span>
-                <span class="right muted">{{ timeLabel(file.modified) }}</span>
-                <span class="muted ellipsis">{{ file.assignment || '未绑定' }}</span>
-                <span class="right row-actions">
-                  <button type="button" class="link" @click="openFile(file)">打开</button>
-                  <button type="button" class="link" @click="reveal(file.path)">显示</button>
-                  <button type="button" class="link" @click="openBind(file)">绑定</button>
-                  <button type="button" class="link danger" @click="removeFile(file)">删除</button>
+            <template v-else>
+              <div class="cv-ch">
+                <b>{{ selectedFolder.name }}</b>
+                <span class="meta">
+                  <template v-if="selectedMeta">
+                    {{
+                      displayCourseCode(selectedMeta.subjectCode || selectedMeta.code) ||
+                      '未知编号'
+                    }}<template v-if="selectedCourseTerm"> · {{ selectedCourseTerm }}</template>
+                  </template>
+                  <template v-else>
+                    自定义文件夹 · {{ selectedFolder.files }} 个文件 ·
+                    {{ selectedFolder.folders }} 个子文件夹
+                  </template>
+                </span>
+                <span class="end">
+                  <button type="button" class="cv-btn sm" @click="reveal(selectedFolder.path)">
+                    <FolderSearch :size="12" />在访达中显示
+                  </button>
                 </span>
               </div>
-            </div>
-            <EmptyState
-              v-else
-              :icon="FileText"
-              title="这个文件夹还是空的"
-              description="点「添加文件」把资料放进来，或在访达里直接拖入。"
-            />
-          </template>
-        </template>
-        <EmptyState
-          v-else
-          :icon="Folder"
-          title="还没有学期文件夹"
-          description="先登录校园账号，然后点右上角「刷新」同步本学期课程。"
-        />
-      </main>
 
-      <aside class="wb-tree" aria-label="文件树">
-        <div class="tree-head">
-          <span>文件</span>
-          <button type="button" class="icon" title="新建文件夹" @click="openFolderModal">
-            <Plus :size="13" />
-          </button>
-        </div>
-        <div class="tree-body">
-          <div v-for="item in visibleFolders" :key="item.folder.path">
-            <div
-              class="tree-node"
-              :class="{ active: item.folder.path === selected }"
-              :style="{ paddingLeft: `${4 + item.depth * 14}px` }"
-            >
-              <button
-                v-if="item.folder.folders > 0"
-                type="button"
-                class="tw"
-                @click="toggle(item.folder.path)"
-                :aria-label="`${isExpanded(item.folder.path) ? '收起' : '展开'} ${item.folder.name}`"
-              >
-                <ChevronDown v-if="isExpanded(item.folder.path)" :size="11" />
-                <ChevronRight v-else :size="11" />
-              </button>
-              <span v-else class="tw" aria-hidden="true"></span>
-              <button type="button" class="tree-main" @click="select(item.folder)">
-                <FolderOpen
-                  v-if="isExpanded(item.folder.path) && item.folder.folders > 0"
-                  :size="14"
-                  class="fi"
-                />
-                <Folder v-else :size="14" class="fi" />
-                <span class="nm">{{ item.folder.name }}</span>
-                <span
-                  v-if="
-                    item.folder.course?.name &&
-                    item.folder.course.name !== item.folder.name &&
-                    item.depth > 0
-                  "
-                  class="real"
-                  >{{ item.folder.course.name }}</span
-                >
-                <span class="ct">{{ folderTotal(item.folder) }}</span>
-              </button>
-            </div>
+              <div class="cv-scroll">
+                <template v-if="selectedMeta && courseAssignments.length">
+                  <div class="wb-sect">
+                    <h2>作业</h2>
+                    <span>{{ courseAssignments.length }}</span>
+                    <span class="wb-hint">自动同步自习源学堂</span>
+                  </div>
+                  <div class="cv-panel cv-tbl">
+                    <div class="cv-thead" style="--cols: 1fr 96px 76px 64px">
+                      <span>作业</span><span class="cv-r">截止</span><span class="cv-r">状态</span
+                      ><span class="cv-r">操作</span>
+                    </div>
+                    <div
+                      v-for="assignment in courseAssignments"
+                      :key="assignment.id"
+                      class="cv-tr"
+                      style="--cols: 1fr 96px 76px 64px"
+                    >
+                      <span class="cv-ellip" :title="assignment.title">{{ assignment.title }}</span>
+                      <span class="cv-r cv-num cv-muted">{{ shortDate(assignment.end) }}</span>
+                      <span class="cv-r">
+                        <span class="cv-badge" :class="statusOf(assignment).tone">
+                          {{ statusOf(assignment).text }}
+                        </span>
+                      </span>
+                      <span class="cv-r">
+                        <button
+                          v-if="!assignment.closed"
+                          type="button"
+                          class="cv-link"
+                          @click="openSubmit(assignment)"
+                        >
+                          {{ (assignment.submitCount ?? 0) > 0 ? '重新提交' : '提交' }}
+                        </button>
+                        <span v-else class="cv-muted">—</span>
+                      </span>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="wb-sect">
+                  <h2>文件</h2>
+                  <span>{{ visibleFiles.length }}</span>
+                  <span class="wb-hint">文件夹在本地磁盘上，可在访达里直接整理</span>
+                </div>
+
+                <div v-if="childFolders.length || visibleFiles.length" class="cv-panel cv-tbl">
+                  <div class="cv-thead" style="--cols: 1fr 76px 92px 140px">
+                    <span>名称</span><span class="cv-r">大小</span><span class="cv-r">修改时间</span
+                    ><span>绑定作业</span>
+                  </div>
+                  <button
+                    v-for="folder in childFolders"
+                    :key="folder.path"
+                    type="button"
+                    class="cv-tr"
+                    style="--cols: 1fr 76px 92px 140px"
+                    @click="select(folder)"
+                  >
+                    <span class="c">
+                      <Folder :size="13" class="wb-fi" />
+                      <span class="cv-ellip">{{ folder.name }}</span>
+                    </span>
+                    <span class="cv-r cv-muted">{{ folderTotal(folder) }} 个文件</span>
+                    <span class="cv-r cv-muted">文件夹</span>
+                    <span class="cv-muted">—</span>
+                  </button>
+                  <button
+                    v-for="file in visibleFiles"
+                    :key="file.path"
+                    type="button"
+                    class="cv-tr"
+                    style="--cols: 1fr 76px 92px 140px"
+                    :class="{ sel: pickedFile?.path === file.path }"
+                    @click="pickedFile = file"
+                  >
+                    <span class="c">
+                      <i class="cv-ft">{{ fileExt(file.name) }}</i>
+                      <span class="cv-ellip">{{ file.name }}</span>
+                    </span>
+                    <span class="cv-r cv-num cv-muted">{{ sizeLabel(file.size) }}</span>
+                    <span class="cv-r cv-num cv-muted">{{ timeLabel(file.modified) || '—' }}</span>
+                    <span class="cv-muted cv-ellip">{{ file.assignment || '未绑定' }}</span>
+                  </button>
+                </div>
+                <div v-else class="cv-empty">
+                  <FileText :size="20" /><b>这个文件夹还是空的</b>
+                  <span>点「添加文件」把资料放进来，或在访达里直接拖入。</span>
+                </div>
+              </div>
+            </template>
+          </template>
+          <div v-else class="cv-empty">
+            <Folder :size="20" /><b>还没有学期文件夹</b>
+            <span>先登录校园账号，然后点右上角「同步」同步本学期课程。</span>
           </div>
         </div>
-        <button type="button" class="tree-foot" @click="reveal('')">打开文件文件夹</button>
-      </aside>
+
+        <div class="cv-panel cv-detail">
+          <template v-if="pickedFile">
+            <div class="wb-prev" aria-hidden="true">
+              <div class="wb-pg">
+                <b>{{ fileExt(pickedFile.name) }}</b>
+                <i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
+            <div class="cv-type">
+              文件
+              <span v-if="pickedFile.assignment" class="cv-badge accent">已绑定</span>
+            </div>
+            <h3>{{ pickedFile.name }}</h3>
+            <dl class="cv-kv">
+              <dt>大小</dt>
+              <dd class="cv-num">{{ sizeLabel(pickedFile.size) }}</dd>
+              <dt>修改时间</dt>
+              <dd class="cv-num">{{ timeLabel(pickedFile.modified) || '—' }}</dd>
+              <dt>位置</dt>
+              <dd class="cv-ellip">~/…/{{ selectedFolder?.name || '—' }}</dd>
+              <dt>绑定作业</dt>
+              <dd>{{ pickedFile.assignment || '未绑定' }}</dd>
+              <template v-if="pickedFile.note">
+                <dt>备注</dt>
+                <dd>{{ pickedFile.note }}</dd>
+              </template>
+            </dl>
+            <div class="cv-blk">
+              <p>文件保存在本地磁盘上，工作台只做索引；打开、显示与删除都会直接作用于这个文件。</p>
+            </div>
+            <div class="cv-foot">
+              <button type="button" class="cv-btn sm primary" @click="openFile(pickedFile)">
+                打开
+              </button>
+              <button type="button" class="cv-btn sm" @click="reveal(pickedFile.path)">
+                在访达中显示
+              </button>
+              <button type="button" class="cv-btn sm" @click="openBind(pickedFile)">
+                {{ pickedFile.assignment ? '改绑定' : '绑定作业' }}
+              </button>
+              <button
+                v-if="boundAssignment && !boundAssignment.closed"
+                type="button"
+                class="cv-btn sm"
+                @click="openSubmit(boundAssignment)"
+              >
+                提交到«{{ boundAssignment.title }}»
+              </button>
+              <button type="button" class="cv-btn sm danger" @click="removeFile(pickedFile)">
+                删除
+              </button>
+            </div>
+          </template>
+          <template v-else-if="selectedFolder">
+            <div class="cv-type">{{ selectedKind }}</div>
+            <h3>{{ selectedFolder.name }}</h3>
+            <dl class="cv-kv">
+              <dt>文件</dt>
+              <dd class="cv-num">{{ selectedFolder.files }}</dd>
+              <dt>子文件夹</dt>
+              <dd class="cv-num">{{ selectedFolder.folders }}</dd>
+              <template v-if="selectedMeta">
+                <dt>课程编号</dt>
+                <dd>
+                  {{ displayCourseCode(selectedMeta.subjectCode || selectedMeta.code) || '未知' }}
+                </dd>
+                <dt>学期</dt>
+                <dd>{{ selectedCourseTerm || '—' }}</dd>
+                <dt>作业</dt>
+                <dd class="cv-num">{{ selectedCourse?.assignments.length ?? 0 }}</dd>
+              </template>
+            </dl>
+            <div class="cv-blk">
+              <p>
+                文件夹在本地磁盘上，改名或移动可以直接在访达里完成；工作台按学期和课程整理入口。
+              </p>
+            </div>
+            <div class="cv-foot">
+              <button type="button" class="cv-btn sm primary" @click="addFiles">添加文件</button>
+              <button type="button" class="cv-btn sm" @click="openFolderModal">新建文件夹</button>
+            </div>
+          </template>
+          <div v-else class="cv-placeholder">选择一个文件夹查看内容。</div>
+        </div>
+      </div>
     </div>
 
     <div v-if="folderModal" class="wb-overlay" @click.self="folderModal = false">
@@ -803,15 +968,15 @@ onMounted(load);
           @keyup.enter="createFolder"
         />
         <div class="dialog-actions">
-          <UiButton size="sm" variant="ghost" @click="folderModal = false">取消</UiButton>
-          <UiButton
-            size="sm"
-            variant="primary"
+          <button type="button" class="cv-btn" @click="folderModal = false">取消</button>
+          <button
+            type="button"
+            class="cv-btn primary"
             :disabled="busy || !folderName.trim()"
             @click="createFolder"
           >
             创建
-          </UiButton>
+          </button>
         </div>
       </div>
     </div>
@@ -835,8 +1000,8 @@ onMounted(load);
         </label>
         <p class="muted small">绑定作业后，提交时可直接选用这个文件。</p>
         <div class="dialog-actions">
-          <UiButton size="sm" variant="ghost" @click="bindOpen = false">取消</UiButton>
-          <UiButton size="sm" variant="primary" @click="saveBinding">保存</UiButton>
+          <button type="button" class="cv-btn" @click="bindOpen = false">取消</button>
+          <button type="button" class="cv-btn primary" @click="saveBinding">保存</button>
         </div>
       </div>
     </div>
@@ -898,306 +1063,46 @@ onMounted(load);
         </div>
 
         <div class="dialog-actions">
-          <UiButton size="sm" variant="ghost" @click="submitOpen = false">取消</UiButton>
-          <UiButton size="sm" :disabled="previewing || submitting" @click="previewSubmit">
+          <button type="button" class="cv-btn" @click="submitOpen = false">取消</button>
+          <button
+            type="button"
+            class="cv-btn"
+            :disabled="previewing || submitting"
+            @click="previewSubmit"
+          >
             预览提交
-          </UiButton>
-          <UiButton
-            size="sm"
-            variant="primary"
+          </button>
+          <button
+            type="button"
+            class="cv-btn primary"
             :disabled="!preview || !preview.canSubmit || submitting"
             @click="confirmSubmit"
           >
             {{ submitting ? '正在提交…' : '确认提交' }}
-          </UiButton>
+          </button>
         </div>
       </div>
     </div>
   </section>
 </template>
-
 <style scoped>
-/* The workspace is the page here, so it gets one panel: over a wallpaper the
-   app's text tokens stay on a light fill instead of sitting on the photo. */
+/* Layout comes from the campus v2 system (.campus-v2 + .cv-*); only the
+   workbench-specific tree, section rows and dialogs live here. */
 .workbench {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   min-height: 0;
-  padding: 18px 20px 20px;
-  border: 1px solid var(--panel-border, var(--border));
-  border-radius: var(--radius-lg);
-  background: var(--panel, var(--surface));
-}
-/* Hairlines inside the workspace follow the wallpaper the way campus does:
-   an opaque grey edge reads as a drawn line over a picture. */
-.has-wallpaper .workbench {
-  --border: rgba(15, 23, 42, 0.1);
-}
-.wb-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.wb-title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-width: 0;
-}
-.wb-title h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
 }
 .wb-term {
-  font-size: 13px;
-  font-weight: 600;
-}
-.wb-meta {
-  font-size: 11.5px;
+  margin-left: 8px;
   color: var(--text-tertiary);
-}
-.wb-meta b {
-  font-weight: 500;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.wb-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wb-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--control-border);
-  border-radius: 6px;
-  color: var(--text-tertiary);
-  background: var(--control-bg);
-}
-.wb-search input {
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  width: 150px;
-  color: var(--text);
-}
-.wb-body {
-  display: flex;
-  gap: 20px;
-  min-height: 420px;
-}
-.wb-pane {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.wb-crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-.crumb {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--accent-text, #1a5ec6);
-  cursor: pointer;
-}
-.crumb-action {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-.crumb-action:hover {
-  color: var(--accent-text, #1a5ec6);
-}
-.wb-section {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 4px;
-}
-.wb-section h2 {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.wb-section .muted,
-.muted {
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-}
-.spacer {
-  flex: 1;
-}
-.wb-course-head h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.wb-course-head h2 span {
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-tertiary);
 }
-.wb-course-head p {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+.wb-cols {
+  min-height: 0;
 }
-.course-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.course-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  padding: 12px 14px;
-  border: 1px solid var(--panel-border, var(--border));
-  border-radius: 12px;
-  background: var(--panel, var(--surface));
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-}
-.course-card:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-}
-.course-card strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-.course-card .alias {
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-.course-nums {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-.course-nums b {
-  font-weight: 500;
-  color: var(--text);
-}
-.course-nums .due {
-  font-weight: 500;
-}
-.course-code {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-.wb-table {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.wb-row {
-  display: grid;
-  align-items: center;
-  column-gap: 12px;
-  padding: 0 12px;
-  min-height: 32px;
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--divider, rgba(15, 23, 42, 0.05));
-}
-.wb-row:last-child {
-  border-bottom: 0;
-}
-.wb-th {
-  background: var(--control-bg-subtle);
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  min-height: 28px;
-}
-.assign-row {
-  grid-template-columns: 2.4fr 1fr 0.9fr 0.6fr;
-}
-.file-row {
-  grid-template-columns: minmax(0, 2.2fr) 0.5fr 0.9fr 0.9fr minmax(0, 1.4fr);
-}
-.right {
-  text-align: right;
-}
-.ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.row-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  white-space: nowrap;
-}
-.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  font-size: 11.5px;
-  color: var(--accent-text, #1a5ec6);
-  cursor: pointer;
-}
-.link.danger {
-  color: var(--danger, #c23a2f);
-}
-.ok {
-  color: var(--success-text, #246e44);
-}
-.late {
-  color: var(--danger, #c23a2f);
-}
-.due {
-  color: var(--warning, #a15c00);
-}
+
+/* ---- folder tree (left column) ---- */
 .wb-tree {
-  width: 250px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  padding-left: 14px;
-  display: flex;
-  flex-direction: column;
   min-height: 0;
 }
 .tree-head {
@@ -1205,11 +1110,12 @@ onMounted(load);
   align-items: center;
   justify-content: space-between;
   height: 26px;
+  padding: 0 2px 0 8px;
   color: var(--text-tertiary);
   font-size: 11.5px;
   font-weight: 600;
+  flex-shrink: 0;
 }
-.tree-head .icon,
 .icon {
   display: inline-flex;
   align-items: center;
@@ -1227,6 +1133,7 @@ onMounted(load);
 }
 .tree-body {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   margin-top: 2px;
 }
@@ -1309,17 +1216,110 @@ onMounted(load);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
+.wb-tree-empty {
+  margin: 0;
+  padding: 14px 10px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
 .tree-foot {
+  flex-shrink: 0;
   border: 0;
   border-top: 1px solid var(--divider, rgba(15, 23, 42, 0.05));
   background: none;
-  padding: 8px 0 0;
+  padding: 8px 8px 2px;
   font: inherit;
   font-size: 11.5px;
   color: var(--accent-text, #1a5ec6);
   text-align: left;
   cursor: pointer;
 }
+
+/* ---- center column ---- */
+.wb-crumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 14px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.crumb {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-text, #1a5ec6);
+  cursor: pointer;
+}
+.wb-sect {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 2px 0;
+  flex-shrink: 0;
+}
+.wb-sect h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.wb-sect > span {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.wb-sect .wb-hint {
+  margin-left: auto;
+  font-variant-numeric: normal;
+}
+.wb-fi {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+/* ---- inspector file preview ---- */
+.wb-prev {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+.wb-pg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 56px;
+  height: 74px;
+  padding: 7px 6px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.wb-pg b {
+  color: var(--text-tertiary);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.wb-pg i {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: #e3e6ea;
+}
+.wb-pg i:nth-child(2) {
+  width: 70%;
+}
+.wb-pg i:nth-child(5) {
+  width: 60%;
+}
+
+/* ---- dialogs ---- */
 .wb-overlay {
   position: fixed;
   inset: 0;
@@ -1377,8 +1377,17 @@ onMounted(load);
   font-size: 11.5px;
   color: var(--text-secondary);
 }
+.muted {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
 .small {
   font-size: 11px;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .submit-files {
   max-height: 180px;
@@ -1422,20 +1431,6 @@ onMounted(load);
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@media (max-width: 900px) {
-  .wb-body {
-    flex-direction: column;
-  }
-  .wb-tree {
-    width: 100%;
-    border-left: 0;
-    border-top: 1px solid var(--border);
-    padding: 10px 0 0;
-  }
-  .course-grid {
-    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

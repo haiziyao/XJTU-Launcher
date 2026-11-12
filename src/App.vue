@@ -11,7 +11,6 @@ import {
   Home,
   LayoutGrid,
   LoaderCircle,
-  MapPinned,
   MessagesSquare,
   Briefcase,
   Settings,
@@ -89,6 +88,7 @@ import './styles/ui.css';
 import './styles/pages.css';
 import './styles/fonts.css';
 import './styles/campus.css';
+import './styles/campus-v2.css';
 import './styles/desktop-shell.css';
 import './styles/pet-toast.css';
 import './styles/pet-art.css';
@@ -226,14 +226,14 @@ const sidebarCandidates = computed<SidebarEntry[]>(() => {
       primary: true,
     },
   ];
-  const campus = sortedPlugins.value.find((plugin) => plugin.page.type === 'campus');
-  if (campus) {
+  for (const plugin of sortedPlugins.value) {
+    if (plugin.page.type !== 'campus') continue;
     entries.push({
-      id: campus.id,
-      title: '畅行校园',
-      iconName: `plugin.${campus.id}`,
-      icon: MapPinned,
-      visible: !config.value.disabledPlugins.includes(campus.id),
+      id: plugin.id,
+      title: plugin.name,
+      iconName: `plugin.${plugin.id}`,
+      icon: pluginGlyph(plugin),
+      visible: !config.value.disabledPlugins.includes(plugin.id),
       primary: true,
     });
   }
@@ -1122,6 +1122,8 @@ onBeforeUnmount(() => {
                 v-else-if="activePlugin?.page.type === 'campus'"
                 :key="campusScope"
                 :name="activePlugin.name"
+                :avatar="displayAvatar"
+                :preset="activePlugin.page.preset ?? 'all'"
                 :access-mode="account.accessMode ?? null"
                 :direct-session="account.directSession ?? false"
                 @direct-session="refreshAccountStatus"

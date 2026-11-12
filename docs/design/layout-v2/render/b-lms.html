@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.cols { display: grid; grid-template-columns: 214px 1fr 300px; gap: 12px; flex: 1; min-height: 0; padding-bottom: 16px; }
+.clist { display: flex; flex-direction: column; padding: 6px; gap: 1px; }
+.clist .lh { font-size: 11px; color: var(--text-tertiary); padding: 4px 8px 6px; display: flex; }
+.citem { display: grid; grid-template-columns: 8px 1fr auto; column-gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; }
+.citem b { font-weight: 500; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.citem .s { grid-column: 2 / 4; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.citem .k { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; }
+.k.danger { color: var(--danger); background: var(--danger-soft); }
+.k.warn { color: var(--warning); background: var(--warning-soft); }
+.k.accent { color: var(--accent-text); background: var(--accent-soft); }
+.citem.on { background: var(--nav-active); }
+.citem.on b { color: var(--nav-active-text); font-weight: 600; }
+.citem.all { grid-template-columns: 1fr auto; }
+.center { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ch { display: flex; align-items: baseline; gap: 8px; }
+.ch b { font-size: 15px; font-weight: 600; }
+.ch .meta { font-size: 11.5px; color: var(--text-tertiary); }
+.acts .thead, .acts .tr { grid-template-columns: 1fr 104px 60px; }
+.acts .tr { height: 36px; }
+.detail { padding: 14px 14px; display: flex; flex-direction: column; gap: 11px; }
+.detail .type { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-tertiary); }
+.detail h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
+.detail .blk { border-top: 1px solid var(--divider); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.detail .blk h4 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.detail p { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.file { display: flex; align-items: center; gap: 8px; font-size: 12px; height: 26px; }
+.file .sz { margin-left: auto; color: var(--text-tertiary); font-size: 11px; }
+.foot { display: flex; gap: 8px; margin-top: auto; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>畅行校园</h1>
+      <nav class="ptabs">
+        <span class="ptab">待办<span class="n">9</span></span>
+        <span class="ptab">通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab on">学习</span>
+        <span class="ptab">学业</span>
+        <span class="ptab">生活</span>
+      </nav>
+      <div class="right"><span class="sample">示例数据</span></div>
+    </div>
+    <nav class="sub">
+      <span class="stab on">思源学堂</span>
+      <span class="stab">课程资料</span>
+      <div class="tools">
+        <span class="select">2026-2027 秋季学期</span>
+        <span class="search">搜索课程或活动</span>
+      </div>
+    </nav>
+
+    <div class="content">
+      <div class="cols">
+        <div class="panel clist">
+          <div class="lh">课程 11<span style="margin-left:auto">未交</span></div>
+          <div class="citem all"><b>全部课程</b><span class="k accent">9</span></div>
+          <div class="citem on"><i class="cs c1"></i><b>计算机组成</b><span class="k danger">3</span><span class="s">王老师 · 3 学分</span></div>
+          <div class="citem"><i class="cs c2"></i><b>计算机网络原理</b><span class="k warn">2</span><span class="s">李老师 · 3 学分</span></div>
+          <div class="citem"><i class="cs c5"></i><b>组成与结构专题实验</b><span class="k warn">1</span><span class="s">王老师 · 2 学分</span></div>
+          <div class="citem"><i class="cs c3"></i><b>操作系统设计专题实验</b><span class="k accent">1</span><span class="s">张老师 · 2 学分</span></div>
+          <div class="citem"><i class="cs c4"></i><b>文学经典与热点透视</b><span class="k accent">1</span><span class="s">刘老师 · 2 学分</span></div>
+          <div class="citem"><i class="cs c6"></i><b>人工智能</b><span class="k accent">1</span><span class="s">赵老师 · 3 学分</span></div>
+          <div class="citem"><i class="cs c1"></i><b>自然语言处理</b><span></span><span class="s">孙老师 · 2 学分</span></div>
+          <div class="citem"><i class="cs c2"></i><b>概率论与数理统计</b><span></span><span class="s">周老师 · 3 学分</span></div>
+          <div class="citem"><i class="cs c3"></i><b>思想道德与法治</b><span></span><span class="s">陈老师 · 3 学分</span></div>
+          <div class="citem"><i class="cs c4"></i><b>大学英语（四）</b><span></span><span class="s">Emily · 2 学分</span></div>
+          <div class="citem"><i class="cs c5"></i><b>体育（四）</b><span></span><span class="s">吴老师 · 1 学分</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>计算机组成</b><span class="meta">COMP3021 · 教学班 03</span></div>
+          <span class="seg" style="align-self:flex-start"><span class="on">作业<span class="n">6</span></span><span>学习资料<span class="n">11</span></span><span>课程回放<span class="n">3</span></span><span>全部<span class="n">22</span></span></span>
+          <div class="panel acts">
+            <div class="thead"><span>作业</span><span class="r">截止</span><span class="r">状态</span></div>
+            <div class="tr sel"><span class="ellip">第四章作业（第一次）</span><span class="r num due-today">今天 23:59</span><span class="r"><span class="badge danger">未交</span></span></div>
+            <div class="tr"><span class="ellip">第四章作业（第二次）</span><span class="r num due-today">今天 23:59</span><span class="r"><span class="badge danger">未交</span></span></div>
+            <div class="tr"><span class="ellip">第五章作业（第一次）</span><span class="r num">12月16日</span><span class="r"><span class="badge accent">未交</span></span></div>
+            <div class="tr"><span class="ellip">第三章作业</span><span class="r num muted">10月29日</span><span class="r"><span class="badge ok">✓ 已交</span></span></div>
+            <div class="tr"><span class="ellip">第二章作业</span><span class="r num muted">10月15日</span><span class="r"><span class="badge ok">✓ 92</span></span></div>
+            <div class="tr"><span class="ellip sec">第一章作业</span><span class="r num muted">9月30日</span><span class="r"><span class="badge muted">截止</span></span></div>
+          </div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">作业 · 个人提交<span class="badge danger" style="margin-left:auto">未交</span></div>
+          <h3>第四章作业（第一次）</h3>
+          <div style="font-size:12px" class="due-today">今天 23:59 截止 · 还剩 9 小时</div>
+          <dl class="kv" style="margin:0">
+            <dt>开始</dt><dd class="num">11月4日 08:00</dd>
+            <dt>提交次数</dt><dd>可交 3 次 · 已交 0</dd>
+            <dt>已交人数</dt><dd class="num">42 / 96</dd>
+          </dl>
+          <div class="blk">
+            <h4>说明</h4>
+            <p>完成教材第四章习题 4.3、4.7、4.12，合并为一个 PDF 提交。</p>
+          </div>
+          <div class="blk">
+            <h4>附件</h4>
+            <div class="file"><i class="ft">PDF</i>第四章习题.pdf<span class="sz">386 KB</span></div>
+            <div class="file"><i class="ft">DOC</i>答题模板.docx<span class="sz">24 KB</span></div>
+          </div>
+          <div class="foot">
+            <span class="btn primary">在工作台提交</span>
+            <span class="btn">网页打开</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

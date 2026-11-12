@@ -427,7 +427,8 @@
    the token for that subtree rather than restyling every campus page. Panels and
    lists then match the rest of the app; the fills are light enough that campus
    text keeps the contrast it has on white. */
-.has-wallpaper .campus-workspace {
+.has-wallpaper .campus-workspace,
+.has-wallpaper .campus-v2 {
   --surface: var(--panel);
   --surface-subtle: rgba(255, 255, 255, 0.52);
   --surface-sunken: rgba(255, 255, 255, 0.4);

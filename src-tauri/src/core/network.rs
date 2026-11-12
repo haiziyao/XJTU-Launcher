@@ -53,14 +53,21 @@ pub fn trusted(url: &Url) -> bool {
                     // Course attachments. The LMS blob endpoint redirects here;
                     // the adapter still checks the exact origin and path first.
                     | "media.xjtu.edu.cn"
+                    // Services reached from 移动交通大学. Each keeps its own
+                    // CAS session; the app only links to them.
+                    | "superapp.xjtu.edu.cn"
+                    | "transaction.xjtu.edu.cn"
+                    | "message-service.xjtu.edu.cn"
+                    | "reservation.xjtu.edu.cn"
+                    | "xjbus.xjtu.edu.cn"
+                    | "formflow.xjtu.edu.cn"
             )
         )
 }
 
 /// The library seat system and the sports venue system only answer over plain
 /// HTTP on fixed ports. Keep this exception to their exact origins. WebVPN maps
-/// them as `http-<port>` paths, which is how the library seat page is reachable
-/// off campus; the venue system has no such route.
+/// them as `http-<port>` paths, which is how both are reachable off campus.
 pub fn service_http(url: &Url) -> bool {
     url.scheme() == "http"
         && url.username().is_empty()
@@ -492,6 +499,9 @@ mod tests {
         assert_eq!(mapped.host_str(), Some(VPN_HOST));
         assert!(mapped.path().starts_with("/http-8086/"), "{mapped}");
         assert_eq!(original_url(&mapped).unwrap(), lib);
+        let venue_vpn = Transport::address(&venue, AccessMode::Webvpn).unwrap();
+        assert!(venue_vpn.path().starts_with("/http-8080/"), "{venue_vpn}");
+        assert_eq!(original_url(&venue_vpn).unwrap(), venue);
         for bad in [
             "https://rg.lib.xjtu.edu.cn:8086/qseat",
             "http://rg.lib.xjtu.edu.cn/qseat",

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../layout-v2/render/v2.css">
+<style>
+body { background: #fff; }
+.sheet { width: 1120px; height: 760px; padding: 28px 36px; display: grid; grid-template-columns: 420px 1fr; gap: 28px; }
+.hero { border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(180deg, #f7f9fc, #eef2f8); display: flex; align-items: center; justify-content: center; position: relative; }
+.hero svg { height: 640px; }
+.hero .tag { position: absolute; left: 16px; top: 12px; font-size: 12px; color: var(--text-tertiary); }
+.side { display: flex; flex-direction: column; gap: 16px; }
+.side h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.side p { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.var { border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.var svg { height: 250px; }
+.var b { font-size: 12.5px; font-weight: 600; }
+.var span { font-size: 11px; color: var(--text-tertiary); }
+.ctx { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 130px 1fr; gap: 14px; align-items: center; }
+.ctx svg { height: 210px; }
+.ctx .k2 { font-size: 11px; color: var(--text-tertiary); }
+.ctx .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ctx .v small { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="skin" x1="0" x2="1"><stop offset="0" stop-color="#f7d7b9"/><stop offset=".55" stop-color="#efc29b"/><stop offset="1" stop-color="#d99f77"/></linearGradient>
+    <linearGradient id="face" x1="0" x2="1"><stop offset="0" stop-color="#f8dbbf"/><stop offset=".6" stop-color="#f1c7a2"/><stop offset="1" stop-color="#dfa983"/></linearGradient>
+    <linearGradient id="shirt" x1="0" x2="1"><stop offset="0" stop-color="#6690de"/><stop offset=".55" stop-color="#4a76c9"/><stop offset="1" stop-color="#34599f"/></linearGradient>
+    <linearGradient id="sleeve" x1="0" x2="1"><stop offset="0" stop-color="#5e89d8"/><stop offset="1" stop-color="#3e66b0"/></linearGradient>
+    <linearGradient id="shorts" x1="0" x2="1"><stop offset="0" stop-color="#46526a"/><stop offset=".6" stop-color="#343e52"/><stop offset="1" stop-color="#262d3c"/></linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3029"/><stop offset="1" stop-color="#1f1a17"/></linearGradient>
+    <linearGradient id="shoe" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3e7ee"/></linearGradient>
+    <radialGradient id="floor"><stop offset="0" stop-color="#1f2a3d" stop-opacity=".22"/><stop offset="1" stop-color="#1f2a3d" stop-opacity="0"/></radialGradient>
+
+    <g id="leg-l">
+      <path fill="url(#skin)" d="M62,312 C64,336 67,352 68,364 C64,380 63,398 68,420 C71,436 74,450 76,462 L92,462 C92,448 94,432 95,414 C97,398 96,382 93,366 C94,350 97,332 98,314 Z"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".22" stroke-width="1" stroke-linecap="round" d="M75,362 Q81,358 87,362"/>
+      <path fill="#c58d68" fill-opacity=".28" d="M95,414 C97,398 96,382 93,366 C92,382 90,398 89,414 C88,432 89,448 90,462 L92,462 C92,448 94,432 95,414 Z"/>
+      <!-- sock + shoe -->
+      <path fill="#f4f6f9" d="M75,448 L93,448 L92,466 L76,466 Z"/>
+      <path fill="url(#shoe)" stroke="#c4cbd6" stroke-width="1" d="M72,468 C72,462 77,460 84,460 C91,460 96,462 96,468 L98,484 C98,490 93,492 84,492 C75,492 70,490 70,484 Z"/>
+      <path fill="#dfe4eb" stroke="#c4cbd6" stroke-width="1" d="M69,485 C69,492 75,495 84,495 C93,495 99,492 99,485 C96,489 91,490 84,490 C77,490 72,489 69,485 Z"/>
+      <path fill="none" stroke="#aab3c1" stroke-width="1" stroke-linecap="round" d="M78,467 L90,467 M77.5,472 L90.5,472 M77,477 L91,477"/>
+      <path fill="#4a76c9" d="M71,480 C76,478 86,478 97,476 L97.6,480 C88,482 78,483 70.6,484 Z"/>
+    </g>
+    <g id="arm-l">
+      <path fill="url(#skin)" d="M35,146 C33,166 32,184 33,198 C30,214 32,238 36.4,262 L47.6,262 C48,244 51,222 53,200 C55,186 56,166 57,148 Z"/>
+      <path fill="#c58d68" fill-opacity=".3" d="M51,200 C53,186 54,166 55,148 L52,148 C51,166 49,186 47,200 C45,222 44,244 44,262 L47,262 C47,244 49,222 51,200 Z"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".22" stroke-width="1" stroke-linecap="round" d="M37,200 Q42,203 48,199"/>
+      <path fill="url(#skin)" d="M36,258 C33,270 33,284 36,294 C38,300 44,301 46,296 C49,288 50,272 48,258 Z"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".45" stroke-width="1" stroke-linecap="round" d="M47,266 C51,271 51,279 48,285 M39,288 L39.6,296 M42.4,289 L43,297"/>
+      <!-- sleeve -->
+      <path fill="url(#sleeve)" d="M60,86 C44,88 35,102 35,122 L33.4,152 Q46,159 60,154 L61,128 Z"/>
+      <path fill="none" stroke="#2c4f92" stroke-opacity=".5" stroke-width="1" d="M33.8,148 Q46,154 60,150"/>
+    </g>
+  </defs>
+</svg>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="torso">
+      <path fill="url(#shorts)" d="M66,230 L134,230 C136,258 138,288 140,318 L102,318 L100,274 L98,318 L60,318 C62,288 64,258 66,230 Z"/>
+      <path fill="#232a37" d="M66,230 L134,230 L134.4,238 L65.6,238 Z"/>
+      <path fill="none" stroke="#4a76c9" stroke-width="2.4" d="M64.6,246 L61.4,316 M135.4,246 L138.6,316"/>
+      <path fill="none" stroke="#1b212c" stroke-opacity=".55" stroke-width="1" stroke-linecap="round" d="M100,244 L100,272 M74,300 Q80,296 88,299 M112,299 Q120,296 126,300"/>
+      <path fill="url(#shirt)" d="M87,73 C80,77 66,81 55,86 C53,104 54,120 56,134 C59,160 66,186 69,212 C69,222 68,232 67,244 C80,249 120,249 133,244 C132,232 131,222 131,212 C134,186 141,160 144,134 C146,120 147,104 145,86 C134,81 120,77 113,73 C108,78 104,80 100,80 C96,80 92,78 88,73 Z"/>
+      <path fill="#fff" fill-opacity=".1" d="M62,96 C70,90 82,88 92,92 C84,110 74,140 70,190 C66,160 61,128 62,96 Z"/>
+      <path fill="none" stroke="#24467f" stroke-opacity=".38" stroke-width="1.2" stroke-linecap="round" d="M70,120 Q84,130 98,124 M102,124 Q116,130 130,120 M100,128 L100,150 M74,198 Q86,205 97,202 M106,214 Q119,211 128,204 M70,232 Q84,238 96,236"/>
+      <path fill="#3a62ad" d="M88,73 C92,79 96,82 100,82 C104,82 108,79 112,73 L114.6,74.6 C110,82.6 105,86 100,86 C95,86 90,82.6 85.4,74.6 Z"/>
+    </g>
+    <g id="head">
+      <path fill="url(#skin)" d="M88,54 C88,63 87,71 84,76 L116,76 C113,71 112,63 112,54 Z"/>
+      <path fill="#b9805c" fill-opacity=".45" d="M89,57 Q100,70 111,57 L111,63 Q100,75 89,63 Z"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".4" stroke-width="1" stroke-linecap="round" d="M92,64 L96.6,76 M108,64 L103.4,76"/>
+      <path fill="url(#face)" d="M79.6,38 C75,35.4 72.4,40 73.2,45.4 C74,50.6 77,53.6 80.6,52.6 Z"/>
+      <path fill="#d79c76" d="M120.4,38 C125,35.4 127.6,40 126.8,45.4 C126,50.6 123,53.6 119.4,52.6 Z"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".6" stroke-width=".9" d="M78.4,41 C76,40.4 75.4,44 76.4,47 M121.6,41 C124,40.4 124.6,44 123.6,47"/>
+      <path fill="url(#face)" d="M80,30 C80,18 89,11 100,11 C111,11 120,18 120,30 L120,41 C120,49.6 117.4,55.4 112.6,60.4 C108.4,64.6 104.4,66.6 100,66.6 C95.6,66.6 91.6,64.6 87.4,60.4 C82.6,55.4 80,49.6 80,41 Z"/>
+      <path fill="#c58d68" fill-opacity=".35" d="M120,38 L120,41 C120,49.6 117.4,55.4 112.6,60.4 C108.4,64.6 104.4,66.6 100,66.6 C104,65 108.4,61.4 111.4,56 C114.6,50.4 116.4,44 116.6,38 Z"/>
+      <path fill="#fff" fill-opacity=".18" d="M84,40 C84,46 86,50 89,53 C87,47 86.4,43 86.6,40 Z"/>
+      <path fill="#3a2f28" fill-opacity=".55" d="M80,40 L80,28 C80.6,25 81.4,23.4 82.6,22.6 L82.4,40 Z M120,40 L120,28 C119.4,25 118.6,23.4 117.4,22.6 L117.6,40 Z"/>
+      <path fill="url(#hair)" d="M80.4,31 C78,20 81,11 88,6.6 C93,3.4 101,1.6 109,3.6 C118,6 123.4,13.6 121.6,26 L120,31.6 C118.8,26.4 117,23 114.4,21 C108,22.4 99,20.6 92,17.6 C87.4,21.4 83.4,25.6 81.4,31.6 Z"/>
+      <path fill="none" stroke="#5a4a3f" stroke-opacity=".8" stroke-width="1" stroke-linecap="round" d="M86,12 Q94,4.6 106,6 M84.6,17 Q95,9.6 110,11.4 M92,18 Q103,12.4 116,16.4 M100,4.4 Q112,5.4 119,12.6"/>
+      <path fill="#2b2320" d="M85.8,33.6 Q90.4,30.6 95.2,32.6 L95.2,34.4 Q90.4,33 86,35.2 Z M104.8,32.6 Q109.6,30.6 114.2,33.6 L114,35.2 Q109.6,33 104.8,34.4 Z"/>
+      <path fill="#fff" d="M86.6,39 Q90.6,36.4 94.6,39 Q90.6,41.2 86.6,39 Z M105.4,39 Q109.4,36.4 113.4,39 Q109.4,41.2 105.4,39 Z"/>
+      <circle cx="90.8" cy="38.9" r="1.8" fill="#3b2a21"/><circle cx="109.2" cy="38.9" r="1.8" fill="#3b2a21"/>
+      <circle cx="91.4" cy="38.3" r=".55" fill="#fff"/><circle cx="109.8" cy="38.3" r=".55" fill="#fff"/>
+      <path fill="none" stroke="#2b2320" stroke-width="1.05" stroke-linecap="round" d="M86.2,39.1 Q90.6,36 94.9,38.8 M105.1,38.8 Q109.4,36 113.8,39.1"/>
+      <path fill="none" stroke="#c58d68" stroke-opacity=".5" stroke-width=".8" stroke-linecap="round" d="M87.4,41.4 Q90.6,42.6 93.8,41.4 M106.2,41.4 Q109.4,42.6 112.6,41.4"/>
+      <path fill="none" stroke="#b9805c" stroke-opacity=".7" stroke-width="1" stroke-linecap="round" d="M101.2,39.6 C101.6,44 102.6,47.6 103,50 C101.8,51.4 99.6,51.6 97.8,50.8"/>
+      <path fill="#fff" fill-opacity=".3" d="M99.4,40 L98.6,48 L99.8,48 L100.4,40 Z"/>
+      <path fill="#a8655b" d="M95,56 Q100,58.2 105,56 Q100,60.4 95,56 Z"/>
+      <path fill="none" stroke="#8d4f47" stroke-width="1" stroke-linecap="round" d="M94.6,55.9 Q100,58.8 105.4,55.9"/>
+      <path fill="#f5c9b6" fill-opacity=".35" d="M84,46 Q87.6,44.4 90,48 Q87,50.6 84,49 Z M116,46 Q112.4,44.4 110,48 Q113,50.6 116,49 Z"/>
+    </g>
+    <g id="man">
+      <use href="#leg-l"/><use href="#leg-l" transform="translate(200 0) scale(-1 1)"/>
+      <use href="#torso"/>
+      <use href="#arm-l"/><use href="#arm-l" transform="translate(200 0) scale(-1 1)"/>
+      <use href="#head"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="sheet">
+  <div class="hero">
+    <span class="tag">体格人物 · 精细稿</span>
+    <svg viewBox="0 0 200 504">
+      <ellipse cx="100" cy="494" rx="52" ry="7" fill="url(#floor)"/>
+      <use href="#man"/>
+    </svg>
+  </div>
+  <div class="side">
+    <div><h2>体型随 BMI 变化</h2><p>身体按 BMI 横向缩放，头部与五官保持不变；人物高度只表示比例，不推断肌肉或体脂。</p></div>
+    <div class="row">
+      <div class="var"><svg viewBox="0 0 200 504"><ellipse cx="100" cy="494" rx="46" ry="6" fill="url(#floor)"/><g transform="translate(100 0) scale(.88 1) translate(-100 0)"><use href="#leg-l"/><use href="#leg-l" transform="translate(200 0) scale(-1 1)"/><use href="#torso"/><use href="#arm-l"/><use href="#arm-l" transform="translate(200 0) scale(-1 1)"/></g><use href="#head"/></svg><b>偏瘦</b><span>BMI &lt; 18.5</span></div>
+      <div class="var"><svg viewBox="0 0 200 504"><ellipse cx="100" cy="494" rx="52" ry="7" fill="url(#floor)"/><use href="#man"/></svg><b>正常</b><span>18.5 – 24</span></div>
+      <div class="var"><svg viewBox="0 0 200 504"><ellipse cx="100" cy="494" rx="58" ry="7" fill="url(#floor)"/><g transform="translate(100 0) scale(1.14 1) translate(-100 0)"><use href="#leg-l"/><use href="#leg-l" transform="translate(200 0) scale(-1 1)"/><use href="#torso"/><use href="#arm-l"/><use href="#arm-l" transform="translate(200 0) scale(-1 1)"/></g><use href="#head"/></svg><b>偏重</b><span>BMI ≥ 24</span></div>
+    </div>
+    <div class="ctx">
+      <svg viewBox="0 0 230 504">
+        <line x1="12" x2="12" y1="8" y2="496" stroke="#8c929b"/><line x1="6" x2="18" y1="8" y2="8" stroke="#8c929b"/><line x1="6" x2="18" y1="496" y2="496" stroke="#8c929b"/>
+        <ellipse cx="130" cy="494" rx="52" ry="7" fill="url(#floor)"/>
+        <use href="#man" transform="translate(30 0)"/>
+      </svg>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><div class="k2">概览卡片里的实际尺寸（约 210 px 高）</div></div>
+        <div><div class="k2">身高 / 体重</div><div class="v">176.2<small>cm</small> · 66.0<small>kg</small></div></div>
+        <div><div class="k2">BMI</div><div class="v">21.3<small>正常</small></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -56,6 +56,11 @@ pub enum Query {
     FitnessScore {
         year: String,
     },
+    /// Raw measurement and history for one fitness item (1–7).
+    FitnessItem {
+        item: u8,
+        year: String,
+    },
     Profile,
     LmsCourses,
     LmsActivities {
@@ -99,7 +104,7 @@ impl Query {
             Self::Calendar => "calendar",
             Self::AttendanceStreams { .. } | Self::AttendanceRecords { .. } => "attendance",
             Self::Card | Self::CardTransactions { .. } => "card",
-            Self::Fitness | Self::FitnessScore { .. } => "fitness",
+            Self::Fitness | Self::FitnessScore { .. } | Self::FitnessItem { .. } => "fitness",
             Self::Profile => "profile",
             Self::LmsCourses
             | Self::LmsActivities { .. }
@@ -130,7 +135,7 @@ impl Query {
             Self::AttendanceStreams { .. } => 86_400,
             Self::AttendanceRecords { .. } => 600,
             Self::Card | Self::CardTransactions { .. } => 180,
-            Self::Fitness | Self::FitnessScore { .. } => 86_400,
+            Self::Fitness | Self::FitnessScore { .. } | Self::FitnessItem { .. } => 86_400,
             Self::Profile => 3_600,
             Self::LmsCourses => 600,
             Self::LmsActivities { .. } | Self::LmsActivity { .. } => 300,
@@ -198,10 +203,13 @@ impl Query {
             {
                 return Err("请选择有效的日期范围和页码".into());
             }
-            Self::FitnessScore { year }
+            Self::FitnessScore { year } | Self::FitnessItem { year, .. }
                 if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) =>
             {
                 return Err("请选择有效的体测学年".into());
+            }
+            Self::FitnessItem { item, .. } if !(1..=7).contains(item) => {
+                return Err("请选择有效的体测项目".into());
             }
             Self::LmsActivities { course } if !(1..=9_999_999).contains(course) => {
                 return Err("课程编号无效".into());
@@ -339,12 +347,16 @@ pub async fn query(
         };
         return Ok((value, None));
     }
-    if matches!(query, Query::Fitness | Query::FitnessScore { .. }) {
+    if matches!(
+        query,
+        Query::Fitness | Query::FitnessScore { .. } | Query::FitnessItem { .. }
+    ) {
         let account = account.ok_or("请先登录校园账号")?;
-        let client = super::fitness::Client::connect(&account).await?;
+        let session = super::sports::Session::connect(&account).await?;
         let value = match query {
-            Query::Fitness => json!({"rows": client.years().await?}),
-            Query::FitnessScore { year } => client.score(&year).await?,
+            Query::Fitness => json!({"rows": session.fitness().years().await?}),
+            Query::FitnessScore { year } => session.fitness().score(&year).await?,
+            Query::FitnessItem { item, year } => session.fitness().item(item, &year).await?,
             _ => unreachable!(),
         };
         return Ok((value, None));
@@ -516,7 +528,8 @@ pub async fn query(
         | Query::LibrarySeats { .. }
         | Query::VenueList
         | Query::VenueSlots { .. }
-        | Query::VenueOrders => unreachable!(),
+        | Query::VenueOrders
+        | Query::FitnessItem { .. } => unreachable!(),
     };
     Ok((value, Some(client.transport.snapshot()?)))
 }
@@ -611,6 +624,29 @@ mod tests {
         assert!(valid_date("2024-02-29"));
         assert!(!valid_date("2026-02-29"));
         assert!(!valid_date("2026-04-31"));
+    }
+    #[test]
+    fn fitness_item_requires_a_known_item_and_year() {
+        assert!(Query::FitnessItem {
+            item: 1,
+            year: "2025".into()
+        }
+        .validate()
+        .is_ok());
+        for item in [0, 8] {
+            assert!(Query::FitnessItem {
+                item,
+                year: "2025".into()
+            }
+            .validate()
+            .is_err());
+        }
+        assert!(Query::FitnessItem {
+            item: 2,
+            year: "25".into()
+        }
+        .validate()
+        .is_err());
     }
     #[test]
     fn grade_preserves_text_scores_and_unknowns() {

@@ -35,6 +35,7 @@
 - 其余应用数据分两处，布局对齐 Codex 的 `~/.codex`：
   - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`（含 `plugins/settings/<插件 id>.json` 的插件设置）、`agent/`、`resources/`（用户自备的入口图标等资源，见 [自定义入口图标](reference/ICONS.md)）与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
   - `xjtu-launcher-file`（可见，默认 `~/Documents/xjtu-launcher-file`，可在「应用设置 → 存储」改位置）：`workspace/` 放资料库，`plugin/` 放用户自备的插件资源，`download/` 放下载；用户自己的文件只放在这里。
+  - 随应用发布的内容资源放仓库根目录 `resources/`，由 `bundle.resources` 打包，界面运行时读取而不是在代码里硬编码；当前用于社区广场的资源站点（`resources/community/sites.json` 与图标）。用户可把同结构目录放到 `~/.xjtu-launcher/resources/community/` 覆盖内置内容，同一套校验失败时直接报错。格式与限制见 [resources/README.md](../resources/README.md)。
   - 文件位置记录在 `~/.xjtu-launcher/storage.json`，页面保存配置时无法把它改回去。迁移必须先复制并核对数量与字节、记录新位置，最后才删除旧文件；失败时保留旧数据并撤销副本。
   - 界面显示任何路径都写成 `~/...`，不得出现用户主目录中的账号名。`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不参与迁移。
 - 配置及凭据原子写入。新字段必须提供默认值，保持既有用户偏好；读取失败时报告错误并保留原文件。
@@ -72,7 +73,7 @@
 - **多人协作流程（2026-11-11 起）**：分支命名不做要求，可以按主题或 issue 自建。每个功能或修复完成后，必须并入当前版本分支，不要长期停留在个人分支；不要凭记忆假设分支名，先看 `git branch -a`。
 - 版本分支在开发期可以自由提交；到发版时间点**冻结**，不再接受新功能。冻结后把版本分支同步到 `dev`，由测试人员做集成测试。`dev` 只做集成与测试，不直接开发。
 - 测试通过后，由 `dev` 创建 PR 合入 `main`，测试人员给 PR 加 `tested` 标签。`main` 更新后自动构建发布。
-- `main` 为 GitHub 默认分支，也是发布分支；改名会断掉 `release.yml` 与 `main-guard.yml`，当前不改。`main` 只接受从 `dev` 合入的 PR，禁止其他来源、直接推送、删除与强推。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；当前最新发布版为 **0.6.6**，`main` 应与它一致。
+- `main` 为 GitHub 默认分支，也是发布分支；改名会断掉 `release.yml` 与 `main-guard.yml`，当前不改。`main` 只接受从 `dev` 合入的 PR，禁止其他来源、直接推送、删除与强推。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；当前最新发布版为 **0.7.0**，`main` 应与它一致。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
 - 推送个人分支与合入当前版本分支可按当次任务执行；合入 `dev`（集成测试）、`main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](operations/RELEASING.md)。
 - GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`。每位开发者使用自己的 Git 身份（仓库级配置），不改全局身份和 SSH 密钥，不要覆盖原密钥，也不要冒用他人姓名或邮箱。不要在共享文档、skill 或提交模板里写死某个人的姓名与邮箱。

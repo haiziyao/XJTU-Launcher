@@ -7,7 +7,7 @@
 - 侧栏入口名为「插件中心」，页面分「校园广场」「拓展发明」「创新小港」「已安装插件」四个分区。
 - 每行是插件名称、右侧一行简述和启用开关；单击行展开作者、版本、许可、分类与详细描述，有第三方素材时再显示署名，启用后可从这里打开插件页面。
 - 只有启用开关会改动配置；`disabledPlugins` 记录关闭的插件 id，侧栏入口跟随启用状态。
-- 默认启用：课程表、畅行校园、Agent 设置、主页主题、回放截取；默认关闭：桌面宠物、字体美化。
+- 默认启用：课程表、畅行校园、预约中心、个人画像、Agent 设置、主页主题、回放截取；默认关闭：桌面宠物、字体美化。
 - 旧配置里的 `pluginServer`、`checkPluginUpdates` 与桌面宠物字段只读取一次，用于迁移，之后不再写入。
 
 ## 元数据与存储
@@ -52,7 +52,7 @@
 - `credits`：可选，最多 300 个字符；只在有第三方素材、改编代码或需要署名时填写。
 - `name`：1–30 个字符；`description` 最多 300 个字符；`details` 最多 600 个字符。
 - `enabledByDefault`：新配置的初始状态；用户切换后以 `disabledPlugins` 为准。
-- `page.type`：`timetable`、`campus`、`agentSettings`、`homeTheme`、`pptCapture`、`desktopPet`、`fontBeautify` 或 `links`。`links` 目前没有内置清单使用。
+- `page.type`：`timetable`、`campus`、`agentSettings`、`homeTheme`、`pptCapture`、`desktopPet`、`fontBeautify` 或 `links`。`links` 目前没有内置清单使用。`campus` 可带 `preset`：`reservations`（预约中心）或 `profile`（个人画像），缺省打开完整畅行校园。
 - `widget = true`：在主页「我的插件」区显示入口，目前只有课程表。
 - `sidebar`：可选，缺省为 `true`。设为 `false` 时插件仍可在插件中心启停，但不占侧栏入口；回放截取从「思源学堂 → 课程回放」进入。
 - `icon`：预留图标标识。
@@ -74,15 +74,17 @@
 
 ## 内置插件一览
 
-| 插件                                | 分区     | 页面            | 默认             |
-| ----------------------------------- | -------- | --------------- | ---------------- |
-| `cn.xjtu.timetable` 课程表          | 校园广场 | `timetable`     | 启用             |
-| `cn.xjtu.campus` 畅行校园           | 校园广场 | `campus`        | 启用             |
-| `cn.xjtu.desktop-pet` 桌面宠物      | 拓展发明 | `desktopPet`    | 关闭             |
-| `cn.xjtu.font-beautify` 字体美化    | 拓展发明 | `fontBeautify`  | 关闭             |
-| `cn.xjtu.home-theme` 主页主题       | 拓展发明 | `homeTheme`     | 启用             |
-| `cn.xjtu.agent-settings` Agent 设置 | 拓展发明 | `agentSettings` | 启用             |
-| `cn.xjtu.ppt-capture` 回放截取      | 创新小港 | `pptCapture`    | 启用，无侧栏入口 |
+| 插件                                   | 分区     | 页面                       | 默认             |
+| -------------------------------------- | -------- | -------------------------- | ---------------- |
+| `cn.xjtu.timetable` 课程表             | 校园广场 | `timetable`                | 启用             |
+| `cn.xjtu.campus` 畅行校园              | 校园广场 | `campus`                   | 启用             |
+| `cn.xjtu.campus-reservations` 预约中心 | 校园广场 | `campus`（`reservations`） | 启用             |
+| `cn.xjtu.campus-profile` 个人画像      | 校园广场 | `campus`（`profile`）      | 启用             |
+| `cn.xjtu.desktop-pet` 桌面宠物         | 拓展发明 | `desktopPet`               | 关闭             |
+| `cn.xjtu.font-beautify` 字体美化       | 拓展发明 | `fontBeautify`             | 关闭             |
+| `cn.xjtu.home-theme` 主页主题          | 拓展发明 | `homeTheme`                | 启用             |
+| `cn.xjtu.agent-settings` Agent 设置    | 拓展发明 | `agentSettings`            | 启用             |
+| `cn.xjtu.ppt-capture` 回放截取         | 创新小港 | `pptCapture`               | 启用，无侧栏入口 |
 
 Agent 设置插件的基础页包含「搜索服务 / 开启搜索服务 Agent」开关，控制社区广场是否可以把搜索问题发给默认模型服务。字段是 `config.json` 的 `agentSearchEnabled`，默认 `false`；它随应用配置保存，不写进插件设置文件。模型不可达时社区页的 Agent 模式仍会置灰，不只看这个开关。
 

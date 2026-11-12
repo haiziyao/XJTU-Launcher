@@ -1,0 +1,100 @@
+/* 个人画像 / 预约中心 renders. Extends layout-v2's v2.css; sample data only. */
+:root {
+  /* Chart categorical order (validated: dataviz validate_palette, light). Fixed order, never cycled. */
+  --v1: #4a76c9; /* 餐饮 / 主序列 */
+  --v2: #16a085; /* 超市 */
+  --v3: #c08a22; /* 热水·浴室 (contrast WARN → always direct-labelled) */
+  --v4: #7b62c2;
+  --v5: #c0587c;
+  --v-other: #c3c8d0; /* 其他：中性灰，不占分类色 */
+  --seq-1: #dbe5f6;
+  --seq-2: #b3c8ec;
+  --seq-3: #7f9fdb;
+  --seq-4: #4a76c9;
+  --grid: #eceef1;
+}
+.cols.ov { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto 1fr; }
+.span3 { grid-column: 1 / 4; }
+.panel.pad { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.ph2 { display: flex; align-items: baseline; gap: 8px; }
+.ph2 b { font-size: 13px; font-weight: 600; }
+.ph2 .meta { font-size: 11.5px; color: var(--text-tertiary); }
+.ph2 .more { margin-left: auto; font-size: 11.5px; color: var(--accent-text); }
+
+/* identity strip */
+.id { display: grid; grid-template-columns: 52px 1fr repeat(4, 150px); align-items: center; column-gap: 16px; padding: 14px 18px; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600; }
+.id .who b { font-size: 16px; font-weight: 600; display: block; }
+.id .who span { font-size: 12px; color: var(--text-secondary); }
+.kpi { border-left: 1px solid var(--divider); padding-left: 16px; display: flex; flex-direction: column; gap: 1px; }
+.kpi .k2 { font-size: 11.5px; color: var(--text-tertiary); display: flex; align-items: center; gap: 5px; }
+.kpi .k2 svg { width: 13px; height: 13px; }
+.kpi .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.kpi .v small { font-size: 12px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+.kpi .d { font-size: 11px; color: var(--text-tertiary); }
+.up { color: var(--success-text); }
+.down { color: var(--danger); }
+
+/* charts */
+.chart svg { display: block; width: 100%; }
+.chart text { font-family: inherit; font-size: 10.5px; fill: var(--text-tertiary); }
+.chart text.val { fill: var(--text); font-size: 11px; font-weight: 600; }
+.chart .gl { stroke: var(--grid); stroke-width: 1; }
+.chart .base { stroke: var(--border-strong); stroke-width: 1; }
+.chart .ln { fill: none; stroke: var(--v1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--v1); stroke: #fff; stroke-width: 2; }
+.chart .ref { stroke: var(--text-tertiary); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* donut + legend */
+.donut { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 14px; }
+.donut svg { width: 132px; height: 132px; }
+.donut .c { font-size: 18px; font-weight: 600; fill: var(--text); }
+.donut .cs2 { font-size: 10.5px; fill: var(--text-tertiary); }
+.lg { display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+.lg div { display: grid; grid-template-columns: 10px 1fr auto 40px; align-items: center; gap: 7px; white-space: nowrap; }
+.donut { grid-template-columns: 120px 1fr; }
+.donut svg { width: 120px; height: 120px; }
+.wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 70px; }
+.wk i { display: block; background: var(--seq-2); border-radius: 4px 4px 0 0; }
+.wk i.on { background: var(--v1); }
+.wkl { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; font-size: 10.5px; color: var(--text-tertiary); text-align: center; }
+.wkv { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; font-size: 10.5px; color: var(--text-secondary); text-align: center; font-variant-numeric: tabular-nums; }
+.lg i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+.lg .n { font-variant-numeric: tabular-nums; text-align: right; }
+.lg .p { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; font-size: 11px; }
+
+/* horizontal meter bars */
+.meter { display: grid; grid-template-columns: 74px 1fr 52px; align-items: center; gap: 8px; font-size: 12px; }
+.meter .bar { height: 8px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; border-radius: 4px; background: var(--v1); }
+.meter .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.meters { display: flex; flex-direction: column; gap: 9px; }
+
+/* body figure */
+.body { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; }
+.body svg { width: 120px; height: 200px; }
+.body .sil { fill: #e6eaf1; stroke: #b9c4d6; stroke-width: 1.2; }
+.body .dim { stroke: var(--text-tertiary); stroke-width: 1; }
+.body text { font-size: 10.5px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.stat .k2 { font-size: 11px; color: var(--text-tertiary); }
+.stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .v small { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+
+/* range strip: BMI scale */
+.range { position: relative; height: 8px; border-radius: 4px; display: grid; grid-template-columns: 18.5fr 5.5fr 4fr 6fr; gap: 2px; }
+.range i { display: block; border-radius: 2px; }
+.range .pin { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--text); border-radius: 1px; }
+.rl { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-tertiary); }
+
+/* item cards */
+.items { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.item { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.item.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.item .t { font-size: 11.5px; color: var(--text-tertiary); display: flex; align-items: center; }
+.item .t .badge { margin-left: auto; height: 18px; font-size: 10.5px; }
+.item .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.item .v small { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+.item .s { font-size: 11px; color: var(--text-tertiary); }
+.item .bar { height: 4px; border-radius: 2px; background: var(--surface-sunken); }
+.item .bar i { display: block; height: 100%; border-radius: 2px; background: var(--v1); }

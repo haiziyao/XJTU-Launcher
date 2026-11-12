@@ -1,40 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import SectionHeader from '../../../components/ui/SectionHeader.vue';
-import FilterBar from '../../../components/ui/FilterBar.vue';
-import MenuSelect from '../../../components/ui/MenuSelect.vue';
-import DataTable, { type DataColumn, type DataSort } from '../../../components/ui/DataTable.vue';
+import { BookOpen, Search } from 'lucide-vue-next';
+import CampusHeaderSlot from './CampusHeaderSlot.vue';
 import InlineAlert from '../../../components/ui/InlineAlert.vue';
 import { bridge } from '../../../shared/bridge';
 import { applyCached, cacheName } from '../../../shared/cache';
-import { currentAcademicStart } from '../../../shared/domain';
+import { currentAcademicStart, updatedInfo } from '../../../shared/domain';
 import type { Courses, Terms } from '../../../types';
 
 /**
- * 全校课程 (LAYOUT §9.6): the whole published timetable for one term, filtered
- * and sorted in place. The school returns thousands of rows, so the table caps
- * at 300 and the header says the honest total.
+ * 全校课程 (layout v2): terms in the left column, the whole published timetable
+ * for one term in the centre, filtered and sorted in place. The school returns
+ * thousands of rows, so the table caps at 300 and the header says the honest
+ * total.
  */
 const LIMIT = 300;
 const terms = ref<Terms | null>(null);
 const courses = ref<Courses | null>(null);
 const term = ref('');
 const query = ref('');
-const sort = ref<DataSort | null>({ key: 'name', dir: 'asc' });
+type SortKey = 'name' | 'code' | 'teachers' | 'credits';
+const sort = ref<{ key: SortKey; dir: 'asc' | 'desc' } | null>({ key: 'name', dir: 'asc' });
 const loading = ref(false);
 const loadedAt = ref<number | null>(null);
 const error = ref('');
 
-const columns: DataColumn[] = [
-  { key: 'name', label: '课程', sortable: true },
-  { key: 'code', label: '课号', sortable: true },
-  { key: 'class', label: '教学班' },
-  { key: 'teachers', label: '教师', sortable: true },
-  { key: 'credits', label: '学分', align: 'right', sortable: true },
-  { key: 'campus', label: '校区' },
-  { key: 'department', label: '院系' },
-  { key: 'timePlace', label: '时间地点' },
-];
 // Hide future academic years; they have no published timetable yet.
 const academicStart = currentAcademicStart();
 const termOptions = computed(() =>
@@ -65,13 +55,38 @@ const filtered = computed(() => {
     ),
   );
 });
-const rows = computed(() => filtered.value.slice(0, LIMIT));
+const sorted = computed(() => {
+  const current = sort.value;
+  if (!current) return filtered.value;
+  const factor = current.dir === 'asc' ? 1 : -1;
+  return [...filtered.value].sort((left, right) => {
+    const a = left[current.key];
+    const b = right[current.key];
+    if (a == null) return 1;
+    if (b == null) return -1;
+    if (current.key === 'credits') return (Number(a) - Number(b)) * factor;
+    return String(a).localeCompare(String(b), 'zh-Hans-CN', { numeric: true }) * factor;
+  });
+});
+const rows = computed(() => sorted.value.slice(0, LIMIT));
 const truncated = computed(() => filtered.value.length > LIMIT);
-const subtitle = computed(() =>
-  courses.value
-    ? [termName.value, `${filtered.value.length} 门`].filter(Boolean).join(' · ')
-    : termName.value,
-);
+const summary = computed(() => {
+  if (!courses.value) return '';
+  const total = `${filtered.value.length} 门`;
+  return truncated.value ? `${total} · 显示前 ${LIMIT} 条` : total;
+});
+
+function arrow(key: SortKey): string {
+  if (sort.value?.key !== key) return '';
+  return sort.value.dir === 'asc' ? '↑' : '↓';
+}
+
+function sortBy(key: SortKey) {
+  sort.value =
+    sort.value?.key === key && sort.value.dir === 'asc'
+      ? { key, dir: 'desc' }
+      : { key, dir: 'asc' };
+}
 
 async function loadTerms(force = false) {
   await applyCached<Terms>('terms', undefined, (value) => {
@@ -116,69 +131,130 @@ onMounted(() => void loadCourses());
 </script>
 
 <template>
-  <section class="campus-section">
-    <SectionHeader
-      title="全校课程"
-      :subtitle="subtitle"
-      :updated-at="loadedAt"
-      :refreshing="loading"
-      @refresh="loadCourses(true)"
-    >
-      <template #filters>
-        <MenuSelect
-          :model-value="term"
-          :options="termOptions"
-          label="学期"
-          placeholder="选择学期"
-          fit
-          @update:model-value="changeTerm"
-        />
-      </template>
-    </SectionHeader>
+  <CampusHeaderSlot slot="meta">
+    <span v-if="loadedAt">更新于 {{ updatedInfo(loadedAt) }}</span>
+  </CampusHeaderSlot>
+  <CampusHeaderSlot slot="tools">
+    <label class="cv-search">
+      <Search :size="13" aria-hidden="true" />
+      <input
+        v-model="query"
+        type="search"
+        placeholder="搜索课程、课号、教师或院系"
+        aria-label="搜索全校课程"
+        spellcheck="false"
+      />
+    </label>
+    <button type="button" class="cv-btn" :disabled="loading" @click="loadCourses(true)">
+      刷新
+    </button>
+  </CampusHeaderSlot>
 
-    <InlineAlert v-if="error" tone="error" :title="error" />
+  <div class="cv-cols lc">
+    <div class="cv-panel cv-list">
+      <div class="cv-lh">学期</div>
+      <button
+        v-for="option in termOptions"
+        :key="option.value"
+        type="button"
+        class="cv-item plain"
+        :class="{ on: term === option.value }"
+        @click="changeTerm(option.value)"
+      >
+        <b>{{ option.label }}</b>
+      </button>
+    </div>
 
-    <FilterBar
-      v-model:query="query"
-      placeholder="搜索课程、课号、教师或院系"
-      label="搜索全校课程"
-    />
+    <div class="cv-center">
+      <InlineAlert v-if="error" tone="error" :title="error" />
+      <div class="cv-ch">
+        <b>{{ termName || '全校课程' }}</b>
+        <span class="meta">{{ summary }}</span>
+      </div>
 
-    <DataTable
-      v-model:sort="sort"
-      :columns="columns"
-      :rows="rows"
-      row-key="key"
-      :loading="loading && !courses"
-      :empty-text="query.trim() ? '没有匹配的课程' : '这个学期还没有发布课程'"
-      label="全校课程"
-    >
-      <template #cell-name="{ row }">
-        <strong class="course-name">{{ row.name }}</strong>
-      </template>
-      <template #cell-code="{ row }">{{ row.code || '—' }}</template>
-      <template #cell-class="{ row }">{{ row.class || '—' }}</template>
-      <template #cell-teachers="{ row }">{{ row.teachers || '—' }}</template>
-      <template #cell-credits="{ row }">{{ row.credits ?? '—' }}</template>
-      <template #cell-campus="{ row }">{{ row.campus || '—' }}</template>
-      <template #cell-department="{ row }">{{ row.department || '—' }}</template>
-      <template #cell-timePlace="{ row }">{{ row.timePlace || '—' }}</template>
-    </DataTable>
-
-    <p v-if="truncated" class="course-truncated">
-      共 {{ filtered.length }} 门，显示前 {{ LIMIT }} 门；用搜索缩小范围。
-    </p>
-  </section>
+      <div v-if="loading && !courses" class="cv-empty">
+        <BookOpen :size="22" /><b>正在读取全校课程…</b>
+      </div>
+      <div v-else-if="!rows.length" class="cv-empty">
+        <BookOpen :size="22" />
+        <b>{{ query.trim() ? '没有匹配的课程' : '这个学期还没有发布课程' }}</b>
+      </div>
+      <div v-else class="cv-panel cv-tbl">
+        <div
+          class="cv-thead"
+          style="--cols: minmax(160px, 1fr) 86px minmax(90px, 1fr) 56px 64px 130px"
+        >
+          <button type="button" class="th" @click="sortBy('name')">
+            课程<span class="arw">{{ arrow('name') }}</span>
+          </button>
+          <button type="button" class="th" @click="sortBy('code')">
+            课号<span class="arw">{{ arrow('code') }}</span>
+          </button>
+          <button type="button" class="th" @click="sortBy('teachers')">
+            教师<span class="arw">{{ arrow('teachers') }}</span>
+          </button>
+          <span class="cv-r">
+            <button type="button" class="th" @click="sortBy('credits')">
+              学分<span class="arw">{{ arrow('credits') }}</span>
+            </button>
+          </span>
+          <span>校区</span>
+          <span>时间地点</span>
+        </div>
+        <div
+          v-for="row in rows"
+          :key="String(row.key)"
+          class="cv-tr course-row"
+          style="--cols: minmax(160px, 1fr) 86px minmax(90px, 1fr) 56px 64px 130px"
+        >
+          <span class="c">
+            <span class="cv-tt">
+              <span class="cv-ellip">{{ row.name }}</span>
+              <small v-if="row.class || row.department">
+                {{ [row.class, row.department].filter(Boolean).join(' · ') }}
+              </small>
+            </span>
+          </span>
+          <span class="cv-muted cv-num cv-ellip">{{ row.code || '—' }}</span>
+          <span class="cv-sec cv-ellip">{{ row.teachers || '—' }}</span>
+          <span class="cv-r cv-num">{{ row.credits ?? '—' }}</span>
+          <span class="cv-muted cv-ellip">{{ row.campus || '—' }}</span>
+          <span class="cv-muted cv-ellip">{{ row.timePlace || '—' }}</span>
+        </div>
+        <div
+          v-if="truncated"
+          class="cv-tr"
+          style="--cols: minmax(160px, 1fr) 86px minmax(90px, 1fr) 56px 64px 130px"
+        >
+          <span class="cv-sec cv-ellip">还有 {{ filtered.length - rows.length }} 条</span>
+          <span></span><span></span><span></span><span></span>
+          <span class="cv-r cv-muted">缩小筛选或搜索课号</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.course-name {
-  font-weight: 500;
+.cv-tr.course-row {
+  height: 40px;
 }
-.course-truncated {
-  padding: 10px 2px;
+.th {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.th:hover {
+  color: var(--text);
+}
+.arw {
   color: var(--text-tertiary);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
 }
 </style>

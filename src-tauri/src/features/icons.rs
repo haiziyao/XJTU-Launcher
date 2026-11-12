@@ -43,13 +43,15 @@ const OUTPUT_SIDE: u32 = 96;
 
 /// Ids the app understands today. The template lists them with empty values so
 /// the file explains itself; empty (like a missing key) means "built-in glyph".
-const KNOWN_IDS: [&str; 26] = [
+const KNOWN_IDS: [&str; 28] = [
     "nav.home",
     "nav.agent",
     "nav.community",
     "nav.market",
     "nav.settings",
     "plugin.cn.xjtu.campus",
+    "plugin.cn.xjtu.campus-reservations",
+    "plugin.cn.xjtu.campus-profile",
     "plugin.cn.xjtu.timetable",
     "plugin.cn.xjtu.home-theme",
     "plugin.cn.xjtu.agent-settings",

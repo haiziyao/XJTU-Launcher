@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>反馈与建议 — 设计草图 — XJTU Launcher</title>
+<!-- 设计草图：只用于确认版式与文案，不上线。样式复用官网 styles.css，表单控件样式写在下面。 -->
+<link rel="icon" href="../../../website/assets/favicon.png" sizes="32x32">
+<link rel="stylesheet" href="../../../website/styles.css">
+<style>
+  /* 草图专用：表单控件。上线版会并入 website/styles.css。 */
+  .fb-badge {
+    position: fixed; right: 16px; bottom: 16px; z-index: 50;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(16, 18, 24, .86); color: #fff;
+    font-size: 12px; letter-spacing: .04em;
+  }
+  .fb-sec { padding: 64px 0 88px; }
+  .fb-sec .sec-head { align-items: center; }
+  .fb-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .fb-main { max-width: 820px; margin-top: 40px; }
+  .fb-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
+  .fb-field { margin-bottom: 22px; }
+  .fb-field:last-of-type { margin-bottom: 18px; }
+  .fb-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; font-size: 14px; font-weight: 650; }
+  .fb-label small { font-weight: 400; color: #9298a6; font-size: 12.5px; }
+    .fb-input, .fb-area {
+    width: 100%; padding: 11px 13px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--soft); color: var(--ink);
+    font: inherit; font-size: 14.5px;
+    transition: border-color .18s, background .18s, box-shadow .18s;
+  }
+  .fb-input::placeholder, .fb-area::placeholder { color: #a8adba; }
+  .fb-input:focus, .fb-area:focus {
+    outline: none; background: #fff; border-color: #b9a9ff;
+    box-shadow: 0 0 0 3px rgba(124, 92, 255, .14);
+  }
+  .fb-area { min-height: 148px; resize: vertical; line-height: 1.65; }
+  .fb-area.short { min-height: 96px; }
+  .fb-kind { display: flex; gap: 8px; flex-wrap: wrap; }
+  .fb-kind input { position: absolute; opacity: 0; pointer-events: none; }
+  .fb-kind label {
+    padding: 7px 15px; border: 1px solid var(--line); border-radius: 999px;
+    font-size: 13.5px; color: var(--muted); cursor: pointer;
+    transition: border-color .18s, color .18s, background .18s;
+  }
+  .fb-kind label:hover { border-color: #cfd3de; color: var(--ink); }
+  .fb-kind input:checked + label { border-color: var(--brand); color: var(--brand); background: rgba(124, 92, 255, .07); font-weight: 650; }
+  .fb-kind input:focus-visible + label { box-shadow: 0 0 0 3px rgba(124, 92, 255, .16); }
+  .fb-consent { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 22px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .fb-consent input { margin: 3px 0 0; width: 15px; height: 15px; accent-color: var(--brand); }
+  .fb-submit { width: 100%; padding: 12px 18px; border: 0; border-radius: 10px; background: var(--ink); color: #fff; font: inherit; font-size: 14.5px; font-weight: 650; cursor: pointer; }
+  .fb-submit:hover { background: #23262f; }
+  .fb-submit[disabled] { opacity: .45; cursor: not-allowed; }
+  .fb-note { margin: 16px 0 0; font-size: 12.5px; color: #9298a6; line-height: 1.75; }
+  .fb-success { display: none; max-width: 820px; margin-top: 24px; }
+  .fb-success strong { display: block; margin: 4px 0 6px; font-size: 20px; letter-spacing: -.01em; }
+  .fb-code { display: inline-block; margin-left: 4px; padding: 3px 9px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font: 600 14px/1.5 var(--mono); }
+  @media (max-width: 860px) {
+    .fb-sec { padding: 40px 0 64px; }
+    .fb-card { padding: 20px; }
+    .fb-sec .sec-head { align-items: flex-start; flex-direction: column; gap: 20px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="#">
+      <img src="../../../website/assets/icon.png" width="28" height="28" alt="">
+      <span>XJTU Launcher</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="#">社区广场</a>
+      <a href="#" data-sm="hide">方向</a>
+      <a href="#">下载</a>
+      <a href="#" data-sm="hide">项目</a>
+      <a href="#" data-sm="hide">Q&amp;A</a>
+      <a href="#" aria-current="page" style="color:var(--ink)">反馈</a>
+      <a class="ghost" href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="fb-sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <p class="kicker">反馈</p>
+          <h2>反馈与建议</h2>
+        </div>
+        <div>
+          <p class="sub">功能想要什么、哪里不好用、哪句话写错了，都可以写在这里。</p>
+          <div class="fb-actions" style="margin-top:16px">
+            <a class="doc-btn" href="#">在 GitHub 公开讨论</a>
+          </div>
+        </div>
+      </div>
+
+      <form class="fb-card fb-main" id="fb-form" novalidate>
+        <div class="fb-field">
+          <span class="fb-label" id="kind-label">类型</span>
+          <div class="fb-kind" role="radiogroup" aria-labelledby="kind-label">
+            <input type="radio" name="kind" id="kind-idea" value="idea" checked>
+            <label for="kind-idea">功能建议</label>
+            <input type="radio" name="kind" id="kind-bug" value="bug">
+            <label for="kind-bug">Bug 反馈</label>
+            <input type="radio" name="kind" id="kind-other" value="other">
+            <label for="kind-other">其他</label>
+          </div>
+        </div>
+
+        <div class="fb-field">
+          <label class="fb-label" for="fb-title">
+            <span>标题</span>
+            <small><span id="count-title">0</span>/60</small>
+          </label>
+          <input class="fb-input" id="fb-title" type="text" maxlength="60" placeholder="一句话说清楚要反馈什么" value="希望课表能导出成 ics">
+        </div>
+
+        <div class="fb-field">
+          <label class="fb-label" for="fb-body">
+            <span>详细描述</span>
+            <small><span id="count-body">0</span>/2000</small>
+          </label>
+          <textarea class="fb-area" id="fb-body" maxlength="2000" placeholder="现在是什么样、你希望变成什么样，越具体越好">现在的课表只能在应用里看，手机日历收不到提醒。希望能导出 ics，导入到系统日历或者别的客户端里，这样上课前就有通知。
+
+导出范围想能选：本周、整个学期。</textarea>
+        </div>
+
+        <div class="fb-field" id="fb-steps-field" hidden>
+          <label class="fb-label" for="fb-steps">
+            <span>复现步骤</span>
+            <small>选填</small>
+          </label>
+          <textarea class="fb-area short" id="fb-steps" maxlength="1000" placeholder="点了哪里、看到了什么、能不能稳定复现"></textarea>
+        </div>
+
+        <div class="fb-field">
+          <label class="fb-label" for="fb-contact">
+            <span>联系方式</span>
+            <small>选填</small>
+          </label>
+          <input class="fb-input" id="fb-contact" type="text" maxlength="100" placeholder="邮箱或 QQ / 微信">
+        </div>
+
+        <label class="fb-consent">
+          <input type="checkbox" id="fb-consent">
+          <span>我知道这条反馈会保存在项目服务器上，保留 12 个月。</span>
+        </label>
+
+        <button class="fb-submit" type="submit" id="fb-submit">提交反馈</button>
+        <p class="fb-note">不要填写密码、学号等个人信息。</p>
+        </form>
+
+      <div class="fb-card fb-success" id="fb-success" style="margin-top:24px">
+        <span class="tag" style="color:var(--brand)">已提交</span>
+        <strong>收到了，谢谢</strong>
+        <p class="sub" style="margin:2px 0 0">编号 <code class="fb-code" id="fb-success-code">FB-20261111-7K3Q</code></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="fbrand">
+      <img src="../../../website/assets/icon.png" width="32" height="32" alt="">
+      <span>XJTU Launcher</span>
+    </div>
+    <p>MIT License · <a href="#">GitHub</a> · <a href="#">Q&amp;A</a><br>学生个人项目，与西安交通大学官方无关。凭据只保存在本机。</p>
+  </div>
+</footer>
+
+<div class="fb-badge">设计草图 · 未上线</div>
+
+<script>
+  // 草图行为：字符计数、Bug 才展开「复现步骤」、提交后展示成功态。
+  const form = document.getElementById("fb-form");
+  const title = document.getElementById("fb-title");
+  const body = document.getElementById("fb-body");
+  const steps = document.getElementById("fb-steps-field");
+  const success = document.getElementById("fb-success");
+
+  const count = (input, out) => {
+    const update = () => (out.textContent = input.value.length);
+    input.addEventListener("input", update);
+    update();
+  };
+  count(title, document.getElementById("count-title"));
+  count(body, document.getElementById("count-body"));
+
+  form.querySelectorAll('input[name="kind"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      steps.hidden = radio.value !== "bug" || !radio.checked;
+    });
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    // 提交成功后整块表单与说明一起收起来，只留编号，避免空出来的列。
+    form.style.display = "none";
+    success.style.display = "block";
+    success.scrollIntoView({ block: "center" });
+  });
+</script>
+</body>
+</html>

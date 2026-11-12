@@ -6,3 +6,6 @@ import { ref } from 'vue';
  * or not-yet-opened section simply has no badge.
  */
 export const campusTodoCount = ref<number | null>(null);
+
+/** Same rule for 通知: the badge appears only after a page has loaded a list. */
+export const campusNoticeCount = ref<number | null>(null);

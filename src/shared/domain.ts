@@ -29,6 +29,8 @@ export const defaultConfig = (): AppConfig => ({
   greeting: '把校园，放在手边。',
   widgets: ['timetable', 'links', 'notices', 'plugins'],
   pluginOrder: [],
+  // Optional inventions; a fresh install starts with only these off. Keep in
+  // sync with `plugins/*/plugin.json` and `AppConfig::default()` in Rust.
   disabledPlugins: ['cn.xjtu.desktop-pet', 'cn.xjtu.font-beautify'],
   hiddenPlugins: [],
   pluginLayout: 1,

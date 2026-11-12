@@ -14,7 +14,9 @@ mod workbench;
 pub(crate) use agent::{expose, mcp, providers};
 pub(crate) use campus::{browser as campus_browser, timetable_custom, tool_names};
 pub(crate) use core::{cache, config, network, storage, vault};
-pub(crate) use features::{community, fonts, icons, personal_image, pet_desktop, updates};
+pub(crate) use features::{
+    community, fonts, icons, personal_image, pet_desktop, resources, updates,
+};
 pub(crate) use identity::{accounts, auth};
 pub(crate) use plugins::{capture as capture_store, settings as plugin_settings};
 
@@ -98,6 +100,7 @@ pub fn run() {
             commands::school::school_catalog,
             commands::system::entry_icons,
             commands::school::school_query,
+            commands::school::calendar_image,
             commands::network::campus_notices,
             cache::cache_read,
             pet_desktop::pet_view,
@@ -161,6 +164,7 @@ pub fn run() {
             commands::agent::agent_tools,
             community::agent_search_status,
             community::community_agent_search,
+            resources::resource_sites,
             commands::expose::expose_status,
             commands::expose::expose_tools,
             commands::expose::expose_set_enabled,
@@ -196,6 +200,7 @@ pub fn run() {
             commands::timetable::query_timetable,
             commands::timetable::edit_timetable,
             commands::session::refresh_direct_session,
+            commands::session::refresh_fitness_session,
             commands::session::refresh_profile_session,
             commands::session::refresh_lms_session,
             commands::session::refresh_library_session,

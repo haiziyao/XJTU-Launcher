@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../layout-v2/render/v2.css"><link rel="stylesheet" href="profile.css">
+<style>
+.cols.l-c-r { grid-template-columns: 196px 1fr 270px; }
+.slots { display: grid; grid-template-columns: 58px repeat(6, 1fr); gap: 4px; font-size: 11.5px; }
+.slots .h { color: var(--text-tertiary); text-align: center; padding: 4px 0; }
+.slots .t { color: var(--text-tertiary); display: flex; align-items: center; font-variant-numeric: tabular-nums; }
+.slots .s { height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.s.free { background: var(--success-soft); color: var(--success-text); }
+.s.few { background: var(--warning-soft); color: var(--warning); }
+.s.full { background: var(--surface-sunken); color: var(--text-tertiary); }
+.s.sel { background: var(--accent); color: #fff; font-weight: 600; }
+.lgd { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-secondary); }
+.lgd span { display: inline-flex; align-items: center; gap: 5px; }
+.lgd i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="reservations"></aside>
+  <main class="main">
+    <header class="ph" data-app="reservations" data-s="场馆" data-meta="场馆会话有效 · 更新于 09:20"><span class="seg"><span class="on">预约</span><span>我的订单<span class="n">2</span></span></span></header>
+    <div class="content">
+      <div class="cols l-c-r">
+        <div class="panel clist">
+          <div class="lh">场馆</div>
+          <div class="citem plain on"><b>兴庆校区体育馆 · 羽毛球</b><span class="n">12</span></div>
+          <div class="citem plain"><b>兴庆校区 · 乒乓球</b><span class="n">8</span></div>
+          <div class="citem plain"><b>东区网球场</b><span class="n">0</span></div>
+          <div class="citem plain"><b>游泳馆</b><span class="n">31</span></div>
+          <div class="citem plain"><b>创新港 · 羽毛球</b><span class="n">5</span></div>
+          <div class="lh">日期</div>
+          <div class="citem plain on"><b>今天 11-12 周四</b></div>
+          <div class="citem plain"><b>明天 11-13 周五</b></div>
+          <div class="citem plain"><b>11-14 周六</b></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>兴庆校区体育馆 · 羽毛球</b><span class="meta">6 块场地 · 每场 1 小时 · 今天剩余 12 场</span></div>
+          <div class="panel pad">
+            <div class="slots">
+              <span></span><span class="h">1 号</span><span class="h">2 号</span><span class="h">3 号</span><span class="h">4 号</span><span class="h">5 号</span><span class="h">6 号</span>
+              <span class="t">14:00</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span>
+              <span class="t">15:00</span><span class="s full">已满</span><span class="s few">余 1</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span>
+              <span class="t">16:00</span><span class="s free">可约</span><span class="s full">已满</span><span class="s free">可约</span><span class="s full">已满</span><span class="s full">已满</span><span class="s few">余 1</span>
+              <span class="t">17:00</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span>
+              <span class="t">18:00</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span>
+              <span class="t">19:00</span><span class="s free">可约</span><span class="s sel">已选</span><span class="s free">可约</span><span class="s full">已满</span><span class="s free">可约</span><span class="s full">已满</span>
+              <span class="t">20:00</span><span class="s free">可约</span><span class="s free">可约</span><span class="s full">已满</span><span class="s free">可约</span><span class="s full">已满</span><span class="s free">可约</span>
+              <span class="t">21:00</span><span class="s full">已满</span><span class="s free">可约</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span><span class="s full">已满</span>
+            </div>
+            <div class="lgd"><span><i style="background:var(--success-soft);border:1px solid #bfe0cb"></i>可约</span><span><i style="background:var(--warning-soft);border:1px solid #f0d4a8"></i>余量少</span><span><i style="background:var(--surface-sunken);border:1px solid var(--border)"></i>已满</span><span><i style="background:var(--accent)"></i>已选</span></div>
+          </div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">预约确认<span class="badge accent">待确认</span></div>
+          <h3>羽毛球 · 2 号场</h3>
+          <dl class="kv" style="margin:0">
+            <dt>场馆</dt><dd>兴庆校区体育馆</dd>
+            <dt>时间</dt><dd>今天 19:00–20:00</dd>
+            <dt>费用</dt><dd>¥ 10.00 · 校园卡</dd>
+            <dt>黑名单</dt><dd><span class="badge ok">未受限</span></dd>
+          </dl>
+          <div class="blk"><h4>须知</h4><p>开场 15 分钟内未到场记为违约；累计 3 次违约暂停预约 7 天。取消请在开场前 2 小时完成。</p></div>
+          <div class="blk"><h4>我的订单<span>2</span></h4>
+            <div class="file"><span class="cs c1"></span>11-13 20:00 羽毛球 4 号<span class="sz">已预约</span></div>
+            <div class="file"><span class="cs c2"></span>11-09 19:00 乒乓球 6 台<span class="sz">已完成</span></div>
+          </div>
+          <div class="foot"><span class="btn primary">确认预约</span><span class="btn">取消</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>
