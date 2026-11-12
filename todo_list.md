@@ -24,6 +24,9 @@
   - 工作流已接线，等 `SIGNPATH_PROJECT_SLUG` 等变量与 Secret 配置后真实跑一次。
 - [ ] **macOS Developer ID 与公证**（未开始）
   - 当前只有 ad-hoc 签名，首次打开仍提示“无法验证开发者”。
+- [ ] **恢复 Linux 安装包**（未开始，2026-11-13 决定等正式版再做）
+  - v0.1.0 发过 `amd64.deb` / `amd64.AppImage`；2026-10-23 合并 `2fefc6c` 解决 `release.yml` 冲突时，Linux 任务和 Windows `msi` 一起被丢掉，没有决策记录。
+  - 恢复时要改 `release.yml` 矩阵、`tools/upload-oss.mjs` 与发布 job 的平台键断言、`website/index.html` 下载区（视觉改动需先获准），并在真机上验证校园登录、课表、体测与自动更新。
 
 ## 插件
 
