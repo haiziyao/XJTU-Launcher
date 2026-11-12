@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 1fr 86px 70px 50px 56px 50px; }
+.tbl .tr { height: 34px; }
+.score { font-weight: 600; }
+.fail { color: var(--danger); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="学业" data-s="成绩"><span class="search">搜索课程</span></header>
+    <div class="content">
+      <div class="cols l-c">
+        <div class="panel clist">
+          <div class="figs">
+            <div class="fig"><span class="k2">加权绩点</span><span class="v">3.72</span></div>
+            <div class="fig"><span class="k2">加权均分</span><span class="v">87.4</span></div>
+            <div class="fig"><span class="k2">已修学分</span><span class="v">98.5</span></div>
+            <div class="fig"><span class="k2">不及格</span><span class="v">0</span></div>
+          </div>
+          <div class="hr"></div>
+          <div class="lh">学期<span>绩点</span></div>
+          <div class="citem plain"><b>全部学期</b><span class="n">3.72</span></div>
+          <div class="citem plain on"><b>2025-2026 春季</b><span class="n">3.81</span></div>
+          <div class="citem plain"><b>2025-2026 秋季</b><span class="n">3.69</span></div>
+          <div class="citem plain"><b>2024-2025 春季</b><span class="n">3.74</span></div>
+          <div class="citem plain"><b>2024-2025 秋季</b><span class="n">3.62</span></div>
+          <div class="lh">课程性质</div>
+          <div class="citem plain"><b>全部</b><span class="n">11</span></div>
+          <div class="citem plain"><b>必修</b><span class="n">7</span></div>
+          <div class="citem plain"><b>选修</b><span class="n">3</span></div>
+          <div class="citem plain"><b>通识</b><span class="n">1</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>2025-2026 春季学期</b><span class="meta">11 门 · 26 学分 · 绩点 3.81 · 均分 88.6</span></div>
+          <div class="panel tbl">
+            <div class="thead"><span>课程</span><span>课号</span><span>性质</span><span class="r">学分</span><span class="r">成绩 ↓</span><span class="r">绩点</span></div>
+            <div class="tr"><span class="ellip">数据结构与算法</span><span class="muted num">COMP2011</span><span class="sec">必修</span><span class="r num">4</span><span class="r num score">96</span><span class="r num">4.3</span></div>
+            <div class="tr"><span class="ellip">离散数学</span><span class="muted num">MATH2021</span><span class="sec">必修</span><span class="r num">3</span><span class="r num score">93</span><span class="r num">4.0</span></div>
+            <div class="tr"><span class="ellip">数字逻辑</span><span class="muted num">COMP2005</span><span class="sec">必修</span><span class="r num">3</span><span class="r num score">91</span><span class="r num">4.0</span></div>
+            <div class="tr"><span class="ellip">大学物理（二）</span><span class="muted num">PHYS1002</span><span class="sec">必修</span><span class="r num">4</span><span class="r num score">89</span><span class="r num">3.7</span></div>
+            <div class="tr"><span class="ellip">线性代数与解析几何</span><span class="muted num">MATH1013</span><span class="sec">必修</span><span class="r num">3</span><span class="r num score">88</span><span class="r num">3.7</span></div>
+            <div class="tr"><span class="ellip">程序设计实践</span><span class="muted num">COMP2009</span><span class="sec">必修</span><span class="r num">2</span><span class="r num score">优秀</span><span class="r num">4.0</span></div>
+            <div class="tr"><span class="ellip">中国近现代史纲要</span><span class="muted num">GE1021</span><span class="sec">必修</span><span class="r num">3</span><span class="r num score">85</span><span class="r num">3.3</span></div>
+            <div class="tr"><span class="ellip">西方音乐欣赏</span><span class="muted num">GE3105</span><span class="sec">通识</span><span class="r num">1</span><span class="r num score">90</span><span class="r num">4.0</span></div>
+            <div class="tr"><span class="ellip">机器学习导论</span><span class="muted num">COMP3110</span><span class="sec">选修</span><span class="r num">2</span><span class="r num score">87</span><span class="r num">3.7</span></div>
+            <div class="tr"><span class="ellip">创新创业基础</span><span class="muted num">GE2203</span><span class="sec">选修</span><span class="r num">1</span><span class="r num score">良好</span><span class="r num">3.3</span></div>
+            <div class="tr"><span class="ellip">体育（二）</span><span class="muted num">PE1002</span><span class="sec">必修</span><span class="r num">0.5</span><span class="r num score">82</span><span class="r num">3.0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

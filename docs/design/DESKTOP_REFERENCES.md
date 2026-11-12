@@ -5,7 +5,7 @@
 ## XJTUToolBox：校园业务与应用导航
 
 - 上游：https://github.com/yan-xiaoo/XJTUToolBox
-- 本地：`/Users/bilibili/Developer/HZY/References/XJTUToolBox`
+- 本地：`~/Developer/HZY/References/XJTUToolBox`
 - 研究提交：`e6a2d3b603ff7a803cc1d658a1fb5d52ca6b511b`
 - 已实际查看 `screenshots/sample_1.png` 至 `sample_4.png`。这是仓库提供的展示图，不能视为当前版本所有页面的实机截图。
 - 已读 `app/main_window.py`：主窗口继承 `MSFluentWindow`，功能通过 `addSubInterface` 注册，账户及设置使用 `NavigationItemPosition.BOTTOM` 固定到底部。
@@ -15,7 +15,7 @@
 ## Clash Verge Rev：Tauri 客户端外壳
 
 - 上游：https://github.com/clash-verge-rev/clash-verge-rev
-- 本地：`/Users/bilibili/Developer/HZY/References/clash-verge-rev`
+- 本地：`~/Developer/HZY/References/clash-verge-rev`
 - 本次浅克隆提交：`79657119452b8202a4f1daf64acb12e7cf093080`
 - 已实际查看官方 `docs/preview_light.png`，并核对布局源码；截图与当前开发分支可能存在差异。
 - `src/components/layout/layout-sidebar.tsx`：主导航、底部流量区域分开；右键菜单提供展开/收起，`collapse_navbar` 保存状态；菜单可以解锁排序。

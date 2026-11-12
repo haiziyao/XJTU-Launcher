@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { X } from 'lucide-vue-next';
-import { bridge } from '../bridge';
-import { renderMarkdown } from '../markdown';
-import { updateStatus } from '../updates';
+import { bridge } from '../shared/bridge';
+import { renderMarkdown } from '../shared/markdown';
+import { updateStatus } from '../shared/updates';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 

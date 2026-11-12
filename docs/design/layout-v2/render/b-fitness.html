@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 1fr 96px 88px; }
+.tbl .tr { height: 34px; }
+.total .v { font-size: 30px; }
+.total .badge { align-self: flex-start; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="生活" data-s="体测"><span class="muted" style="font-size:12px">更新于 今天 09:20</span></header>
+    <div class="content">
+      <div class="cols l-c-r" style="grid-template-columns: 176px 1fr 232px">
+        <div class="panel clist">
+          <div class="lh">学年</div>
+          <div class="citem plain on"><b>2025-2026 学年</b><span class="n">✓</span></div>
+          <div class="citem plain"><b>2024-2025 学年</b><span class="n">✓</span></div>
+          <div class="citem plain"><b>2023-2024 学年</b><span class="n">✓</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>2025-2026 学年体测</b><span class="meta">李同学 · 学号 2234567890 · 大三 · 男</span></div>
+          <div class="panel tbl">
+            <div class="thead"><span>项目</span><span class="r">成绩</span><span class="r">等级</span></div>
+            <div class="tr"><span>身高体重指数（BMI）</span><span class="r num">21.4</span><span class="r"><span class="badge ok">良好</span></span></div>
+            <div class="tr"><span>肺活量</span><span class="r num">4210 ml</span><span class="r"><span class="badge ok">良好</span></span></div>
+            <div class="tr"><span>50 米跑</span><span class="r num">7.2 秒</span><span class="r"><span class="badge ok">良好</span></span></div>
+            <div class="tr"><span>坐位体前屈</span><span class="r num">12.6 cm</span><span class="r"><span class="badge ok">良好</span></span></div>
+            <div class="tr"><span>立定跳远</span><span class="r num">238 cm</span><span class="r"><span class="badge ok">良好</span></span></div>
+            <div class="tr"><span>引体向上</span><span class="r num">9 次</span><span class="r"><span class="badge muted">及格</span></span></div>
+            <div class="tr"><span>1000 米跑</span><span class="r num">3'58"</span><span class="r"><span class="badge muted">及格</span></span></div>
+            <div class="tr"><span class="sec">总分</span><span class="r num">82.6</span><span class="r"><span class="badge ok">良好</span></span></div>
+          </div>
+        </div>
+
+        <div class="panel detail total">
+          <div class="type">总分<span class="badge ok">良好</span></div>
+          <div class="fig"><span class="k2">总分</span><span class="v">82.6</span></div>
+          <dl class="kv" style="margin:0">
+            <dt>报告类型</dt><dd>成长报告</dd>
+            <dt>报告状态</dt><dd>已生成</dd>
+          </dl>
+          <div class="blk"><h4>说明</h4><p>等级与分数来自体质健康测试系统，应用内只读。</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

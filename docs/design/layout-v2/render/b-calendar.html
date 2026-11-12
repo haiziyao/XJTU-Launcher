@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.page-prev { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+.paper { height: 420px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--text-tertiary); font-size: 12px; }
+.paper .sheet { width: 360px; height: 250px; background: #fff; border-radius: 4px; box-shadow: var(--shadow-sm); padding: 14px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-content: start; }
+.paper .sheet i { height: 12px; border-radius: 2px; background: #eef1f4; display: block; }
+.paper .sheet i.hd { background: #dfe5ec; }
+.paper .sheet i.hi { background: var(--accent-soft); }
+.kv-list { display: flex; flex-direction: column; gap: 2px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="学业" data-s="校历"><span class="btn">在浏览器打开</span></header>
+    <div class="content">
+      <div class="cols l-c">
+        <div class="panel clist">
+          <div class="lh">学年</div>
+          <div class="citem plain on"><b>2026-2027</b><span class="n">当前</span></div>
+          <div class="citem plain"><b>2025-2026</b></div>
+          <div class="citem plain"><b>2024-2025</b></div>
+          <div class="citem plain"><b>2023-2024</b></div>
+          <div class="lh">提示</div>
+          <div class="citem plain"><b>校历由教务处发布</b></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>2026-2027 学年校历</b><span class="meta">教务处发布 · 网页内容</span></div>
+          <div class="panel page-prev">
+            <div class="paper">
+              <div class="sheet">
+                <i class="hd"></i><i class="hd"></i><i class="hd"></i><i class="hd"></i><i class="hd"></i><i class="hd"></i><i class="hd"></i>
+                <i></i><i class="hi"></i><i></i><i></i><i></i><i></i><i></i>
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                <i></i><i></i><i></i><i class="hi"></i><i></i><i></i><i></i>
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <span>校历以网页形式发布，应用内不重排内容</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center"><span class="btn">在浏览器打开</span><span class="muted" style="font-size:11.5px">内容为教务处网页，应用内只做预览，不重排。</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

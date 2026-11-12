@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "cn.xjtu.campus-profile",
+  "name": "个人画像",
+  "version": "0.1.0",
+  "category": "campus",
+  "author": "haiziyao",
+  "license": "MIT",
+  "description": "校园卡、学籍档案与体测数据",
+  "details": "从畅行校园独立出来的个人数据入口：校园卡余额与流水、学籍档案、体测成绩。体测与校园卡需要直连校园会话，打开时会按需登录。",
+  "enabledByDefault": true,
+  "icon": "user-round",
+  "page": { "type": "campus", "preset": "profile" },
+  "widget": false
+}

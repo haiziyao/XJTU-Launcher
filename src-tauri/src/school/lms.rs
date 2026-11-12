@@ -523,9 +523,28 @@ impl Client {
             .get("activities")
             .and_then(Value::as_array)
             .ok_or("思源学堂活动列表格式已变化")?;
+        let mut rows = activities.iter().filter_map(activity).collect::<Vec<_>>();
+        // The list does not carry the student's submission state, so a
+        // submitted homework would otherwise read as merely 已截止. Read the
+        // homework details for the submission count; failures keep the
+        // unknown state instead of inventing one.
+        let homework = rows
+            .iter()
+            .filter(|row| row["type"] == "homework")
+            .filter_map(|row| row["id"].as_u64())
+            .collect::<Vec<_>>();
+        let (details, _) = self.details_of(&homework).await;
+        for detail in details {
+            let id = detail["id"].as_u64().unwrap_or(0);
+            if let Some(row) = rows.iter_mut().find(|row| row["id"].as_u64() == Some(id)) {
+                row["submitCount"] = detail["submitCount"].clone();
+                row["closed"] = detail["closed"].clone();
+                row["resubmitOpen"] = detail["resubmitOpen"].clone();
+            }
+        }
         Ok(json!({
             "course": course,
-            "activities": activities.iter().filter_map(activity).collect::<Vec<_>>()
+            "activities": rows
         }))
     }
 
@@ -1671,6 +1690,8 @@ fn activity(value: &Value) -> Option<Value> {
         "end": campus_time(value.get("end_time")),
         "published": value.get("published").and_then(Value::as_bool).unwrap_or(true),
         "group": value.get("submit_by_group").and_then(Value::as_bool).unwrap_or(false),
+        "closed": value.get("is_closed").and_then(Value::as_bool).unwrap_or(false),
+        "submitCount": value.get("user_submit_count").and_then(Value::as_u64),
     }))
 }
 

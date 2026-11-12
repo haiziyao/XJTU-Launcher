@@ -7,7 +7,7 @@
 
 口径：
 
-- **接口**指应用内 Rust 命令与 `school_query` 的 `Query` 类型；学校系统内部的 HTTP 路径不逐条展开，协议记录见 [CAMPUS_FEATURES.md](../../../dev-docs/CAMPUS_FEATURES.md)。
+- **接口**指应用内 Rust 命令与 `school_query` 的 `Query` 类型；学校系统内部的 HTTP 路径不逐条展开，协议记录见 [CAMPUS_FEATURES.md](../../../dev-docs/features/CAMPUS_FEATURES.md)。
 - **频率**是按校历、任务周期和页面性质做的产品估算，不是埋点数据。项目没有遥测，不能把估算写成实测。
 - **外链**指点击后进入内置校园网页窗口、系统浏览器或下载文件，而不是在当前页面直接展示。
 
@@ -33,9 +33,9 @@
 | 场馆                | 原生列表、时段、订单                   | 场馆、日期、时段、价格、可订状态、我的预订          | 无                     | 每周 1–2 次       | 原生只读，仅校园网，无预订 |
 | 通知                | 只在主页展示教务处 20 条               | 标题、日期、分类、原文链接                          | 通知正文               | 每天 / 每周       | 列表原生，正文外链         |
 | 个人页              | 原生设置页                             | 头像、显示名称、校园账号、MCP 模式                  | 无                     | 低频              | 原生                       |
-| Agent               | 原生对话页                             | 14 个校园工具，可读写部分能力                       | 回复中的链接           | 使用 Agent 时每天 | 原生，工具面已合并         |
+| Agent               | 原生对话页                             | 17 个校园工具（13 只读 + 4 写），可读写部分能力     | 回复中的链接           | 使用 Agent 时每天 | 原生，工具面已合并         |
 | 社区                | 占位页                                 | 无                                                  | 无                     | 未接入            | 占位                       |
-| 插件市场 / 应用设置 | 原生设置页                             | 插件启停、更新、外观、主页元素                      | 更新发布页             | 低频              | 原生                       |
+| 插件中心 / 应用设置 | 原生设置页                             | 插件启停、外观、主页元素                            | 无                     | 低频              | 原生                       |
 
 ## 2. 学业页面
 
@@ -43,7 +43,7 @@
 
 | 项       | 内容                                               |
 | -------- | -------------------------------------------------- |
-| 组件     | `src/components/CampusView.vue` 内联子页           |
+| 组件     | `src/features/campus/CampusView.vue` 内联子页      |
 | 查询接口 | `school_query` → `Query::Grades { term?: String }` |
 | 展示字段 | 课程名、学期、课程类别、分数、学分、绩点           |
 | 筛选     | 后端支持 `term`，当前页面不传，也没有学期筛选 UI   |
@@ -71,7 +71,7 @@
 
 | 项       | 内容                                                                        |
 | -------- | --------------------------------------------------------------------------- |
-| 组件     | `src/components/campus/CampusRooms.vue`                                     |
+| 组件     | `src/features/campus/components/CampusRooms.vue`                            |
 | 查询接口 | `Query::RoomOptions`、`Query::Rooms { campus, building, date, start, end }` |
 | 展示字段 | 校区、楼宇、日期、节次；结果含教室、楼宇、校区、容量、类型                  |
 | 写操作   | 无                                                                          |
@@ -84,7 +84,7 @@
 
 | 项       | 内容                                                     |
 | -------- | -------------------------------------------------------- |
-| 组件     | `src/components/campus/CampusCourses.vue`                |
+| 组件     | `src/features/campus/components/CampusCourses.vue`       |
 | 查询接口 | `Query::Terms`、`Query::Courses { term?, name, campus }` |
 | 展示字段 | 课程名、课程号、教师、院系、学分、上课时间与地点         |
 | 写操作   | 无                                                       |
@@ -109,7 +109,7 @@
 
 | 项       | 内容                                                                                                                             |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 组件     | `src/components/campus/CampusEvaluations.vue`                                                                                    |
+| 组件     | `src/features/campus/components/CampusEvaluations.vue`                                                                           |
 | 查询接口 | `Query::Evaluations { term?, finished }`；`school_prepare_evaluations`；`school_submit_evaluations`；`school_cancel_evaluations` |
 | 展示字段 | 问卷、课程、教师、学期、截止时间、评分档位、文字意见、逐份提交结果                                                               |
 | 写操作   | 可写：预览后提交；提交结果不明时不自动重试                                                                                       |
@@ -150,7 +150,7 @@
 
 | 项       | 内容                                               |
 | -------- | -------------------------------------------------- |
-| 组件     | `src/components/campus/CampusFitness.vue`          |
+| 组件     | `src/features/campus/components/CampusFitness.vue` |
 | 查询接口 | `Query::Fitness`、`Query::FitnessScore { year }`   |
 | 展示字段 | 学年列表、总分、等级、学生信息、项目分项、上报状态 |
 | 写操作   | 无                                                 |
@@ -163,7 +163,7 @@
 
 | 项       | 内容                                                                                                          |
 | -------- | ------------------------------------------------------------------------------------------------------------- |
-| 组件     | `src/components/campus/CampusProfile.vue`                                                                     |
+| 组件     | `src/features/campus/components/CampusProfile.vue`                                                            |
 | 查询接口 | `siteQuery` → `Query::Profile`；`refresh_profile_session`                                                     |
 | 展示字段 | 姓名、学号、头像、校区、书院、学院、专业、班级、年级、性别、生日、学制、入学时间、卡号、班主任 / 辅导员及电话 |
 | 写操作   | 无                                                                                                            |
@@ -176,7 +176,7 @@
 
 | 项       | 内容                                                                                                               |
 | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| 组件     | `src/components/campus/CampusLibrary.vue`                                                                          |
+| 组件     | `src/features/campus/components/CampusLibrary.vue`                                                                 |
 | 查询接口 | `Query::LibraryFloors`、`Query::LibraryAreas { floor }`、`Query::LibrarySeats { area }`；`refresh_library_session` |
 | 展示字段 | 校区、楼层、区域、实时座位状态、空余数                                                                             |
 | 写操作   | 无；预约 / 签到未开放                                                                                              |
@@ -189,7 +189,7 @@
 
 | 项       | 内容                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------ |
-| 组件     | `src/components/campus/CampusVenue.vue`                                                                |
+| 组件     | `src/features/campus/components/CampusVenue.vue`                                                       |
 | 查询接口 | `Query::VenueList`、`Query::VenueSlots { venue, date }`、`Query::VenueOrders`；`refresh_venue_session` |
 | 展示字段 | 场馆、日期、时段、价格、可订 / 锁定状态、我的预订                                                      |
 | 写操作   | 无；预订 / 取消未开放                                                                                  |
@@ -202,7 +202,7 @@
 
 | 项       | 内容                                                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 组件     | `src/components/campus/CampusLms.vue`                                                                                                                  |
+| 组件     | `src/features/campus/components/CampusLms.vue`                                                                                                         |
 | 查询接口 | `Query::LmsCourses`、`Query::LmsActivities { course }`、`Query::LmsActivity { activity }`、`Query::LmsSubmissions { activity }`；`refresh_lms_session` |
 | 文件接口 | `lms_open_file`（校园窗口打开）、`lms_save_file`（原生另存为，上限 2 GB）                                                                              |
 | 写接口   | Rust 已有 `homework_preview` / `homework_submit`，通过 Agent 的 `campus_lms_submit` 使用；页面没有上传 / 提交入口                                      |
@@ -218,7 +218,7 @@
 
 | 项       | 内容                                                                       |
 | -------- | -------------------------------------------------------------------------- |
-| 组件     | `src/components/HomeView.vue`                                              |
+| 组件     | `src/features/home/HomeView.vue`                                           |
 | 数据接口 | `query_timetable`（今日课程）、`campus_notices`（教务处 20 条）            |
 | 主页元素 | 今日课程、教务处通知、校园快捷入口、我的插件；可在主页主题里开关和排序     |
 | 外链     | 四个快捷入口：一网通办、教务系统、思源学堂、图书馆；通知正文               |
@@ -229,7 +229,7 @@
 
 | 项       | 内容                                                                             |
 | -------- | -------------------------------------------------------------------------------- |
-| 组件     | `src/components/TimetableView.vue`                                               |
+| 组件     | `src/features/campus/TimetableView.vue`                                          |
 | 接口     | `query_timetable`、`edit_timetable`                                              |
 | 能力     | 周课表、今日课程、按周切换、课程块编辑、隐藏课程、添加本机课程、恢复学校原始内容 |
 | 写操作   | 只改本机 `timetable-custom.json`，不写学校系统                                   |
@@ -250,14 +250,14 @@
 
 ### 5.4 个人页
 
-| 项       | 内容                                                                     |
-| -------- | ------------------------------------------------------------------------ |
-| 组件     | `src/components/PersonalView.vue`、`AccountsView.vue`、`McpSettings.vue` |
-| 内容     | 头像、显示名称、校园账号、账号会话状态、MCP 模式端口与工具开关           |
-| 校园数据 | 账号状态、直连会话状态；不展示成绩 / 课表等业务数据                      |
-| 外链     | 无                                                                       |
-| 频率预估 | 低频                                                                     |
-| 当前缺口 | 学籍档案仍在畅行校园，不在个人页                                         |
+| 项       | 内容                                                                            |
+| -------- | ------------------------------------------------------------------------------- |
+| 组件     | `src/features/personal/PersonalView.vue`、`AccountsView.vue`、`McpSettings.vue` |
+| 内容     | 头像、显示名称、校园账号、账号会话状态、MCP 模式端口与工具开关                  |
+| 校园数据 | 账号状态、直连会话状态；不展示成绩 / 课表等业务数据                             |
+| 外链     | 无                                                                              |
+| 频率预估 | 低频                                                                            |
+| 当前缺口 | 学籍档案仍在畅行校园，不在个人页                                                |
 
 ## 6. 外部跳转清单
 
@@ -269,7 +269,7 @@
 
 | 入口                      | 地址来源                            | 当前去向              | 是否属于要移除的校园外链 |
 | ------------------------- | ----------------------------------- | --------------------- | ------------------------ |
-| 主页“一网通办”            | `src/domain.ts` `campusLinks`       | 内置校园窗口          | 是                       |
+| 主页“一网通办”            | `src/shared/domain.ts` `campusLinks`       | 内置校园窗口          | 是                       |
 | 主页“教务系统”            | `campusLinks`                       | 内置校园窗口          | 是                       |
 | 主页“思源学堂”            | `campusLinks`                       | 内置校园窗口          | 是                       |
 | 主页“图书馆”              | `campusLinks`                       | 内置校园窗口          | 是                       |
@@ -320,7 +320,7 @@
 | 命令 / 工具                  | 作用                                 | 读 / 写 | 使用方                               |
 | ---------------------------- | ------------------------------------ | ------- | ------------------------------------ |
 | `school_query`               | 执行上面的封闭查询                   | 读      | 页面、Agent / MCP                    |
-| `school_catalog`             | 校园能力清单与后端进度               | 读      | 畅行校园入口、插件市场               |
+| `school_catalog`             | 校园能力清单与后端进度               | 读      | 畅行校园入口、插件中心               |
 | `campus_notices`             | 读取公开通知栏目                     | 读      | 主页、Agent / MCP                    |
 | `school_prepare_evaluations` | 生成评教预览，不发提交               | 读      | 评教页、Agent / MCP                  |
 | `school_submit_evaluations`  | 逐份提交评教，需 `confirm=true`      | 写      | 评教页、Agent / MCP                  |
@@ -357,7 +357,7 @@
 | 每周 1–3 次 | 空闲教室、图书馆座位、场馆（有运动习惯的用户）   | 自习与运动场景                                |
 | 每学期高峰  | 成绩、考试、评教、校历、全校课程                 | 出分、考试周、评教截止、开学 / 选课，时间集中 |
 | 每年 / 按需 | 体测、学籍、考勤                                 | 体测每年一次；学籍与考勤按事务需要            |
-| 按需 / 低频 | 个人页、插件市场、应用设置                       | 配置类操作                                    |
+| 按需 / 低频 | 个人页、插件中心、应用设置                       | 配置类操作                                    |
 | 未接入      | 社区                                             | 占位页面                                      |
 
 ## 9. 要移除外链，还缺什么
@@ -377,7 +377,7 @@
 
 ## 10. 文档差异
 
-`dev-docs/need-do.md` 仍写着“成绩、考试、空闲教室、全校课程、校历、评教、考勤、校园卡、体测、校园通知只有 Agent / MCP、没有独立页面”。这与当前代码不一致：除通知正文外，这些能力都已有原生子页。范围确认后应同步修正该条目，避免后续按过时状态排期。
+`dev-docs/planning/need-do.md` 仍写着“成绩、考试、空闲教室、全校课程、校历、评教、考勤、校园卡、体测、校园通知只有 Agent / MCP、没有独立页面”。这与当前代码不一致：除通知正文外，这些能力都已有原生子页。范围确认后应同步修正该条目，避免后续按过时状态排期。
 
 ## 11. 需要你决定
 

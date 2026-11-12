@@ -1,0 +1,901 @@
+/* Campus layout v2 (direction B): one header row, one section row, then a
+   three-column master–detail body. Tokens come from style.css so the wallpaper
+   tint keeps working; every class is prefixed .cv- to stay separate from the
+   older campus.css classes still used by pages that have not moved yet. */
+
+/* The page fills the content viewport and scrolls inside each panel, the way a
+   desktop app does, instead of letting the whole page scroll. The subtraction
+   mirrors .desktop-content-inner's padding (and .mac-native's extra top strip). */
+.campus-v2 {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 68px);
+  min-height: 360px;
+}
+.mac-native .campus-v2 {
+  height: calc(100vh - 80px);
+}
+@media (max-width: 980px) {
+  .campus-v2 {
+    height: calc(100vh - 56px);
+  }
+}
+
+/* ---- first row: title + primary tabs ---- */
+.cv-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 34px;
+  flex-shrink: 0;
+}
+.cv-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.cv-ptabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.cv-ptab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) ease,
+    color var(--duration) ease;
+}
+.cv-ptab:hover:not(.on) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.cv-ptab.on {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.cv-ptab .n {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cv-ptab.on .n {
+  color: var(--accent-text);
+}
+.cv-vsep {
+  width: 1px;
+  height: 14px;
+  margin: 0 6px;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+.cv-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---- second row: section tabs or page meta, then page tools ---- */
+.cv-sub {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  margin-top: 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cv-stab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cv-stab:hover:not(.on) {
+  color: var(--text);
+}
+.cv-stab.on {
+  color: var(--text);
+  font-weight: 500;
+}
+.cv-stab.on::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.cv-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.cv-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* When the row is the section nav, page meta moves to the right, next to the
+   tools, instead of sitting among the tabs. */
+.cv-head-meta.push {
+  margin-left: auto;
+  padding-left: 12px;
+}
+.cv-head-meta.push ~ .cv-tools {
+  margin-left: 8px;
+}
+.cv-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+/* ---- controls ---- */
+.cv-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  width: 190px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.cv-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.cv-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.cv-search input::placeholder {
+  color: var(--text-tertiary);
+}
+.cv-select {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 26px 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
+    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
+  background-position:
+    right 13px center,
+    right 9px center;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+.cv-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+.cv-btn:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+.cv-btn.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 500;
+}
+.cv-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.cv-btn.ghost {
+  padding: 0 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-text);
+}
+.cv-btn.sm {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+.cv-btn.danger {
+  border-color: transparent;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cv-seg {
+  display: inline-flex;
+  gap: 2px;
+  height: 28px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--control-sunken);
+}
+.cv-seg button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cv-seg button.on {
+  background: var(--control-bg);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: var(--shadow-xs);
+}
+.cv-seg .n {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- body and columns ---- */
+.cv-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding-top: 14px;
+  overflow: hidden;
+}
+.cv-cols {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+/* Right columns give way first when the sidebar is wide and the window narrow. */
+.cv-cols.lcr {
+  grid-template-columns: minmax(168px, 214px) minmax(0, 1fr) minmax(220px, 300px);
+}
+.cv-cols.lc {
+  grid-template-columns: minmax(168px, 214px) minmax(0, 1fr);
+}
+.cv-cols.cr {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+}
+.cv-center {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+/* Center headings and panels scroll together, header stays put. */
+.cv-center > .cv-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+.cv-ch {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  min-height: 22px;
+}
+/* Long course names and dates truncate instead of running under the tools. */
+.cv-ch b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-ch .meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-ch .end {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* ---- panels ---- */
+.cv-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cv-scroll,
+.cv-list,
+.cv-tbl,
+.cv-detail {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.cv-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px;
+}
+.cv-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.cv-type .cv-badge {
+  margin-left: auto;
+}
+.cv-detail h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.cv-blk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--divider);
+  padding-top: 10px;
+}
+.cv-blk h4 {
+  display: flex;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.cv-blk h4 span {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.cv-blk p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.cv-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+/* ---- left filter / index column ---- */
+.cv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+}
+.cv-lh {
+  display: flex;
+  padding: 6px 8px 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.cv-lh:not(:first-child) {
+  margin-top: 8px;
+}
+.cv-lh span {
+  margin-left: auto;
+}
+.cv-item {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.cv-item b {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-item .s {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-item.plain {
+  grid-template-columns: 1fr auto;
+  padding: 5px 8px;
+}
+.cv-item.plain .s {
+  grid-column: 1 / 3;
+}
+.cv-item .n {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cv-item:hover:not(.on) {
+  background: var(--surface-hover);
+}
+.cv-item.on {
+  background: var(--nav-active);
+}
+.cv-item.on b {
+  color: var(--nav-active-text);
+  font-weight: 600;
+}
+
+/* Count pills inside lists and tables. */
+.cv-k {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cv-k.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cv-k.warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.cv-k.accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.cv-k.muted {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+/* ---- tables ---- */
+.cv-thead,
+.cv-tr {
+  display: grid;
+  grid-template-columns: var(--cols, 1fr);
+  column-gap: 12px;
+  align-items: center;
+  padding: 0 12px;
+}
+.cv-thead {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 30px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.cv-tr {
+  min-height: 34px;
+  height: 34px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.cv-tr:last-child {
+  border-bottom: 0;
+}
+.cv-tr:hover {
+  background: var(--surface-hover);
+}
+.cv-tr.sel {
+  background: var(--accent-wash);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+button.cv-tr {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  text-align: left;
+}
+.cv-grp {
+  position: sticky;
+  z-index: 1;
+  top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.cv-grp .n {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.cv-grp.today {
+  color: var(--danger);
+}
+.cv-grp.soon {
+  color: var(--warning);
+}
+.cv-tr .c {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.cv-tt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+.cv-tt small {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- status badges ---- */
+.cv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cv-badge.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cv-badge.warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.cv-badge.accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.cv-badge.ok {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.cv-badge.muted {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+.cv-due-today {
+  color: var(--danger);
+}
+.cv-due-soon {
+  color: var(--warning);
+}
+
+/* ---- typography helpers ---- */
+.cv-muted {
+  color: var(--text-tertiary);
+}
+.cv-sec {
+  color: var(--text-secondary);
+}
+.cv-num {
+  font-variant-numeric: tabular-nums;
+}
+.cv-r {
+  justify-self: end;
+  text-align: right;
+}
+.cv-ellip {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-link {
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 12px;
+  padding: 0;
+}
+.cv-link:hover {
+  text-decoration: underline;
+}
+.cv-hr {
+  height: 1px;
+  margin: 6px 2px;
+  background: var(--divider);
+}
+
+/* Course identity: a small square, the only colour a course gets. */
+.cv-cs {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.cv-cs.c1 {
+  background: #4a76c9;
+}
+.cv-cs.c2 {
+  background: #2f8f7f;
+}
+.cv-cs.c3 {
+  background: #b4842b;
+}
+.cv-cs.c4 {
+  background: #7b62c2;
+}
+.cv-cs.c5 {
+  background: #c0587c;
+}
+.cv-cs.c6 {
+  background: #607086;
+}
+.cv-nodata {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+
+/* File type glyph and folder icon. */
+.cv-ft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.cv-folder {
+  position: relative;
+  width: 15px;
+  height: 12px;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 2px 2px 3px 3px;
+  flex-shrink: 0;
+}
+.cv-folder::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -1.5px;
+  width: 7px;
+  height: 3px;
+  border: 1.5px solid var(--text-tertiary);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+}
+.cv-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  font-size: 12px;
+}
+.cv-file .sz {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* Key–value grid inside the detail column. */
+.cv-kv {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.cv-kv dt {
+  color: var(--text-tertiary);
+}
+.cv-kv dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text);
+}
+
+/* Big figures. */
+.cv-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cv-fig .k2 {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+.cv-fig .v {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.cv-fig .v small {
+  margin-left: 3px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+.cv-figs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 10px;
+  padding: 6px 8px 4px;
+}
+.cv-figs .v {
+  font-size: 18px;
+}
+
+/* Subscription / order rows used by 图书馆 and 场馆. */
+.cv-order {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+}
+.cv-order:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.cv-order .l1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cv-order .l1 b {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-order .l1 .cv-badge {
+  margin-left: auto;
+}
+
+/* Empty and loading states. */
+.cv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 32px 20px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  text-align: center;
+}
+.cv-empty b {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cv-empty svg {
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+.cv-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 24px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Alerts sit between the header and the body. */
+.campus-v2 > .inline-alert {
+  margin-top: 10px;
+}

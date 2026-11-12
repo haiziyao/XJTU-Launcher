@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.chead { display: flex; align-items: center; gap: 10px; }
+.crumb { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.crumb .back { color: var(--accent-text); }
+.crumb .sl { color: var(--text-tertiary); }
+.crumb b { font-weight: 600; font-size: 14px; }
+.chead .meta { font-size: 11.5px; color: var(--text-tertiary); }
+.chead .seg { margin-left: auto; }
+.body { display: grid; grid-template-columns: 1fr 344px; gap: 14px; flex: 1; min-height: 0; }
+.acts .thead, .acts .tr { grid-template-columns: 1fr 112px 64px; }
+.acts .tr { height: 38px; }
+.detail { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.detail .type { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-tertiary); }
+.detail h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.detail .when { font-size: 12px; }
+.detail .blk { border-top: 1px solid var(--divider); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.detail .blk h4 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.detail p { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.file { display: flex; align-items: center; gap: 8px; font-size: 12px; height: 26px; }
+.file .sz { margin-left: auto; color: var(--text-tertiary); font-size: 11px; }
+.acts-foot { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>畅行校园</h1>
+      <nav class="ptabs">
+        <span class="ptab">待办<span class="n">9</span></span>
+        <span class="ptab">通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab on">学习</span>
+        <span class="ptab">学业</span>
+        <span class="ptab">生活</span>
+      </nav>
+      <div class="right"><span class="sample">示例数据</span></div>
+    </div>
+    <nav class="sub">
+      <span class="stab on">思源学堂</span>
+      <span class="stab">课程资料</span>
+      <div class="tools">
+        <span class="select">2026-2027 秋季学期</span>
+        <span class="search">搜索课程或活动</span>
+      </div>
+    </nav>
+
+    <div class="content">
+      <div class="chead">
+        <div class="crumb"><span class="back">‹ 我的课程</span><span class="sl">/</span><i class="cs c1"></i><b>计算机组成</b></div>
+        <span class="meta">王老师 · COMP3021 · 3 学分 · 教学班 03</span>
+        <span class="seg"><span class="on">作业<span class="n">6</span></span><span>学习资料<span class="n">11</span></span><span>课程回放<span class="n">3</span></span><span>全部<span class="n">22</span></span></span>
+      </div>
+
+      <div class="body">
+        <div class="panel acts">
+          <div class="thead"><span>作业</span><span class="r">截止</span><span class="r">状态</span></div>
+          <div class="grp">未交<span class="n">3</span></div>
+          <div class="tr sel"><span class="ellip">第四章作业（第一次）</span><span class="r num due-today">今天 23:59</span><span class="r"><span class="badge danger">未交</span></span></div>
+          <div class="tr"><span class="ellip">第四章作业（第二次）</span><span class="r num due-today">今天 23:59</span><span class="r"><span class="badge danger">未交</span></span></div>
+          <div class="tr"><span class="ellip">第五章作业（第一次）</span><span class="r num">12月16日 23:59</span><span class="r"><span class="badge accent">未交</span></span></div>
+          <div class="grp">已交<span class="n">2</span></div>
+          <div class="tr"><span class="ellip">第三章作业</span><span class="r num muted">10月29日 23:59</span><span class="r"><span class="badge ok">✓ 已交</span></span></div>
+          <div class="tr"><span class="ellip">第二章作业</span><span class="r num muted">10月15日 23:59</span><span class="r"><span class="badge ok">✓ 92 分</span></span></div>
+          <div class="grp">已截止<span class="n">1</span></div>
+          <div class="tr"><span class="ellip sec">第一章作业</span><span class="r num muted">9月30日 23:59</span><span class="r"><span class="badge muted">已截止</span></span></div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">作业 · 个人提交<span class="badge danger" style="margin-left:auto">未交</span></div>
+          <h3>第四章作业（第一次）</h3>
+          <div class="when"><span class="due-today">今天 23:59 截止 · 还剩 9 小时</span></div>
+          <dl class="kv" style="margin:0">
+            <dt>开始</dt><dd class="num">11月4日 08:00</dd>
+            <dt>提交次数</dt><dd>可提交 3 次 · 已交 0 次</dd>
+            <dt>已交人数</dt><dd class="num">42 / 96</dd>
+          </dl>
+          <div class="blk">
+            <h4>说明</h4>
+            <p>完成教材第四章习题 4.3、4.7、4.12，手写拍照或电子版均可，合并为一个 PDF 提交。</p>
+          </div>
+          <div class="blk">
+            <h4>附件</h4>
+            <div class="file"><i class="ft">PDF</i>第四章习题.pdf<span class="sz">386 KB</span><span class="link">下载</span></div>
+            <div class="file"><i class="ft">DOC</i>答题模板.docx<span class="sz">24 KB</span><span class="link">下载</span></div>
+          </div>
+          <div class="acts-foot">
+            <span class="btn primary">在工作台提交</span>
+            <span class="btn">网页打开</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

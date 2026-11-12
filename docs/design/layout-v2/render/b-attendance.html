@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 1fr 78px 70px 96px 74px; }
+.tbl .tr { height: 34px; }
+.state { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; white-space: nowrap; }
+.state.ok { color: var(--success-text); } .state.late { color: var(--danger); } .state.leave { color: var(--warning); } .state.absent { color: var(--danger); }
+.tabs { display: flex; gap: 2px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="生活" data-s="考勤"><span class="muted" style="font-size:12px">更新于 今天 08:10</span></header>
+    <div class="content">
+      <div class="cols l-c">
+        <div class="panel clist">
+          <div class="figs" style="grid-template-columns:1fr 1fr">
+            <div class="fig"><span class="k2">到课率</span><span class="v">96.2<small>%</small></span></div>
+            <div class="fig"><span class="k2">准时率</span><span class="v">91.7<small>%</small></span></div>
+            <div class="fig"><span class="k2">迟到</span><span class="v">4</span></div>
+            <div class="fig"><span class="k2">缺勤 · 请假</span><span class="v">2<small>· 3</small></span></div>
+          </div>
+          <div class="hr"></div>
+          <div class="lh">筛选</div>
+          <div class="citem plain on"><b>全部记录</b><span class="n">120</span></div>
+          <div class="citem plain"><b>只看异常</b><span class="k danger">9</span></div>
+          <div class="lh">学期</div>
+          <div class="citem plain on"><b>2026-2027 秋季</b></div>
+          <div class="citem plain"><b>2025-2026 春季</b></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>刷卡记录</b><span class="meta">120 条 · 异常 9 条</span>
+            <span class="end"><span class="seg"><span class="on">刷卡记录</span><span>门禁流水</span></span></span></div>
+          <div class="panel tbl">
+            <div class="thead"><span>日期</span><span>节次</span><span>地点</span><span>教师</span><span class="r">状态</span></div>
+            <div class="tr"><span class="num">11-12 周四</span><span class="num sec">1–2</span><span class="ellip">主楼 A-304</span><span class="sec ellip">王老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-12 周四</span><span class="num sec">3–4</span><span class="ellip">主楼 A-205</span><span class="sec ellip">李老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-11 周三</span><span class="num sec">1–2</span><span class="ellip">主楼 A-304</span><span class="sec ellip">王老师</span><span class="r"><span class="state late">! 迟到 6 分</span></span></div>
+            <div class="tr"><span class="num">11-11 周三</span><span class="num sec">3–4</span><span class="ellip">西2-203</span><span class="sec ellip">张老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-10 周二</span><span class="num sec">1–2</span><span class="ellip">主楼 A-304</span><span class="sec ellip">王老师</span><span class="r"><span class="state leave">假 已请假</span></span></div>
+            <div class="tr"><span class="num">11-10 周二</span><span class="num sec">5–6</span><span class="ellip">中2-1203</span><span class="sec ellip">钱老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-09 周一</span><span class="num sec">5–6</span><span class="ellip">涵英楼 1001</span><span class="sec ellip">赵老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-09 周一</span><span class="num sec">1–2</span><span class="ellip">主楼 A-301</span><span class="sec ellip">许老师</span><span class="r"><span class="state absent">✕ 缺勤</span></span></div>
+            <div class="tr"><span class="num">11-06 周五</span><span class="num sec">1–2</span><span class="ellip">中2-1101</span><span class="sec ellip">周老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-06 周五</span><span class="num sec">7–8</span><span class="ellip">主楼 C-401</span><span class="sec ellip">陈老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-05 周四</span><span class="num sec">7–8</span><span class="ellip">体育场</span><span class="sec ellip">吴老师</span><span class="r"><span class="state ok">✓ 准时</span></span></div>
+            <div class="tr"><span class="num">11-05 周四</span><span class="num sec">1–2</span><span class="ellip">东1-308</span><span class="sec ellip">Emily</span><span class="r"><span class="state late">! 迟到 3 分</span></span></div>
+            <div class="tr"><span class="num muted">11-04 周三</span><span class="num sec">…</span><span class="ellip sec">共 120 条</span><span></span><span class="r link" style="font-size:12px">加载更多 ›</span></div>
+          </div>
+          <div class="muted" style="font-size:11.5px">刷卡记录不含课程名。</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

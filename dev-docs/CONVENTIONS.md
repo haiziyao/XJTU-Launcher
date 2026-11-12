@@ -1,12 +1,12 @@
 # 开发约定手册
 
-更新于 2026-11-08。本文件是项目规则的**唯一来源**；根目录 [AGENTS.md](../AGENTS.md) 只保留给 coding agent 的硬约束摘要。历史讨论在 [archive/](archive/)，不能用旧记录覆盖本文件。用户当次明确要求优先于历史文档；已授权的工作继续完成，不反复确认。
+更新于 2026-11-11。本文件是项目规则的**唯一来源**；根目录 [AGENTS.md](../AGENTS.md) 只保留给 coding agent 的硬约束摘要，[dev.md](../dev.md) 是开发入口。历史讨论在 [archive/](archive/)，不能用旧记录覆盖本文件。用户当次明确要求优先于历史文档；已授权的工作继续完成，不反复确认。
 
 ## 1. 产品方向
 
 - 面向学生的本地校园客户端，优先 macOS，其次 Windows。技术栈固定为 **Rust + Tauri 2 + Vue 3 + TypeScript**。
 - 产品承载校园账号、主页、课表、内置插件中心与 Agent。不建设启动器平台账号服务端；插件中心只展示随应用发布的内置插件，**不再有远端市场**（2026-11-08 用户决定），也不建设插件服务端。
-- 校园业务优先研究本地 `/Users/bilibili/Developer/HZY/References/XJTUToolBox`，理解协议后独立适配。参考仓库中的功能、测试数据或设计图**不能**被写成已在本项目完成。
+- 校园业务优先研究本地 `~/Developer/HZY/References/XJTUToolBox`，理解协议后独立适配。参考仓库中的功能、测试数据或设计图**不能**被写成已在本项目完成。
 - 直接复用参考项目代码前，先核对 GPL-3.0 的分发要求；当前实现应保持独立重写。
 - 不因名称是"启动器"就推导出快捷键唤出、命令搜索、启动本地应用等需求；未讨论的能力保持待定。
 
@@ -18,11 +18,13 @@
    - `docs/design/plugin-market-v2/` 的插件市场部分已被 2026-11-08 的内置插件中心决定取代；软件更新部分继续有效。插件中心的行式布局（名称、右侧简述、开关，单击展开详情）由用户当次确认。
    - `docs/design/campus-agent-v1/` 的 Agent 与评教页面**未获准**；旧稿只可借鉴骨架，视觉细节须重新确认。
    - 最小化桌宠的设计**未获准**，不得按设想直接实现。
+   - `docs/design/style-v1/` 只是风格系统提案，**未获准**，没有改应用代码；实现前需用户选定方向。
    - `docs/design/campus-v0.6/`：范围与信息架构已确认（2026-10-30，方案 A 工作区），**视觉未获准**；参考图获批前不改校园前端。
+   - `docs/design/workbench-v1/`、`docs/design/community-v1/` 与 `docs/design/font-library-v1/` 的已实现页面仍待用户验收，验收前不把视觉写成“已完成”。
 4. 保持简约的桌面观感与简洁信息密度，使用系统原生标题栏。不要添加无关页脚、学校名、版本号、数量统计、状态灯、宣传卡片或占位演示对话。
 5. 侧栏开关位于分隔线垂直中部，使用正式图标。展开宽度可拖动，向内侧拖过最窄宽度自动收起；收起宽度 macOS 为 **76px**（刚好容纳左上角窗口按钮），其他平台为 **56px**。
 6. 默认以文字呈现资料，用户操作后再进入编辑态。
-7. 按钮统一使用 `UiButton`（文字）与 `UiIconButton`（纯图标），不直接写 `.btn` 类，也不按页面另造图标按钮；变体、尺寸和例外见 [按钮与通用控件](UI_COMPONENTS.md)。新增通用交互优先抽成 `src/components/ui/` 组件，颜色、间距、圆角和动效沿用现有 token。
+7. 按钮统一使用 `UiButton`（文字）与 `UiIconButton`（纯图标），不直接写 `.btn` 类，也不按页面另造图标按钮；变体、尺寸和例外见 [按钮与通用控件](reference/UI_COMPONENTS.md)。新增通用交互优先抽成 `src/components/ui/` 组件，颜色、间距、圆角和动效沿用现有 token。
 8. 最小化桌宠只在主窗口最小化时出现；关闭窗口仍是关闭，不是收起。桌宠窗口只能调用它自己的少量命令（查看设置与通知、还原主窗口、切换只保留桌宠、打开设置），**不得**获得主窗口的 IPC 能力。宠物精灵图仅限非商业使用并保留署名，MIT 不覆盖这些素材。
 9. 课表只有节次、没有上课时间，**不要编造上课提醒**。
 10. 开发与验收使用真正的 Tauri App（`npm run dev` 启动桌面窗口）；独立构建产物验收后留给用户查看。
@@ -31,8 +33,9 @@
 
 - 凭据按用户决定保存在 `~/.xjtu-launcher/auth.json`，包含账号、可选密码、会话与模型 API Key。日常读写**不用**系统钥匙串；旧凭据只用于一次性迁移，不恢复历史加密存储方案。保存密码是可选项，接口不回读已存密码。
 - 其余应用数据分两处，布局对齐 Codex 的 `~/.codex`：
-  - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`（含 `plugins/settings/<插件 id>.json` 的插件设置）、`agent/`、`resources/`（用户自备的入口图标等资源，见 [自定义入口图标](ICONS.md)）与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
+  - `~/.xjtu-launcher`（隐藏，位置固定、不迁移）：`config.json`、`auth.json`、`storage.json` 三个文件在顶层，`cache/`、`plugins/`（含 `plugins/settings/<插件 id>.json` 的插件设置）、`agent/`、`resources/`（用户自备的入口图标等资源，见 [自定义入口图标](reference/ICONS.md)）与 `state/`（加密账号、模型配置、设备标识、桌宠记录、课表自定义、MCP 配置）在子文件夹。
   - `xjtu-launcher-file`（可见，默认 `~/Documents/xjtu-launcher-file`，可在「应用设置 → 存储」改位置）：`workspace/` 放资料库，`plugin/` 放用户自备的插件资源，`download/` 放下载；用户自己的文件只放在这里。
+  - 随应用发布的内容资源放仓库根目录 `resources/`，由 `bundle.resources` 打包，界面运行时读取而不是在代码里硬编码；当前用于社区广场的资源站点（`resources/community/sites.json` 与图标）。用户可把同结构目录放到 `~/.xjtu-launcher/resources/community/` 覆盖内置内容，同一套校验失败时直接报错。格式与限制见 [resources/README.md](../resources/README.md)。
   - 文件位置记录在 `~/.xjtu-launcher/storage.json`，页面保存配置时无法把它改回去。迁移必须先复制并核对数量与字节、记录新位置，最后才删除旧文件；失败时保留旧数据并撤销副本。
   - 界面显示任何路径都写成 `~/...`，不得出现用户主目录中的账号名。`auth.json`、`config.json`、`storage.json` 与隐藏目录里的应用数据不参与迁移。
 - 配置及凭据原子写入。新字段必须提供默认值，保持既有用户偏好；读取失败时报告错误并保留原文件。
@@ -57,21 +60,24 @@
 
 - 插件中心只展示**随应用发布的内置插件**（`plugins/<id>/plugin.json` 编入二进制），分「校园广场」「拓展发明」「创新小港」「已安装插件」四个分区；**没有远端市场、下载、安装与卸载**（2026-11-08 用户决定）。
 - 插件只有**启用开关**，侧栏入口跟随启用状态（2026-10-23 用户决定；`hiddenPlugins` 仅保留旧配置兼容）。课表属于校园广场且默认启用；桌面宠物与字体美化属于拓展发明，默认关闭；回放截取属于创新小港。
-- 插件行是名称、右侧简述和开关，单击展开作者、版本与详细描述；不恢复卡片式市场。
+- 插件行是名称、右侧简述和开关，单击展开作者、版本、许可与详细描述，有第三方素材时再显示署名；不恢复卡片式市场。
+- 插件静态元数据只写在 `plugins/<id>/plugin.json`，不复制进 `config.json` 或插件设置。`author` 必填；`version` 是插件独立 semver，不跟应用版本绑定；`license` 缺省 `MIT`，第三方素材与改编代码的许可写进 `credits`。
 - 插件设置保存在 `~/.xjtu-launcher/plugins/settings/<插件 id>.json`，与 `config.json` 分开；只有内置插件能拥有设置，读写都要按插件做值域校验，损坏的插件文件不能让应用或配置加载失败。
 - 用户文件区的 `plugin/` 随「设置 → 存储」一起迁移，界面路径显示为 `~/...`。
 - 应用更新来源与插件无关；发布私钥只进入 GitHub Secret。安装前检查正在执行的校园、账号和插件任务，未来 Agent 任务也要接入。
 - 正式应用更新端点和发布公钥尚未部署。**不要**写入设计稿示例域名、假版本或伪造可用插件。
-- P0（2026-10-25，2026-11-08 更新地址）：应用更新源暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/latest.json`（经 OSS 下载网关读私有 Bucket），客户端不额外提示用户。0.5.x 的旧地址 `/xjtu-launcher/latest.json` 由 nginx 转发到同一网关。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](P0.md)。
+- P0（2026-10-25，2026-11-08 更新地址）：应用更新源暂无域名与证书，内置地址临时写死为 `http://8.152.100.169/latest.json`（经 OSS 下载网关读私有 Bucket），客户端不额外提示用户。0.5.x 的旧地址 `/xjtu-launcher/latest.json` 由 nginx 转发到同一网关。安装包仍由 minisign 校验，但清单可能被篡改。拿到域名后必须切回 HTTPS，并恢复 `core/config.rs`、`AppUpdateSettings.vue`、`prepare-release.mjs` 的 HTTPS-only 校验；详见 [P0.md](operations/P0.md)。
 
 ## 6. 分支、提交与发布
 
-- `main` 为 GitHub 默认分支，只接受从 `dev` 合入的 PR，禁止其他来源和直接推送。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；`tested-label` 表示测试人员已在 `dev` 验证并给 PR 加了 `tested` 标签。当前最新发布版为 **0.6.6**，`main` 应与它一致。
-- `dev` 是长期测试集成分支。功能与版本分支从 `main` 拉出，命名为 `dev-<主题>` / `dev-v<版本>`（如 `dev-v0.6.0`），不再使用 `codex/*`。分支先合入 `dev`，由测试人员验证；验证通过后只能由 `dev` 创建 PR 合入 `main`。Git 不允许 `dev` 与 `dev/v0.6.0` 同时存在，所以版本分支用连字符。
+- **多人协作流程（2026-11-11 起）**：分支命名不做要求，可以按主题或 issue 自建。每个功能或修复完成后，必须并入当前版本分支，不要长期停留在个人分支；不要凭记忆假设分支名，先看 `git branch -a`。
+- 版本分支在开发期可以自由提交；到发版时间点**冻结**，不再接受新功能。冻结后把版本分支同步到 `dev`，由测试人员做集成测试。`dev` 只做集成与测试，不直接开发。
+- 测试通过后，由 `dev` 创建 PR 合入 `main`，测试人员给 PR 加 `tested` 标签。`main` 更新后自动构建发布。
+- `main` 为 GitHub 默认分支，也是发布分支；改名会断掉 `release.yml` 与 `main-guard.yml`，当前不改。`main` 只接受从 `dev` 合入的 PR，禁止其他来源、直接推送、删除与强推。GitHub 规则 `main-protection` 要求 `dev-only`、`tested-label` 与三平台 `desktop` 检查通过，只允许 merge 提交；当前最新发布版为 **0.7.0**，`main` 应与它一致。
 - 需要隔离改动时新建 worktree，不因开始新任务随意覆盖现有工作。功能代码和开发专用资料尽量分别提交，按功能提交，发布前检查最终树。
-- 推送功能分支与合入 `dev` 可按当次任务执行；合入 `main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](RELEASING.md)。
-- GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`，本仓库提交身份为 `haiziyao <1754203003@qq.com>`。使用仓库级 `git config --local`，不改全局身份和 SSH 密钥，不要覆盖原密钥。
-- 升版本时同时修改 `package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` / `Cargo.lock`；发布流程见 [RELEASING.md](RELEASING.md)。
+- 推送个人分支与合入当前版本分支可按当次任务执行；合入 `dev`（集成测试）、`main`、发版与撤回 Release 仍**按用户当次明确要求执行**。`main` 更新后由发布工作流自动发版，见 [RELEASING.md](operations/RELEASING.md)。
+- GitHub 使用 `git@github.com:haiziyao/XJTU-Launcher.git`。每位开发者使用自己的 Git 身份（仓库级配置），不改全局身份和 SSH 密钥，不要覆盖原密钥，也不要冒用他人姓名或邮箱。不要在共享文档、skill 或提交模板里写死某个人的姓名与邮箱。
+- 升版本时同时修改 `package.json`、`package-lock.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` / `Cargo.lock`；发布流程见 [RELEASING.md](operations/RELEASING.md)。
 - **每次发版都必须写版本记录**：按 [模板](../docs/releases/TEMPLATE.md) 新建 `docs/releases/v<版本>.md`，写入新增、修复、变更、验证程度、已知限制与下载方式，并登记到 [版本记录索引](../docs/releases/README.md)。发布前先写，发布后补实际验证结果；撤回的版本保留记录并写明原因与替代版本。
 - GitHub Release 说明、镜像 `latest.json` 的 `notes` 与根目录 README 的下载链接必须指向同一个版本，不能出现 README 已换版本而 Release 或镜像仍旧的情况。
 
@@ -85,7 +91,9 @@
 
 ## 8. 文档维护
 
-- `docs/` 面向使用者与产品：用户文档、设计稿、发布说明、截图。`dev-docs/` 面向开发者：约定、实现、发布流程、需求与归档。分工细则见 [dev-docs/README.md](README.md)。
-- 规则变化只改本文件，再同步 `AGENTS.md` 的硬约束摘要，避免两份完整规则各自漂移。
-- 更新功能时同步 README 与开发文档；新增设计明确标记审批状态。
+- `docs/` 面向使用者与产品：用户文档、设计稿、发布说明、截图与宣传图。`dev-docs/` 面向开发者：约定、实现、发布流程、需求与归档。分工细则见 [dev-docs/README.md](README.md)。
+- 根目录 [dev.md](../dev.md) 是开发入口（环境、目录、分支、检查命令）；[todo_list.md](../todo_list.md) 只记没做的开发项与未来方向；[acceptance_list.md](../acceptance_list.md) 记待验收与已验证内容；需求背景、依赖与实现记录写在 [need-do.md](planning/need-do.md)。
+- 规则变化只改本文件，再同步 `AGENTS.md` 的硬约束摘要与 `dev.md` 的速查，避免多份完整规则各自漂移。
+- 更新功能时同步 README、开发文档与相关截图；新增设计明确标记审批状态。README 的截图优先使用 `website/assets/` 的当前版本，`docs/screenshots/` 的旧图只作历史参考。
+- 项目 skill 在根目录 `skills/`；改样式、内置插件或发版流程时，同步更新对应的 `SKILL.md`。
 - 修改历史文档时保留原日期和上下文；过时内容移入 `dev-docs/archive/`，不要直接删除可追溯的记录。

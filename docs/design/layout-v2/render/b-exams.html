@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.tbl .thead, .tbl .tr { grid-template-columns: 1fr 78px 92px 78px 44px; }
+.tbl .tr { height: 34px; }
+.next { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.next .big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.next .lbl { font-size: 11.5px; color: var(--text-tertiary); }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="学业" data-s="考试"><span class="select">2026-2027 秋季学期</span></header>
+    <div class="content">
+      <div class="cols l-c-r" style="grid-template-columns: 186px 1fr 250px">
+        <div class="panel clist">
+          <div class="lh">学期<span>场次</span></div>
+          <div class="citem plain on"><b>2026-2027 秋季</b><span class="n">8</span></div>
+          <div class="citem plain"><b>2025-2026 春季</b><span class="n">9</span></div>
+          <div class="citem plain"><b>2025-2026 秋季</b><span class="n">8</span></div>
+          <div class="lh">校区</div>
+          <div class="citem plain"><b>全部</b><span class="n">8</span></div>
+          <div class="citem plain"><b>兴庆校区</b><span class="n">6</span></div>
+          <div class="citem plain"><b>创新港</b><span class="n">2</span></div>
+          <div class="lh">冲突</div>
+          <div class="citem plain"><b>无冲突</b><span class="n">✓</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>2026-2027 秋季学期</b><span class="meta">8 场 · 最近一场 12 天后 · 无冲突</span></div>
+          <div class="panel tbl">
+            <div class="thead"><span>课程</span><span>日期</span><span>时间</span><span>地点</span><span class="r">座位</span></div>
+            <div class="grp">1 月 4 日 周一<span class="n">2 场</span></div>
+            <div class="tr sel"><span class="ellip">计算机组成</span><span class="num">01-04</span><span class="num sec">09:00–11:00</span><span class="sec ellip">主楼 A-304</span><span class="r num">12</span></div>
+            <div class="tr"><span class="ellip">计算机网络原理</span><span class="num">01-04</span><span class="num sec">14:30–16:30</span><span class="sec ellip">主楼 A-205</span><span class="r num">08</span></div>
+            <div class="grp">1 月 6 日 周三<span class="n">2 场</span></div>
+            <div class="tr"><span class="ellip">概率论与数理统计</span><span class="num">01-06</span><span class="num sec">09:00–11:00</span><span class="sec ellip">中2-1101</span><span class="r num">15</span></div>
+            <div class="tr"><span class="ellip">操作系统设计专题实验</span><span class="num">01-06</span><span class="num sec">14:30–16:30</span><span class="sec ellip">西2-203</span><span class="r num">03</span></div>
+            <div class="grp">1 月 8 日 周五<span class="n">3 场</span></div>
+            <div class="tr"><span class="ellip">人工智能</span><span class="num">01-08</span><span class="num sec">09:00–11:00</span><span class="sec ellip">主楼 C-401</span><span class="r num">21</span></div>
+            <div class="tr"><span class="ellip">文学经典与热点透视</span><span class="num">01-08</span><span class="num sec">14:30–16:30</span><span class="sec ellip">中2-2210</span><span class="r num">06</span></div>
+            <div class="tr"><span class="ellip">自然语言处理</span><span class="num">01-08</span><span class="num sec">19:00–21:00</span><span class="sec ellip">主楼 A-402</span><span class="r num">18</span></div>
+          </div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">考试<span class="badge accent">12 天后</span></div>
+          <h3>计算机组成</h3>
+          <div class="next" style="padding:0">
+            <span class="lbl">1 月 4 日 周一 09:00–11:00</span>
+            <span class="big">主楼 A-304</span>
+          </div>
+          <dl class="kv" style="margin:0">
+            <dt>座位</dt><dd class="num">12 号</dd>
+            <dt>校区</dt><dd>兴庆校区</dd>
+            <dt>课号</dt><dd class="num">COMP3021</dd>
+          </dl>
+          <div class="blk"><h4>同一天</h4>
+            <div class="file"><span class="ellip">计算机网络原理</span><span class="sz num">14:30 主楼 A-205</span></div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

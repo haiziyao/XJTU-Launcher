@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.cb { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--border-strong); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
+.cb.on { background: var(--accent); border-color: var(--accent); }
+.qitem { display: grid; grid-template-columns: 14px 1fr; column-gap: 8px; padding: 6px 8px; border-radius: 6px; align-items: center; }
+.qitem b { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qitem .s { grid-column: 2; font-size: 11px; color: var(--text-tertiary); }
+.qitem.on { background: var(--nav-active); }
+.qitem.on b { color: var(--nav-active-text); font-weight: 600; }
+.qitem.done b { color: var(--text-tertiary); font-weight: 400; }
+.ans .thead, .ans .tr { grid-template-columns: 26px 1fr 112px; }
+.ans .tr { height: 34px; }
+.ta { border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-secondary); height: 76px; line-height: 1.6; }
+.note { font-size: 11.5px; color: var(--text-tertiary); line-height: 1.6; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <header class="campus-head" data-p="学业" data-s="评教"><span class="muted" style="font-size:12px">2026-2027 秋季学期 · 截止 11月30日</span></header>
+    <div class="content">
+      <div class="cols l-c-r" style="grid-template-columns: 220px 1fr 260px">
+        <div class="panel clist">
+          <div class="lh">待评 4<span class="link">全选</span></div>
+          <div class="qitem on"><i class="cb on">✓</i><b>计算机组成</b><span class="s">王老师 · 理论课</span></div>
+          <div class="qitem"><i class="cb on">✓</i><b>计算机网络原理</b><span class="s">李老师 · 理论课</span></div>
+          <div class="qitem"><i class="cb on">✓</i><b>操作系统设计专题实验</b><span class="s">张老师 · 实验课</span></div>
+          <div class="qitem"><i class="cb"></i><b>文学经典与热点透视</b><span class="s">刘老师 · 理论课</span></div>
+          <div class="lh">已评 3</div>
+          <div class="qitem done"><i class="cb" style="border-color:var(--border)"></i><b>人工智能</b><span class="s">赵老师 · ✓ 已提交</span></div>
+          <div class="qitem done"><i class="cb" style="border-color:var(--border)"></i><b>自然语言处理</b><span class="s">孙老师 · ✓ 已提交</span></div>
+          <div class="qitem done"><i class="cb" style="border-color:var(--border)"></i><b>思想道德与法治</b><span class="s">陈老师 · ✓ 已提交</span></div>
+        </div>
+
+        <div class="center">
+          <div class="ch"><b>计算机组成</b><span class="meta">王老师 · 预览答案 · 12 题</span><span class="end"><span class="badge accent">预览中 · 9 分钟后失效</span></span></div>
+          <div class="panel ans">
+            <div class="thead"><span>#</span><span>题目</span><span>答案</span></div>
+            <div class="tr"><span class="muted num">1</span><span class="ellip">教师授课认真，备课充分</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">2</span><span class="ellip">讲解清晰，重点难点突出</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">3</span><span class="ellip">课堂互动充分，能启发思考</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">4</span><span class="ellip">作业与考核安排合理</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">5</span><span class="ellip">课后答疑及时</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">6</span><span class="ellip">课程内容充实，符合教学大纲</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">7</span><span class="ellip">教学资源（课件、资料）完整</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">8</span><span class="ellip">本课程使我收获很大</span><span>非常同意</span></div>
+            <div class="tr"><span class="muted num">…</span><span class="muted">还有 3 道选择题</span><span></span></div>
+            <div class="tr"><span class="muted num">12</span><span class="ellip">对本课程的意见和建议</span><span class="ellip sec">老师讲得很好，谢谢</span></div>
+          </div>
+        </div>
+
+        <div class="panel detail">
+          <div class="type">评教设置</div>
+          <dl class="kv" style="margin:0">
+            <dt>已选</dt><dd>3 门课程</dd>
+            <dt>评分</dt><dd><span class="select" style="height:26px">全部非常同意</span></dd>
+          </dl>
+          <div class="blk"><h4>文字评价</h4><div class="ta">老师讲得很好，谢谢</div></div>
+          <div class="blk"><p class="note">提交后不能在应用内撤回。结果不明时不会自动重试，请到评教系统核对。</p></div>
+          <div class="foot"><span class="btn primary">确认提交 3 门</span><span class="btn">取消预览</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

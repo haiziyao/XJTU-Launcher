@@ -1,10 +1,10 @@
 # XJTU-Launcher 项目交接文档
 
-> 历史归档：本文保留当时原文，文中的 `docs/...` 路径属于旧目录结构。当前规则见 [CONVENTIONS.md](../CONVENTIONS.md)，需求见 [need-do.md](../need-do.md)，实现状态见 [DEVELOPMENT.md](../DEVELOPMENT.md)。
+> 历史归档：本文保留当时原文，文中的 `docs/...` 路径属于旧目录结构。当前规则见 [CONVENTIONS.md](../CONVENTIONS.md)，需求见 [need-do.md](../planning/need-do.md)，实现状态见 [DEVELOPMENT.md](../DEVELOPMENT.md)。
 
 更新时间：2026-10-19（Asia/Shanghai）
 
-项目目录：`/Users/bilibili/Developer/HZY/XJTU-Launcher`
+项目目录：`~/Developer/HZY/XJTU-Launcher`
 
 本文整理前一轮对话和本次明确要求，用于切换对话后继续讨论和开发。文中区分已确定方向、初步方案与待决事项；规划内容不代表功能已经实现。
 
@@ -142,7 +142,7 @@ Desktop Application
 
 可以直接发送以下内容：
 
-> 继续 XJTU-Launcher 项目，目录为 `/Users/bilibili/Developer/HZY/XJTU-Launcher`。请先读取 `README.md` 和 `docs/PROJECT_CONTEXT.md`。项目定位是通用本地 AI Launcher，校园先行；V0.1 直接内置独立的校园模块，优先做校园账户、课表、成绩和基础界面，未来扩展 Agent、插件市场、MCP 与 Skills。技术栈和校园认证实现尚未决定。现在继续讨论技术栈、模块架构和校园 SSO 的可行实现。
+> 继续 XJTU-Launcher 项目，目录为 `~/Developer/HZY/XJTU-Launcher`。请先读取 `README.md` 和 `docs/PROJECT_CONTEXT.md`。项目定位是通用本地 AI Launcher，校园先行；V0.1 直接内置独立的校园模块，优先做校园账户、课表、成绩和基础界面，未来扩展 Agent、插件市场、MCP 与 Skills。技术栈和校园认证实现尚未决定。现在继续讨论技术栈、模块架构和校园 SSO 的可行实现。
 
 建议下一轮先明确目标平台与技术选型，再研究参考项目和学校认证流程，细化第一版开发任务。
 

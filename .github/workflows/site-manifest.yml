@@ -1,0 +1,88 @@
+name: Site manifest
+
+# Rebuilds the website's downloads.json for an existing release and uploads it
+# to the bucket root. Every release does this inside release.yml; run this by
+# hand when the manifest is missing (a release published before the step
+# existed) or wrong.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '已发布的版本号，不带 v（例如 0.6.6）'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check the input
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version must look like 0.6.6"
+            exit 1
+          fi
+          if [ -z "${OSS_BUCKET:-}" ]; then
+            echo "::error::Set the OSS_BUCKET repository variable."
+            exit 1
+          fi
+      - name: Install ossutil 1.7.18
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ossutil.zip \
+            https://github.com/aliyun/ossutil/releases/download/v1.7.18/ossutil-v1.7.18-linux-amd64.zip
+          unzip -q -o /tmp/ossutil.zip -d /tmp/ossutil
+          install -m 755 "$(find /tmp/ossutil -type f -name 'ossutil*' ! -name '*.zip' | head -n1)" /usr/local/bin/ossutil
+          ossutil --version
+      - name: Write the ossutil config
+        env:
+          # `runner` is only available to steps, not to job-level env.
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo '[Credentials]'
+            echo 'language=EN'
+            echo 'endpoint=https://oss-cn-beijing.aliyuncs.com'
+            echo "accessKeyID=$OSS_ACCESS_KEY_ID"
+            echo "accessKeySecret=$OSS_ACCESS_KEY_SECRET"
+          } > "$OSS_CONFIG_FILE"
+      - name: Read the release date
+        run: |
+          set -euo pipefail
+          published=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION" \
+            --jq '.published_at // .created_at // empty')
+          if [ -z "$published" ]; then
+            echo "::error::Release v$VERSION not found."
+            exit 1
+          fi
+          echo "PUB_DATE=$published" >> "$GITHUB_ENV"
+      - name: Download the three installers
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          for name in \
+            "XJTU.Launcher_${VERSION}_aarch64.dmg" \
+            "XJTU.Launcher_${VERSION}_x64.dmg" \
+            "XJTU.Launcher_${VERSION}_x64-setup.exe"; do
+            gh release download "v$VERSION" --pattern "$name" --dir assets --clobber
+          done
+          ls -l assets
+      - name: Build and upload downloads.json
+        env:
+          OSS_CONFIG_FILE: ${{ runner.temp }}/ossutilconfig
+        run: node tools/site-manifest.mjs

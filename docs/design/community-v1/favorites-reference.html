@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>社区广场 · 收藏条参考</title>
+    <style>
+      :root {
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', 'PingFang SC',
+          'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        --text: #1f2329;
+        --text-secondary: #5c636d;
+        --text-tertiary: #8c929b;
+        --surface: #ffffff;
+        --surface-subtle: #f7f8fa;
+        --surface-hover: rgba(15, 23, 42, 0.045);
+        --border: #e4e6ea;
+        --border-strong: #d4d7dc;
+        --accent: #1f6fe5;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 14px;
+        --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 4px rgba(15, 23, 42, 0.05);
+        --shadow-md: 0 6px 16px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+        --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+        /* Mild overshoot so the icon and label settle instead of stopping dead. */
+        --ease-spring: cubic-bezier(0.28, 1.12, 0.42, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--surface-subtle);
+        color: var(--text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 36px 56px;
+      }
+
+      .page-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .hint {
+        margin: 0;
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      .block {
+        margin-top: 26px;
+      }
+      .block-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+        color: var(--text-tertiary);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* The favorites strip: compact squares keep their width, the hovered
+         one grows, and the row's gaps close so both sides move outward. */
+      .fav-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 26px;
+        min-height: 108px;
+        padding: 12px 0;
+        transition: gap 340ms var(--ease-out);
+      }
+      .fav-row.has-open {
+        gap: 8px;
+      }
+
+      .fav-tile {
+        position: relative;
+        flex: 0 0 auto;
+        width: 84px;
+        height: 84px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: var(--surface);
+        box-shadow: var(--shadow-xs);
+        cursor: pointer;
+        outline: none;
+        transition:
+          width 340ms var(--ease-out),
+          border-color 160ms ease,
+          box-shadow 160ms ease;
+      }
+      .fav-tile.is-open {
+        width: var(--open-width, 280px);
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-md);
+      }
+      .fav-tile:focus-visible {
+        box-shadow: var(--focus-ring, 0 0 0 3px rgba(31, 111, 229, 0.22));
+        border-color: var(--accent);
+      }
+      .fav-tile.is-new {
+        animation: tile-in 260ms var(--ease-out);
+      }
+      @keyframes tile-in {
+        from {
+          opacity: 0;
+          transform: scale(0.86);
+        }
+      }
+
+      /* One icon and one label morph from the stacked compact layout into the
+         horizontal expanded layout. No second copy, no cross-fade. */
+      .badge {
+        position: absolute;
+        top: 25px;
+        left: 20px;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--tint);
+        color: var(--accent-fg);
+        transform: translate(5px, -12px);
+        transition: transform 340ms var(--ease-spring);
+      }
+      .fav-tile.is-open .badge {
+        transform: none;
+      }
+
+      .name {
+        position: absolute;
+        top: 22px;
+        left: 68px;
+        overflow: hidden;
+        max-width: 72px;
+        font-size: 13.5px;
+        font-weight: 600;
+        line-height: 18px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transform: translate(calc(-50% - 26px), 32px);
+        transition:
+          transform 340ms var(--ease-spring),
+          max-width 340ms var(--ease-out);
+      }
+      .fav-tile.is-open .name {
+        max-width: none;
+        transform: none;
+      }
+
+      .desc {
+        position: absolute;
+        top: 45px;
+        right: 20px;
+        left: 68px;
+        overflow: hidden;
+        color: var(--text-secondary);
+        font-size: 12.5px;
+        line-height: 17px;
+        opacity: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transform: translateX(-10px);
+        transition:
+          opacity 120ms ease,
+          transform 200ms var(--ease-out);
+      }
+      .fav-tile.is-open .desc {
+        opacity: 1;
+        transform: none;
+        transition:
+          opacity 180ms ease 110ms,
+          transform 300ms var(--ease-out) 110ms;
+      }
+
+      .empty {
+        display: grid;
+        place-items: center;
+        min-height: 84px;
+        color: var(--text-tertiary);
+        font-size: 12.5px;
+      }
+      .empty[hidden] {
+        display: none;
+      }
+
+      /* Star sits in the top-right corner of every favoritable card. */
+      .star-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: 21px;
+        height: 21px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        opacity: 0.5;
+        transition:
+          opacity 150ms ease,
+          color 150ms ease,
+          background 150ms ease,
+          transform 150ms var(--ease-out);
+      }
+      .star-btn:hover {
+        background: var(--surface-hover);
+        opacity: 1;
+      }
+      .star-btn.is-on {
+        color: #c98a12;
+        opacity: 1;
+      }
+      .star-btn.is-on:active {
+        transform: scale(0.82);
+      }
+      .fav-tile .star-btn {
+        top: 4px;
+        right: 4px;
+      }
+
+      /* All sections below the strip, same 3-column rhythm as the app. */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 88px;
+        align-items: center;
+        gap: 14px;
+        min-height: 118px;
+        padding: 16px 16px 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow-xs);
+        transition:
+          border-color 150ms ease,
+          box-shadow 150ms ease;
+      }
+      .card:hover {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-sm);
+      }
+      .card-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .card-heading .badge {
+        position: static;
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        transform: none;
+        transition: none;
+      }
+      .card p {
+        margin: 6px 0 0;
+        color: var(--text-secondary);
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .card-media {
+        height: 86px;
+        border-radius: var(--radius);
+        background:
+          radial-gradient(120% 110% at 12% 8%, rgba(255, 255, 255, 0.75), transparent 48%),
+          linear-gradient(140deg, var(--tint), var(--accent-fg));
+        opacity: 0.9;
+      }
+      .card .star-btn {
+        top: 7px;
+        right: 7px;
+        background: rgba(255, 255, 255, 0.82);
+        opacity: 0.75;
+        backdrop-filter: blur(4px);
+      }
+      .card .star-btn.is-on {
+        opacity: 1;
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          padding: 24px 20px 40px;
+        }
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="page-head">
+        <h1>社区广场</h1>
+        <p class="hint">参考稿：悬停收藏方块看展开 · 点击星标收藏 / 取消</p>
+      </div>
+
+      <section class="block" aria-label="我的收藏">
+        <h2 class="block-label">我的收藏</h2>
+        <div id="favRow" class="fav-row"></div>
+        <p id="empty" class="empty" hidden>还没有收藏。点击下方板块右上角的星标，收藏后会出现在这里。</p>
+      </section>
+
+      <section class="block" aria-label="全部板块">
+        <h2 class="block-label">全部板块</h2>
+        <div id="grid" class="grid"></div>
+      </section>
+    </main>
+
+    <script>
+      const SECTIONS = [
+        {
+          id: 'clubs',
+          title: '社团',
+          description: '社团介绍、活动与招新信息',
+          accent: '#3b6fd8',
+          soft: '#dfe9fb',
+        },
+        {
+          id: 'courses',
+          title: '课程攻略',
+          description: '课程号、学习建议与选课经验',
+          accent: '#6a5ac9',
+          soft: '#e8e3fb',
+        },
+        {
+          id: 'life',
+          title: '校园生活',
+          description: '吃住行、校园设施与办事指南',
+          accent: '#2c8653',
+          soft: '#ddf1e6',
+        },
+        {
+          id: 'career',
+          title: '生涯分享',
+          description: '升学、就业、竞赛与成长经验',
+          accent: '#a8641c',
+          soft: '#f8e8d5',
+        },
+        {
+          id: 'links',
+          title: '资源导航',
+          description: '官方与第三方资源站引用',
+          accent: '#566176',
+          soft: '#e4e8ef',
+        },
+      ];
+
+      const ICONS = {
+        clubs:
+          '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+        courses:
+          '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+        life: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+        career:
+          '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
+        links:
+          '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/>',
+      };
+
+      const byId = Object.fromEntries(SECTIONS.map((section) => [section.id, section]));
+      const favRow = document.getElementById('favRow');
+      const grid = document.getElementById('grid');
+      const empty = document.getElementById('empty');
+
+      let favorites = ['clubs', 'courses', 'links'];
+      let lastAdded = null;
+
+      const COMPACT = 84;
+      const MIN_GAP = 8;
+      const WANTED_WIDTH = 280;
+
+      function iconSvg(id, size) {
+        return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg>`;
+      }
+
+      function starSvg(filled) {
+        return `<svg viewBox="0 0 24 24" width="14" height="14" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+      }
+
+      function tileMarkup(section) {
+        const colors = `--tint:${section.soft};--accent-fg:${section.accent}`;
+        return `
+          <span class="badge" style="${colors}">${iconSvg(section.id, 19)}</span>
+          <span class="name">${section.title}</span>
+          <span class="desc">${section.description}</span>
+          <button class="star-btn is-on" data-star="${section.id}" aria-label="取消收藏 ${section.title}">
+            ${starSvg(true)}
+          </button>`;
+      }
+
+      function renderFavorites() {
+        favRow.innerHTML = favorites
+          .map((id) => {
+            const extra = id === lastAdded ? ' is-new' : '';
+            return `<div class="fav-tile${extra}" data-id="${id}" role="button" tabindex="0" aria-label="${byId[id].title}，已收藏，悬停展开">${tileMarkup(byId[id])}</div>`;
+          })
+          .join('');
+        lastAdded = null;
+        empty.hidden = favorites.length > 0;
+        favRow.querySelectorAll('.fav-tile').forEach(bindHover);
+      }
+
+      function renderGrid() {
+        grid.innerHTML = SECTIONS.map((section) => {
+          const colors = `--tint:${section.soft};--accent-fg:${section.accent}`;
+          return `
+            <article class="card" style="${colors}">
+              <div>
+                <div class="card-heading">
+                  <span class="badge" style="${colors}">${iconSvg(section.id, 16)}</span>
+                  <strong>${section.title}</strong>
+                </div>
+                <p>${section.description}</p>
+              </div>
+              <div class="card-media" aria-hidden="true"></div>
+              <button class="star-btn" data-star="${section.id}" aria-label="收藏 ${section.title}">
+                ${starSvg(false)}
+              </button>
+            </article>`;
+        }).join('');
+        syncStars();
+      }
+
+      function syncStars() {
+        document.querySelectorAll('[data-star]').forEach((button) => {
+          const section = byId[button.dataset.star];
+          const on = favorites.includes(section.id);
+          button.classList.toggle('is-on', on);
+          button.innerHTML = starSvg(on);
+          button.setAttribute('aria-label', `${on ? '取消收藏' : '收藏'} ${section.title}`);
+        });
+      }
+
+      function openWidth() {
+        const count = favRow.querySelectorAll('.fav-tile').length;
+        const base = count * COMPACT + Math.max(0, count - 1) * MIN_GAP;
+        const maxOpen = favRow.clientWidth - base + COMPACT;
+        return Math.max(COMPACT, Math.min(WANTED_WIDTH, maxOpen));
+      }
+
+      function bindHover(tile) {
+        const open = () => {
+          const width = openWidth();
+          if (width <= COMPACT) return;
+          tile.style.setProperty('--open-width', `${width}px`);
+          favRow.classList.add('has-open');
+          tile.classList.add('is-open');
+        };
+        const close = () => {
+          tile.classList.remove('is-open');
+          requestAnimationFrame(() => {
+            if (!favRow.querySelector('.fav-tile.is-open')) favRow.classList.remove('has-open');
+          });
+        };
+        tile.addEventListener('mouseenter', open);
+        tile.addEventListener('mouseleave', close);
+        tile.addEventListener('focusin', open);
+        tile.addEventListener('focusout', close);
+      }
+
+      function toggleFavorite(id) {
+        if (favorites.includes(id)) {
+          favorites = favorites.filter((value) => value !== id);
+        } else {
+          favorites = [...favorites, id];
+          lastAdded = id;
+        }
+        renderFavorites();
+        syncStars();
+      }
+
+      document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-star]');
+        if (!button) return;
+        event.stopPropagation();
+        toggleFavorite(button.dataset.star);
+      });
+
+      renderFavorites();
+      renderGrid();
+    </script>
+  </body>
+</html>

@@ -1,19 +1,25 @@
 //! Run manually on a desktop: cargo run --example campus_browser_smoke
 //! Exercises real native cookie stores with synthetic cookies only. No user vault is read.
-#![allow(dead_code)] // Reuse production modules without exposing them as public library APIs.
-#[path = "../src/campus.rs"]
+#![allow(dead_code)]
+// Reuse production modules without exposing them as public library APIs.
+// The example compiles the campus module and a few of its children separately so
+// it can reuse them without booting the whole application module tree.
+#![allow(clippy::duplicate_mod)]
+#[path = "../src/campus/mod.rs"]
 mod campus;
-#[path = "../src/campus_browser.rs"]
+#[path = "../src/campus/browser.rs"]
 mod campus_browser;
-#[path = "../src/config.rs"]
+#[path = "../src/core/config.rs"]
 mod config;
-#[path = "../src/network.rs"]
+#[path = "../src/core/network.rs"]
 mod network;
-#[path = "../src/plugins.rs"]
+#[path = "../src/plugins/manifest.rs"]
 mod plugins;
-#[path = "../src/tool_names.rs"]
+#[path = "../src/core/storage.rs"]
+mod storage;
+#[path = "../src/campus/tool_names.rs"]
 mod tool_names;
-#[path = "../src/vault.rs"]
+#[path = "../src/core/vault.rs"]
 mod vault;
 
 use tauri::Manager;

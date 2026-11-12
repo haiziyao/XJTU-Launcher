@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { CircleAlert, Clock } from 'lucide-vue-next';
-import { dueInfo } from '../../domain';
+import { dueInfo } from '../../shared/domain';
 
 /**
  * Deadline plus countdown (LAYOUT §5.3). Pass a ticking `now` from the page when

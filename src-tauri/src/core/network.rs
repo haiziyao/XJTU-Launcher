@@ -1,0 +1,598 @@
+//! Campus transport: isolated cookies, bounded trusted redirects, direct/WebVPN routing.
+use aes::cipher::{AsyncStreamCipher, KeyIvInit};
+use reqwest::{header, Client, Response, StatusCode};
+use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
+use serde::{Deserialize, Serialize};
+use std::{sync::Arc, time::Duration};
+use url::Url;
+
+const VPN_HOST: &str = "webvpn.xjtu.edu.cn";
+const VPN_KEY: &[u8; 16] = b"wrdvpnisthebest!";
+pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) XJTU-Launcher/0.1 Safari/537.36";
+
+/// Campus web pages run in a real browser engine; a launcher token in the UA
+/// makes sites such as TronClass reject the page as an unsupported browser.
+/// Backend API requests keep `USER_AGENT`; only the visible windows use this.
+#[cfg(target_os = "windows")]
+pub const BROWSER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+#[cfg(not(target_os = "windows"))]
+pub const BROWSER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AccessMode {
+    #[default]
+    Direct,
+    Webvpn,
+}
+
+pub fn trusted(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && matches!(
+            url.host_str(),
+            Some(
+                "login.xjtu.edu.cn"
+                    | "webvpn.xjtu.edu.cn"
+                    | "bk-kq.xjtu.edu.cn"
+                    | "yjs-kq.xjtu.edu.cn"
+                    | "ywtb.xjtu.edu.cn"
+                    | "authx-service.xjtu.edu.cn"
+                    | "jwxt.xjtu.edu.cn"
+                    | "dean.xjtu.edu.cn"
+                    | "org.xjtu.edu.cn"
+                    | "ncard.xjtu.edu.cn"
+                    | "tyxylp.xjtu.edu.cn"
+                    | "hello.xjtu.edu.cn"
+                    // Keycloak broker between CAS and 思源学堂; it only relays
+                    // the login redirect and holds no user credentials.
+                    | "identity1.xjtu.edu.cn"
+                    | "lms.xjtu.edu.cn"
+                    // Course attachments. The LMS blob endpoint redirects here;
+                    // the adapter still checks the exact origin and path first.
+                    | "media.xjtu.edu.cn"
+                    // Services reached from 移动交通大学. Each keeps its own
+                    // CAS session; the app only links to them.
+                    | "superapp.xjtu.edu.cn"
+                    | "transaction.xjtu.edu.cn"
+                    | "message-service.xjtu.edu.cn"
+                    | "reservation.xjtu.edu.cn"
+                    | "xjbus.xjtu.edu.cn"
+                    | "formflow.xjtu.edu.cn"
+            )
+        )
+}
+
+/// The library seat system and the sports venue system only answer over plain
+/// HTTP on fixed ports. Keep this exception to their exact origins. WebVPN maps
+/// them as `http-<port>` paths, which is how both are reachable off campus.
+pub fn service_http(url: &Url) -> bool {
+    url.scheme() == "http"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && matches!(
+            (url.host_str(), url.port()),
+            (Some("rg.lib.xjtu.edu.cn"), Some(8086)) | (Some("202.117.17.144"), Some(8080))
+        )
+}
+
+/// The profile OAuth callback lands on plain HTTP before it redirects to the
+/// token URL. Allow that one origin as a direct-mode hop; the token itself is
+/// read from the redirect location and the landing page is never stored.
+pub fn hello_http(url: &Url) -> bool {
+    url.scheme() == "http"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(80)
+        && url.host_str() == Some("hello.xjtu.edu.cn")
+}
+
+pub fn vpn_url(url: &Url) -> Result<Url, String> {
+    if !trusted(url) && !service_http(url) {
+        return Err("校园请求地址不受支持".into());
+    }
+    encode_vpn_url(url)
+}
+
+/// Whether a page belongs to the WebVPN portal itself rather than a mapped
+/// campus site (whose path starts with `/https/` or `/http-<port>/`). The
+/// portal shows this page again whenever a ticket was not accepted, so callers
+/// use it to tell an authenticated VPN from a rejected one.
+pub fn webvpn_host(url: &Url) -> bool {
+    let mapped = url.path().starts_with("/https/")
+        || url.path().starts_with("/http/")
+        || url.path().starts_with("/http-");
+    url.scheme() == "https"
+        && url.host_str() == Some(VPN_HOST)
+        && url.username().is_empty()
+        && url.password().is_none()
+        && !mapped
+}
+
+/// Browsing accepts university sites; authentication transport keeps its narrower allowlist.
+pub fn campus_web_url(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && url
+            .host_str()
+            .is_some_and(|host| host == "xjtu.edu.cn" || host.ends_with(".xjtu.edu.cn"))
+}
+
+pub fn browser_address(url: &Url, mode: AccessMode) -> Result<Url, String> {
+    if !campus_web_url(url) {
+        return Err("校园窗口仅支持学校 HTTPS 网站".into());
+    }
+    if mode == AccessMode::Webvpn {
+        encode_vpn_url(url)
+    } else {
+        Ok(url.clone())
+    }
+}
+
+/// The profile system returns its bearer token on an HTTP landing URL that the
+/// HTTPS-only transport would otherwise reject. Accept only that host, port and
+/// a token-shaped value; the caller stores the token and never fetches the URL.
+pub fn hello_token(url: &Url) -> Option<String> {
+    let port_ok = match url.scheme() {
+        "http" => url.port_or_known_default() == Some(80),
+        "https" => url.port_or_known_default() == Some(443),
+        _ => false,
+    };
+    if url.host_str() != Some("hello.xjtu.edu.cn")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || !port_ok
+    {
+        return None;
+    }
+    url.query_pairs()
+        .find(|(key, _)| key == "token")
+        .map(|(_, value)| value.into_owned())
+        .filter(|value| {
+            !value.is_empty()
+                && value.len() <= 8 * 1024
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+}
+
+/// Drops every other query parameter so the token is the only value the login
+/// flow carries forward.
+fn hello_landing(token: &str) -> Result<Url, String> {
+    let mut landing = Url::parse("http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc")
+        .map_err(|_| "个人信息回调地址无效")?;
+    landing.query_pairs_mut().append_pair("token", token);
+    Ok(landing)
+}
+
+fn encode_vpn_url(url: &Url) -> Result<Url, String> {
+    if url.host_str() == Some(VPN_HOST) {
+        return Ok(url.clone());
+    }
+    // Plain-HTTP services keep their port in the WebVPN scheme segment, as
+    // `http-8086`; HTTPS services use plain `https`.
+    let segment = match url.scheme() {
+        "https" => "https".to_string(),
+        "http" if service_http(url) => format!("http-{}", url.port().ok_or("校园地址缺少端口")?),
+        _ => return Err("校园请求地址不受支持".into()),
+    };
+    let mut host = url
+        .host_str()
+        .ok_or("校园地址缺少主机名")?
+        .as_bytes()
+        .to_vec();
+    cfb_mode::Encryptor::<aes::Aes128>::new(VPN_KEY.into(), VPN_KEY.into()).encrypt(&mut host);
+    let mut mapped = Url::parse(&format!(
+        "https://{VPN_HOST}/{segment}/{}{}{}",
+        hex::encode(VPN_KEY),
+        hex::encode(host),
+        url.path()
+    ))
+    .map_err(|_| "无效的 VPN 地址")?;
+    mapped.set_query(url.query());
+    mapped.set_fragment(url.fragment());
+    Ok(mapped)
+}
+
+pub fn original_url(url: &Url) -> Result<Url, String> {
+    if !trusted(url) && !service_http(url) && !hello_http(url) {
+        return Err(format!(
+            "校园跳转地址不受支持（{}）",
+            url.host_str().unwrap_or("未知主机")
+        ));
+    }
+    if url.host_str() != Some(VPN_HOST) {
+        return Ok(url.clone());
+    }
+    let path = url.path();
+    if !path.starts_with("/https/") && !path.starts_with("/http/") && !path.starts_with("/http-") {
+        // The WebVPN portal's own pages are not mapped campus addresses.
+        return Ok(url.clone());
+    }
+    // `/https/<key+host>/<path>` or `/http-<port>/<key+host>/<path>`.
+    let mut parts = url.path().splitn(4, '/');
+    let _leading = parts.next();
+    let segment = parts.next().ok_or("VPN 地址格式不受支持")?;
+    let encoded = parts.next().ok_or("VPN 地址格式不受支持")?;
+    if !matches!(segment, "https" | "http") && !segment.starts_with("http-") {
+        return Err("VPN 地址格式不受支持".into());
+    }
+    if !encoded.starts_with(&hex::encode(VPN_KEY)) {
+        return Err("VPN 地址格式不受支持".into());
+    }
+    let mut host = hex::decode(&encoded[32..]).map_err(|_| "VPN 地址格式不受支持")?;
+    cfb_mode::Decryptor::<aes::Aes128>::new(VPN_KEY.into(), VPN_KEY.into()).decrypt(&mut host);
+    let host = String::from_utf8(host).map_err(|_| "VPN 地址格式不受支持")?;
+    let (scheme, port) = if let Some(port) = segment.strip_prefix("http-") {
+        if port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err("VPN 地址格式不受支持".into());
+        }
+        ("http", format!(":{port}"))
+    } else {
+        (segment, String::new())
+    };
+    let mut ordinary = Url::parse(&format!(
+        "{scheme}://{host}{port}/{}",
+        parts.next().unwrap_or_default()
+    ))
+    .map_err(|_| "VPN 地址格式不受支持")?;
+    ordinary.set_query(url.query());
+    ordinary.set_fragment(url.fragment());
+    if !trusted(&ordinary) && !service_http(&ordinary) {
+        return Err("VPN 目标地址不受支持".into());
+    }
+    Ok(ordinary)
+}
+
+#[derive(Clone)]
+pub struct Transport {
+    pub client: Client,
+    pub cookies: Arc<CookieStoreMutex>,
+}
+impl Transport {
+    pub fn new(saved: Option<&str>) -> Result<Self, String> {
+        Self::with_timeout(saved, Duration::from_secs(25))
+    }
+    /// Self-checks use a short budget so the sidebar answer arrives quickly.
+    pub fn with_timeout(saved: Option<&str>, timeout: Duration) -> Result<Self, String> {
+        let store = match saved {
+            Some(json) => cookie_store::serde::json::load(json.as_bytes())
+                .map_err(|_| "保存的校园会话损坏，请重新登录")?,
+            None => CookieStore::default(),
+        };
+        let cookies = Arc::new(CookieStoreMutex::new(store));
+        let client = Client::builder()
+            .cookie_provider(cookies.clone())
+            .connect_timeout(timeout.min(Duration::from_secs(8)))
+            .timeout(timeout)
+            .redirect(reqwest::redirect::Policy::none())
+            .user_agent(USER_AGENT)
+            .build()
+            .map_err(|_| "无法创建校园连接")?;
+        Ok(Self { client, cookies })
+    }
+    pub fn snapshot(&self) -> Result<String, String> {
+        let jar = self.cookies.lock().map_err(|_| "会话服务繁忙")?;
+        let mut data = Vec::new();
+        cookie_store::serde::json::save_incl_expired_and_nonpersistent(&jar, &mut data)
+            .map_err(|_| "无法保存校园会话")?;
+        String::from_utf8(data).map_err(|_| "无法保存校园会话".into())
+    }
+    pub fn address(url: &Url, mode: AccessMode) -> Result<Url, String> {
+        // The profile landing page is plain HTTP and direct-only; the library
+        // seat page has a port-aware WebVPN mapping.
+        if !trusted(url) && !service_http(url) && !hello_http(url) {
+            return Err("校园请求地址不受支持".into());
+        }
+        if mode == AccessMode::Webvpn {
+            vpn_url(url)
+        } else {
+            Ok(url.clone())
+        }
+    }
+    pub async fn get(&self, url: &Url, mode: AccessMode) -> Result<Response, String> {
+        self.client
+            .get(Self::address(url, mode)?)
+            .send()
+            .await
+            .map_err(|_| "无法连接校园服务，请检查网络后重试".into())
+    }
+    pub async fn follow(
+        &self,
+        mut response: Response,
+        mode: AccessMode,
+        degree: &str,
+    ) -> Result<Page, String> {
+        for _ in 0..12 {
+            let ordinary = original_url(response.url())?;
+            if crate::campus::callback(&ordinary, degree).is_some() {
+                return Ok(Page {
+                    url: ordinary,
+                    html: String::new(),
+                    status: response.status(),
+                });
+            }
+            if response.status().is_redirection() {
+                if matches!(response.status().as_u16(), 307 | 308) {
+                    return Err("校园认证要求重放提交，请重新开始登录".into());
+                }
+                let location = response
+                    .headers()
+                    .get(header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .ok_or("校园认证跳转缺少目标地址")?;
+                let next = response
+                    .url()
+                    .join(location)
+                    .map_err(|_| "校园跳转地址无效")?;
+                // The profile system returns its token on an HTTP landing URL.
+                // Capture it before the HTTPS-only transport policy rejects it.
+                if let Some(token) = hello_token(&next) {
+                    return Ok(Page {
+                        url: hello_landing(&token)?,
+                        html: String::new(),
+                        status: StatusCode::OK,
+                    });
+                }
+                let logical = original_url(&next)?;
+                if crate::campus::callback(&logical, degree).is_some() {
+                    return Ok(Page {
+                        url: logical,
+                        html: String::new(),
+                        status: StatusCode::OK,
+                    });
+                }
+                response = self.get(&logical, mode).await?;
+                continue;
+            }
+            let status = response.status();
+            if !status.is_success() && status != StatusCode::UNAUTHORIZED {
+                return Err(format!("校园服务暂不可用（HTTP {}）", status.as_u16()));
+            }
+            let body = limited_bytes(response, 2 * 1024 * 1024).await?;
+            let html = String::from_utf8(body).map_err(|_| "校园登录页面编码不受支持")?;
+            return Ok(Page {
+                url: ordinary,
+                html,
+                status,
+            });
+        }
+        Err("校园认证跳转次数过多，请重新开始".into())
+    }
+    pub async fn page(&self, url: &Url, mode: AccessMode, degree: &str) -> Result<Page, String> {
+        self.follow(self.get(url, mode).await?, mode, degree).await
+    }
+}
+
+pub struct Page {
+    pub url: Url,
+    pub html: String,
+    pub status: StatusCode,
+}
+
+pub async fn limited_bytes(mut response: Response, limit: usize) -> Result<Vec<u8>, String> {
+    if response.content_length().is_some_and(|n| n > limit as u64) {
+        return Err("校园响应超过大小限制".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| "校园响应读取失败")? {
+        if bytes.len() + chunk.len() > limit {
+            return Err("校园响应超过大小限制".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+pub async fn json(response: Response) -> Result<serde_json::Value, String> {
+    if !response.status().is_success() {
+        return Err("校园请求失败，请重新登录或重试".into());
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(&limited_bytes(response, 2 * 1024 * 1024).await?)
+            .map_err(|_| "校园系统返回了非预期数据")?;
+    if value.get("code").and_then(|v| v.as_i64()) != Some(0) {
+        return Err("校园系统未接受请求，请检查输入或重新登录".into());
+    }
+    Ok(value
+        .get("data")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null))
+}
+
+/// Decides whether the campus login can go direct or must go through WebVPN.
+/// The campus host answering at all — a redirect to CAS, the attendance page,
+/// an expired session or a client error — proves the direct route works, so
+/// any answer below 500 selects Direct. This is the same rule as
+/// `campus::reachable`, which keeps the sidebar self-check and the login page
+/// from disagreeing about the current network. Only a transport failure is
+/// retried once before the login falls back to WebVPN.
+pub async fn probe(degree: &str) -> Result<AccessMode, String> {
+    let host = crate::campus::domain(degree)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(6))
+        .connect_timeout(Duration::from_secs(4))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(USER_AGENT)
+        .build()
+        .map_err(|_| "无法检测校园网络")?;
+    let url = Url::parse(&format!("https://{host}/sa/auth/cas/login/student-pc"))
+        .map_err(|_| "校园地址无效")?;
+    for attempt in 0..2 {
+        match client.get(url.clone()).send().await {
+            Ok(response) => {
+                // A 5xx means the host answered but the service is unhealthy;
+                // WebVPN would only proxy to the same server.
+                return Ok(if response.status().as_u16() < 500 {
+                    AccessMode::Direct
+                } else {
+                    AccessMode::Webvpn
+                });
+            }
+            Err(_) if attempt == 0 => continue,
+            Err(_) => break,
+        }
+    }
+    Ok(AccessMode::Webvpn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn vpn_roundtrip_preserves_query_and_rejects_foreign_hosts() {
+        let url = Url::parse("https://bk-kq.xjtu.edu.cn/sa/auth/cas/login/student-pc?service=https%3A%2F%2Fexample.test%2F&x=1#p").unwrap();
+        let mapped = vpn_url(&url).unwrap();
+        assert_eq!(mapped.host_str(), Some(VPN_HOST));
+        assert_eq!(original_url(&mapped).unwrap(), url);
+        assert_eq!(vpn_url(&mapped).unwrap(), mapped);
+        for bad in [
+            "http://login.xjtu.edu.cn/cas/login",
+            "https://login.xjtu.edu.cn.evil.test/",
+            "https://u:p@login.xjtu.edu.cn/",
+            "https://login.xjtu.edu.cn:444/",
+        ] {
+            assert!(vpn_url(&Url::parse(bad).unwrap()).is_err());
+        }
+    }
+    #[test]
+    fn the_portal_page_is_distinct_from_mapped_campus_sites() {
+        assert!(webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/login?cas_login=true").unwrap()
+        ));
+        assert!(webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/").unwrap()
+        ));
+        assert!(!webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/https/77726476/login").unwrap()
+        ));
+        assert!(!webvpn_host(
+            &Url::parse("https://webvpn.xjtu.edu.cn/http-8086/77726476/seat/").unwrap()
+        ));
+        // The portal's own pages pass through unchanged.
+        let portal = Url::parse("https://webvpn.xjtu.edu.cn/login?cas_login=true").unwrap();
+        assert_eq!(original_url(&portal).unwrap(), portal);
+        for bad in [
+            "http://webvpn.xjtu.edu.cn/login",
+            "https://webvpn.xjtu.edu.cn.evil.test/login",
+            "https://u:p@webvpn.xjtu.edu.cn/login",
+            "https://login.xjtu.edu.cn/cas/login",
+        ] {
+            assert!(!webvpn_host(&Url::parse(bad).unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn plain_http_services_are_limited_to_their_exact_origins() {
+        let lib = Url::parse("http://rg.lib.xjtu.edu.cn:8086/qseat?sp=A101").unwrap();
+        let venue = Url::parse("http://202.117.17.144:8080/web/index.html").unwrap();
+        assert!(service_http(&lib));
+        assert!(service_http(&venue));
+        assert!(Transport::address(&lib, AccessMode::Direct).is_ok());
+        // WebVPN maps plain-HTTP services with their port and round-trips back.
+        let mapped = Transport::address(&lib, AccessMode::Webvpn).unwrap();
+        assert_eq!(mapped.host_str(), Some(VPN_HOST));
+        assert!(mapped.path().starts_with("/http-8086/"), "{mapped}");
+        assert_eq!(original_url(&mapped).unwrap(), lib);
+        let venue_vpn = Transport::address(&venue, AccessMode::Webvpn).unwrap();
+        assert!(venue_vpn.path().starts_with("/http-8080/"), "{venue_vpn}");
+        assert_eq!(original_url(&venue_vpn).unwrap(), venue);
+        for bad in [
+            "https://rg.lib.xjtu.edu.cn:8086/qseat",
+            "http://rg.lib.xjtu.edu.cn/qseat",
+            "http://rg.lib.xjtu.edu.cn.evil.test:8086/qseat",
+            "http://202.117.17.144:8081/web/index.html",
+            "http://u:p@rg.lib.xjtu.edu.cn:8086/qseat",
+            "http://202.117.17.144/web/index.html",
+        ] {
+            assert!(!service_http(&Url::parse(bad).unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn lms_is_the_only_learning_site_on_the_backend_allowlist() {
+        assert!(trusted(
+            &Url::parse("https://lms.xjtu.edu.cn/api/my-courses").unwrap()
+        ));
+        // The LMS login hops through the Keycloak broker before reaching CAS.
+        assert!(trusted(
+            &Url::parse(
+                "https://identity1.xjtu.edu.cn/auth/realms/xjtu/broker/cas-client/endpoint"
+            )
+            .unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("http://identity1.xjtu.edu.cn/auth/realms/xjtu").unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("http://lms.xjtu.edu.cn/api/my-courses").unwrap()
+        ));
+        assert!(!trusted(
+            &Url::parse("https://lms.xjtu.edu.cn:8080/").unwrap()
+        ));
+    }
+
+    #[test]
+    fn the_hello_oauth_landing_is_a_direct_only_http_hop() {
+        let landing =
+            Url::parse("http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?code=abc").unwrap();
+        assert!(hello_http(&landing));
+        assert!(Transport::address(&landing, AccessMode::Direct).is_ok());
+        assert!(Transport::address(&landing, AccessMode::Webvpn).is_err());
+        assert!(original_url(&landing).is_ok());
+        for bad in [
+            "https://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc",
+            "http://hello.xjtu.edu.cn:8080/",
+            "http://hello.xjtu.edu.cn.evil.test/",
+            "http://u:p@hello.xjtu.edu.cn/",
+        ] {
+            assert!(!hello_http(&Url::parse(bad).unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn hello_token_requires_the_profile_host_and_a_token_shape() {
+        let good = Url::parse(
+            "http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?token=abc.DEF_123-&uuid=x",
+        )
+        .unwrap();
+        assert_eq!(hello_token(&good).as_deref(), Some("abc.DEF_123-"));
+        assert_eq!(
+            hello_landing("abc.DEF_123-").unwrap().as_str(),
+            "http://hello.xjtu.edu.cn/yingxin/login/xjtu/oauth/pc?token=abc.DEF_123-"
+        );
+        for bad in [
+            "https://hello.xjtu.edu.cn.evil.test/?token=abc",
+            "http://hello.xjtu.edu.cn:8080/?token=abc",
+            "http://u:p@hello.xjtu.edu.cn/?token=abc",
+            "http://hello.xjtu.edu.cn/?token=",
+            "http://hello.xjtu.edu.cn/?token=abc%20def",
+            "http://hello.xjtu.edu.cn/?other=abc",
+            "http://login.xjtu.edu.cn/?token=abc",
+        ] {
+            assert!(hello_token(&Url::parse(bad).unwrap()).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn cookies_are_isolated_and_session_cookies_survive_encrypted_snapshot() {
+        let a = Transport::new(None).unwrap();
+        let b = Transport::new(None).unwrap();
+        a.cookies
+            .lock()
+            .unwrap()
+            .parse(
+                "test=session-secret; Secure; Path=/",
+                &Url::parse("https://login.xjtu.edu.cn/").unwrap(),
+            )
+            .unwrap();
+        assert_eq!(b.cookies.lock().unwrap().iter_unexpired().count(), 0);
+        let restored = Transport::new(Some(&a.snapshot().unwrap())).unwrap();
+        assert_eq!(restored.cookies.lock().unwrap().iter_unexpired().count(), 1);
+    }
+}

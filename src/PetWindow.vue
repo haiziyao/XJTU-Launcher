@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { bridge } from './bridge';
+import { bridge } from './shared/bridge';
 import type { PetDesktopSettings, PetDesktopView, PetNotification } from './types';
 import deepseekGirl from './assets/pets/deepseek-girl.webp';
 import whalechan from './assets/pets/deepseek-whalechan.webp';

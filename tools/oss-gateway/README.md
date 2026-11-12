@@ -129,6 +129,27 @@ location = /latest.json {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
+
+# 官网版本清单：网关直接回 JSON 字节（不是 302）。桶里还没有这个对象时
+# 网关回 404，这里退回站点自带的静态副本；502（签名失败、OSS 不可达、
+# JSON 损坏）不退回，避免把旧版本当成当前版本显示。
+location = /downloads.json {
+    proxy_pass http://127.0.0.1:8787/downloads.json;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 15s;
+    proxy_intercept_errors on;
+    error_page 404 = /_downloads_static;
+}
+
+location = /_downloads_static {
+    internal;
+    default_type application/json;
+    add_header Cache-Control "no-cache";
+    alias /srv/xjtu-launcher/site/downloads.json;
+}
 ```
 
 ```bash
@@ -155,7 +176,10 @@ sudo nginx -t && sudo systemctl reload nginx
 1. 从草稿 Release 下载全部资产；
 2. `tools/upload-oss.mjs` 用 `ossutil` 上传到 `oss://xjtu-launcher/v<版本>/`；
 3. 把 `latest.json` 六个平台的 `url` 改写成 `https://xjtu-launcher.cn/download/v<版本>/<文件名>`，再上传到 Bucket 根目录；
-4. 上传成功后才把草稿变成正式 Release。
+4. `tools/site-manifest.mjs` 用三个安装包现算大小与 SHA256，生成官网读的 `downloads.json` 并上传到 Bucket 根目录（`website/downloads.json` 只是桶里没有对象时的静态副本）；
+5. 上传成功后才把草稿变成正式 Release。
+
+早年发布、桶里还没有 `downloads.json` 时，跑一次 `.github/workflows/site-manifest.yml`（`Site manifest`，输入版本号）即可补齐；它从已发布 Release 下载三个安装包，重建并上传清单。
 
 先在 GitHub 仓库设置里配置：
 
@@ -216,7 +240,7 @@ site-api 读取这个文件的 `total`，加到 GitHub Releases API 的历史下
 {"t":"2026-11-08T00:35:19Z","event":"download","key":"v0.5.2/xxx.dmg","total":12,"file_total":7}
 ```
 
-还记录 `manifest`（每次 `latest.json` 请求）、`referer_rejected`、`bad_key`、`download_count_failed` 和服务启动。日志不含 Referer 原文、请求头或 AccessKey；Referer 可能被伪造且可能带个人路径，只记拒绝事实。超过 5 MB 轮转成 `.1`，保留 5 个旧文件。计数本身每次下载立即原子写入，日志只是审计，写日志失败不影响下载。
+还记录 `manifest`（每次 `latest.json` 请求）、`manifest_failed`（`downloads.json` 取不到或内容不合法）、`referer_rejected`、`bad_key`、`download_count_failed` 和服务启动；官网清单每次页面加载都会请求，成功的 `downloads.json` 不写日志，也不计下载量。日志不含 Referer 原文、请求头或 AccessKey；Referer 可能被伪造且可能带个人路径，只记拒绝事实。超过 5 MB 轮转成 `.1`，保留 5 个旧文件。计数本身每次下载立即原子写入，日志只是审计，写日志失败不影响下载。
 
 site-api 的定时快照会把 `gateway-downloads.json` 一起复制到 `/srv/xjtu-launcher/stats/backups/`，见 `tools/site-api/README.md`。
 

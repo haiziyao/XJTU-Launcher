@@ -1,11 +1,14 @@
 //! Agent runtime: conversation storage, model streaming and the tool loop.
 pub mod chat;
+pub mod expose;
+pub mod mcp;
 pub mod memory;
 pub mod presets;
+pub mod providers;
 pub mod store;
 pub mod tools;
 
-use crate::{agent::chat::Chat, agent::store::Conversation, providers, vault};
+use crate::{agent::chat::Chat, agent::store::Conversation, vault};
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},

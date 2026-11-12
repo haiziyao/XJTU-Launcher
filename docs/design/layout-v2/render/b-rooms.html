@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="v2.css">
+<style>
+.cols { display: grid; grid-template-columns: 214px 1fr; gap: 14px; flex: 1; min-height: 0; padding-bottom: 14px; }
+.filters { padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.fg { display: flex; flex-direction: column; gap: 6px; }
+.fg h4 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.opt { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.opt .n { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.opt.on { background: var(--nav-active); color: var(--nav-active-text); font-weight: 500; }
+.pgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.pgrid span { height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; border-radius: 4px; background: var(--surface-sunken); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.pgrid span.on { background: var(--accent); color: #fff; font-weight: 600; }
+.seg.full { display: flex; }
+.seg.full span { flex: 1; justify-content: center; padding: 0; }
+.right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.res .thead, .res .tr { grid-template-columns: 1fr 90px 80px 70px 70px; }
+.res .tr { height: 32px; }
+</style></head>
+<body>
+<div class="window">
+  <aside class="appbar" data-active="campus"></aside>
+  <main class="main">
+    <div class="top">
+      <h1>畅行校园</h1>
+      <nav class="ptabs">
+        <span class="ptab">待办<span class="n">9</span></span>
+        <span class="ptab">通知<span class="n">12</span></span>
+        <span class="vsep"></span>
+        <span class="ptab">学习</span>
+        <span class="ptab on">学业</span>
+        <span class="ptab">生活</span>
+      </nav>
+      <div class="right" style="flex-direction:row"><span class="sample">示例数据</span></div>
+    </div>
+    <nav class="sub">
+      <span class="stab">成绩</span><span class="stab">考试</span><span class="stab">评教</span><span class="stab on">空闲教室</span><span class="stab">全校课程</span><span class="stab">校历</span>
+      <div class="tools"><span class="search">搜索教室号</span></div>
+    </nav>
+
+    <div class="content">
+      <div class="cols">
+        <div class="panel filters">
+          <div class="fg"><h4>日期</h4><span class="seg full"><span class="on">今天</span><span>明天</span><span>后天</span></span></div>
+          <div class="fg"><h4>节次 · 3–5 节</h4>
+            <div class="pgrid"><span>1</span><span>2</span><span class="on">3</span><span class="on">4</span><span class="on">5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span></div>
+          </div>
+          <div class="fg"><h4>校区</h4>
+            <div class="opt on">兴庆校区<span class="n">46</span></div>
+            <div class="opt">雁塔校区<span class="n">18</span></div>
+            <div class="opt">创新港<span class="n">63</span></div>
+          </div>
+          <div class="fg"><h4>楼宇</h4>
+            <div class="opt on">全部<span class="n">46</span></div>
+            <div class="opt">主楼 A<span class="n">12</span></div>
+            <div class="opt">中 2 楼<span class="n">8</span></div>
+            <div class="opt">西 2 楼<span class="n">6</span></div>
+            <div class="opt">东 1 楼<span class="n">9</span></div>
+            <div class="opt">主楼 C<span class="n">11</span></div>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="sh"><h2>今天 3–5 节空闲</h2><span class="meta">兴庆校区 · 46 间 · 按楼宇</span><span class="more" style="color:var(--text-secondary)">座位数 ↓</span></div>
+          <div class="panel res">
+            <div class="thead"><span>教室</span><span>楼宇</span><span>类型</span><span class="r">座位</span><span>校区</span></div>
+            <div class="grp">主楼 A<span class="n">12</span></div>
+            <div class="tr"><span>A-301</span><span class="sec">主楼 A</span><span class="sec">阶梯</span><span class="r num">180</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>A-201</span><span class="sec">主楼 A</span><span class="sec">多媒体</span><span class="r num">120</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>A-411</span><span class="sec">主楼 A</span><span class="sec">多媒体</span><span class="r num">100</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>A-203</span><span class="sec">主楼 A</span><span class="sec">多媒体</span><span class="r num">80</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>A-507</span><span class="sec">主楼 A</span><span class="sec">机房</span><span class="r num">64</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>A-402</span><span class="sec">主楼 A</span><span class="sec">研讨</span><span class="r num">40</span><span class="muted">兴庆</span></div>
+            <div class="grp">中 2 楼<span class="n">8</span></div>
+            <div class="tr"><span>中2-1101</span><span class="sec">中 2 楼</span><span class="sec">阶梯</span><span class="r num">200</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>中2-1203</span><span class="sec">中 2 楼</span><span class="sec">多媒体</span><span class="r num">90</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>中2-2105</span><span class="sec">中 2 楼</span><span class="sec">多媒体</span><span class="r num">90</span><span class="muted">兴庆</span></div>
+            <div class="tr"><span>中2-3215</span><span class="sec">中 2 楼</span><span class="sec">研讨</span><span class="r num">36</span><span class="muted">兴庆</span></div>
+            <div class="grp">西 2 楼<span class="n">6</span></div>
+            <div class="tr"><span>西2-203</span><span class="sec">西 2 楼</span><span class="sec">阶梯</span><span class="r num">150</span><span class="muted">兴庆</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body></html>

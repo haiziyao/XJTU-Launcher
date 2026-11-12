@@ -6,6 +6,8 @@ the per-IP rate limit.
 
     GET  /stats                    -> {"downloads": {"total": 46}, "likes": {...}}
     POST /like  {"key": "powerful"} -> {"ok": true, "count": 4, "voted": true}
+    POST /feedback {"kind": ..., "title": ..., "body": ..., "consent": true}
+                                   -> {"ok": true, "id": "FB-20261111-7K3Q"}
 
 Likes are stored in ``STATS_DIR/likes.json``. One vote per direction and per
 browser address: the address is salted and hashed before it is written, so the
@@ -19,6 +21,12 @@ gateway. Since installers are served from OSS, GitHub counts no longer grow;
 the gateway records each fresh download start. When neither source has a value
 the API answers ``"total": null`` and the page hides the counter instead of
 showing an invented number.
+
+Feedback from ``/feedback/`` is appended one JSON object per line to
+``STATS_DIR/feedback/YYYY-MM.jsonl``. Quotas are per browser cookie, not per
+IP, because a campus NAT puts hundreds of people behind one address. The
+audit log stores the id, lengths and flags only -- never the text or the
+contact field -- and the IP is reduced to a salted digest prefix.
 """
 
 import datetime
@@ -30,6 +38,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit
 from socketserver import ThreadingMixIn
 from urllib.request import Request, urlopen
 
@@ -53,12 +62,44 @@ COOKIE_RE = re.compile(r"^[0-9a-f]{32}$")
 LIKES_FILE = os.path.join(STATS_DIR, "likes.json")
 DOWNLOAD_FILE = os.path.join(STATS_DIR, "downloads.json")
 GATEWAY_FILE = os.path.join(STATS_DIR, "gateway-downloads.json")
+FEEDBACK_DIR = os.path.join(STATS_DIR, "feedback")
+FEEDBACK_LOG = os.path.join(STATS_DIR, "feedback.log")
 LIKES_LOG = os.path.join(STATS_DIR, "likes.log")
 STATS_LOG = os.path.join(STATS_DIR, "stats.log")
 BACKUP_DIR = os.path.join(STATS_DIR, "backups")
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUPS = 5
 log_lock = threading.Lock()
+
+FEEDBACK_MAX_BYTES = 8 * 1024
+FEEDBACK_KINDS = ("idea", "bug", "other")
+FEEDBACK_TITLE = (4, 60)
+FEEDBACK_BODY = (10, 2000)
+FEEDBACK_STEPS_MAX = 1000
+FEEDBACK_CONTACT_MAX = 100
+FEEDBACK_WINDOW = 600
+FEEDBACK_PER_WINDOW = 5
+FEEDBACK_DEDUPE = 24 * 3600
+# No 0/O/1/I/S: the id is read out loud and typed by hand when someone asks
+# for their feedback to be deleted.
+ID_ALPHABET = "ACDEFGHJKLMNPQRTUVWXY23456789"
+SECRET_RE = re.compile(
+    r"(?i)(password\s*=|passwd\s*=|bearer\s|-----begin [a-z ]*private key)"
+    r"|\b[0-9a-f]{32,}\b"
+)
+feedback_lock = threading.Lock()
+# Limits and the dedupe window live in memory only: a restart forgets them,
+# which is acceptable for a form that has nginx in front of it.
+feedback_state = {"limits": {}, "recent": {}}
+
+
+class FeedbackError(Exception):
+    """A rejected submission; ``code`` is a short key the page translates."""
+
+    def __init__(self, status, code):
+        Exception.__init__(self, code)
+        self.status = status
+        self.code = code
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -115,9 +156,9 @@ def log_event(event, path=LIKES_LOG, **fields):
             sys.stderr.write("cannot write %s: %s\n" % (path, error))
 
 
-def snapshot_file(name, stamp, source):
+def snapshot_file(name, stamp, source, suffix=".json"):
     """Copy one stats file into backups/ and prune old snapshots."""
-    target = os.path.join(BACKUP_DIR, "%s-%s.json" % (name, stamp))
+    target = os.path.join(BACKUP_DIR, "%s-%s%s" % (name, stamp, suffix))
     try:
         with open(source, "rb") as handle:
             payload = handle.read()
@@ -136,7 +177,7 @@ def snapshot_file(name, stamp, source):
     prefix = name + "-"
     names = sorted(
         entry for entry in os.listdir(BACKUP_DIR)
-        if entry.startswith(prefix) and entry.endswith(".json")
+        if entry.startswith(prefix) and entry.endswith(suffix)
     )
     for entry in names[:-SNAPSHOT_KEEP]:
         try:
@@ -147,9 +188,14 @@ def snapshot_file(name, stamp, source):
 
 
 def snapshot_all():
-    stamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    now = datetime.datetime.utcnow()
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
     likes_ok = snapshot_file("likes", stamp, LIKES_FILE)
     gateway_ok = snapshot_file("downloads", stamp, GATEWAY_FILE)
+    # Append-only and fsynced, so the copy is just an extra safety net.
+    feedback_ok = snapshot_file(
+        "feedback-" + month_key(now), stamp, feedback_file(now), suffix=".jsonl"
+    )
     with lock:
         counts = {key: state["counts"].get(key, 0) for key in KEYS}
     log_event(
@@ -158,6 +204,7 @@ def snapshot_all():
         likes=counts,
         likes_saved=likes_ok,
         gateway_saved=gateway_ok,
+        feedback_saved=feedback_ok,
     )
 
 
@@ -245,6 +292,161 @@ def download_total():
     except IOError as error:
         sys.stderr.write("cannot cache downloads: %s\n" % error)
     return total
+
+
+def month_key(when=None):
+    return (when or datetime.datetime.utcnow()).strftime("%Y-%m")
+
+
+def feedback_file(when=None):
+    return os.path.join(FEEDBACK_DIR, "%s.jsonl" % month_key(when))
+
+
+def salted_digest(kind, value):
+    # Same salt as the vote digests; neither the cookie nor the IP is stored.
+    raw = "%s|%s|%s" % (state["salt"], kind, value)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def feedback_id(when):
+    tail = "".join(ID_ALPHABET[byte % len(ID_ALPHABET)] for byte in os.urandom(4))
+    return "FB-%s-%s" % (when.strftime("%Y%m%d"), tail)
+
+
+def platform_from_ua(ua):
+    value = (ua or "").lower()
+    if "windows" in value:
+        return "Windows"
+    if "iphone" in value or "ipad" in value:
+        return "iOS"
+    if "android" in value:
+        return "Android"
+    if "mac os" in value or "macintosh" in value:
+        return "macOS"
+    if "linux" in value:
+        return "Linux"
+    return "unknown"
+
+
+def page_from_referer(referer):
+    if not referer:
+        return ""
+    path = urlsplit(referer).path
+    return path[:120] if path.startswith("/") else ""
+
+
+def required_text(value, low, high, code):
+    if not isinstance(value, str):
+        raise FeedbackError(400, code)
+    text = value.strip()
+    if len(text) < low or len(text) > high:
+        raise FeedbackError(400, code)
+    return text
+
+
+def optional_text(value, high, code):
+    if value in (None, ""):
+        return ""
+    if not isinstance(value, str):
+        raise FeedbackError(400, code)
+    text = value.strip()
+    if len(text) > high:
+        raise FeedbackError(400, code)
+    return text
+
+
+def validate_feedback(payload):
+    if not isinstance(payload, dict):
+        raise FeedbackError(400, "json")
+    # Hidden field: only a script fills it in.
+    if payload.get("website"):
+        raise FeedbackError(400, "spam")
+    kind = payload.get("kind")
+    if kind not in FEEDBACK_KINDS:
+        raise FeedbackError(400, "kind")
+    title = required_text(payload.get("title"), FEEDBACK_TITLE[0], FEEDBACK_TITLE[1], "title")
+    body = required_text(payload.get("body"), FEEDBACK_BODY[0], FEEDBACK_BODY[1], "body")
+    steps = optional_text(payload.get("steps"), FEEDBACK_STEPS_MAX, "steps")
+    if kind != "bug":
+        steps = ""
+    contact = optional_text(payload.get("contact"), FEEDBACK_CONTACT_MAX, "contact")
+    if payload.get("consent") is not True:
+        raise FeedbackError(400, "consent")
+    return kind, title, body, steps, contact
+
+
+def submit_feedback(payload, voter, ip, ua, page):
+    """Validate, dedupe, quota-check and append one feedback record."""
+    kind, title, body, steps, contact = validate_feedback(payload)
+    now = time.time()
+    stamp = datetime.datetime.utcfromtimestamp(now)
+    digest = hashlib.sha256((title + "\x00" + body).encode("utf-8")).hexdigest()
+
+    with feedback_lock:
+        recent = feedback_state["recent"]
+        for key, entry in list(recent.items()):
+            if now - entry[0] > FEEDBACK_DEDUPE:
+                recent.pop(key, None)
+        hit = recent.get(digest)
+        if hit is not None:
+            # Same text from the same day: hand back the original id and do
+            # not write a second copy. No quota is consumed.
+            return hit[1], True
+
+        stamps = [
+            item for item in feedback_state["limits"].get(voter, [])
+            if now - item < FEEDBACK_WINDOW
+        ]
+        if len(stamps) >= FEEDBACK_PER_WINDOW:
+            feedback_state["limits"][voter] = stamps
+            raise FeedbackError(429, "too many")
+
+        record = {
+            "id": feedback_id(stamp),
+            "t": utc_stamp(),
+            "type": kind,
+            "title": title,
+            "body": body,
+            "steps": steps,
+            "contact": contact,
+            "platform": platform_from_ua(ua),
+            "page": page,
+            "ip": "sha256:" + salted_digest("ip", ip)[:8],
+            "ua": (ua or "")[:200],
+            "voter": voter[:8],
+        }
+        line = json.dumps(record, ensure_ascii=False) + "\n"
+        path = feedback_file(stamp)
+        try:
+            os.makedirs(FEEDBACK_DIR, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except (IOError, OSError) as error:
+            log_event("feedback_failed", path=FEEDBACK_LOG, error=str(error), voter=voter[:8])
+            raise FeedbackError(500, "storage")
+
+        stamps.append(now)
+        feedback_state["limits"][voter] = stamps
+        if len(feedback_state["limits"]) > 4096:
+            feedback_state["limits"] = dict(
+                (key, value) for key, value in feedback_state["limits"].items() if value
+            )
+        recent[digest] = (now, record["id"])
+
+    log_event(
+        "feedback",
+        path=FEEDBACK_LOG,
+        id=record["id"],
+        type=kind,
+        title_len=len(title),
+        body_len=len(body),
+        has_contact=bool(contact),
+        maybe_secret=bool(SECRET_RE.search("\n".join((title, body, steps)))),
+        voter=voter[:8],
+    )
+    return record["id"], False
 
 
 def voter_id(raw):
@@ -336,8 +538,84 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, {"error": "not found"})
 
+    def client_ip(self):
+        # nginx sets X-Real-IP; fall back to the socket address on loopback.
+        address = self.headers.get("X-Real-IP") or ""
+        if not address:
+            address = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        return address or self.client_address[0]
+
+    def read_body(self, limit):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        if length <= 0:
+            raise FeedbackError(400, "empty")
+        if length > limit:
+            # Drain a bounded amount first: closing with unread body bytes
+            # makes the client see a reset instead of the 413.
+            remaining = min(length, limit + 64 * 1024)
+            while remaining > 0:
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+            self.close_connection = True
+            raise FeedbackError(413, "too large")
+        return self.rfile.read(length)
+
+    def vote_cookie(self):
+        """Return (cookie value, Set-Cookie header or None)."""
+        raw = self.cookie_value()
+        if raw:
+            return raw, None
+        raw = os.urandom(16).hex()
+        header = "%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax" % (
+            COOKIE_NAME,
+            raw,
+            COOKIE_MAX_AGE,
+        )
+        return raw, header
+
+    def handle_feedback(self):
+        try:
+            raw = self.read_body(FEEDBACK_MAX_BYTES)
+        except FeedbackError as error:
+            self.reply(error.status, {"error": error.code})
+            return
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            self.reply(400, {"error": "json"})
+            return
+        voter, set_cookie = self.vote_cookie()
+        page = page_from_referer(self.headers.get("Referer", "")) or "/feedback/"
+        try:
+            feedback_id_value, duplicate = submit_feedback(
+                payload,
+                voter,
+                self.client_ip(),
+                self.headers.get("User-Agent", ""),
+                page,
+            )
+        except FeedbackError as error:
+            if error.status == 429:
+                log_event("feedback_rate_limited", path=FEEDBACK_LOG, voter=voter[:8])
+            self.reply(error.status, {"error": error.code}, set_cookie=set_cookie)
+            return
+        self.reply(
+            200,
+            {"ok": True, "id": feedback_id_value, "duplicate": duplicate},
+            set_cookie=set_cookie,
+        )
+
     def do_POST(self):
-        if self.path not in ("/like", "/like/"):
+        path = self.path.split("?", 1)[0].rstrip("/")
+        if path == "/feedback":
+            self.handle_feedback()
+            return
+        if path != "/like":
             self.reply(404, {"error": "not found"})
             return
         try:

@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { RotateCw } from 'lucide-vue-next';
 import UiIconButton from './UiIconButton.vue';
-import { updatedInfo } from '../../domain';
+import { updatedInfo } from '../../shared/domain';
 
 /**
  * Header of one campus section (LAYOUT §3.3): title, optional subtitle and
