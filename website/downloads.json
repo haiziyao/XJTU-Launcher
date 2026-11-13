@@ -1,32 +1,32 @@
 {
-  "version": "0.6.6",
-  "date": "2026-11-10",
+  "version": "0.7.0",
+  "date": "2026-11-12",
   "releases_url": "https://github.com/haiziyao/XJTU-Launcher/releases",
-  "base_url": "/download/v0.6.6/",
+  "base_url": "/download/v0.7.0/",
   "files": [
     {
       "platform": "macOS",
       "arch": "arm64",
       "arch_label": "Apple 芯片",
-      "name": "XJTU.Launcher_0.6.6_aarch64.dmg",
-      "size": 25198029,
-      "sha256": "d992d7547b7d3b86d4895b3a76375483b47f9ce351adc30352266dc601f88e41"
+      "name": "XJTU.Launcher_0.7.0_aarch64.dmg",
+      "size": 25345355,
+      "sha256": "3b06fc30e9a7c503b91e988fdfee62014d5f5fcb6468e5da3bd0446528a4a82b"
     },
     {
       "platform": "macOS",
       "arch": "x64",
       "arch_label": "Intel 芯片",
-      "name": "XJTU.Launcher_0.6.6_x64.dmg",
-      "size": 26113584,
-      "sha256": "a2a1e83c906352e0076cdc028ab70e1ac53efc58447d54f6ca5973471ad41cb4"
+      "name": "XJTU.Launcher_0.7.0_x64.dmg",
+      "size": 26266112,
+      "sha256": "c94f28f5bf2f4bc97e91fe94148be228a3e50bc40b9fae5c7ad0c8a44783409a"
     },
     {
       "platform": "Windows",
       "arch": "x64",
       "arch_label": "64 位",
-      "name": "XJTU.Launcher_0.6.6_x64-setup.exe",
-      "size": 22552892,
-      "sha256": "546b8422248a3ce535eb30b2a0ff4ff787f50c8f5a88e986141ac8918d211c65"
+      "name": "XJTU.Launcher_0.7.0_x64-setup.exe",
+      "size": 22641155,
+      "sha256": "489dd17f51c48364b1bea36faa63bca2d1d493211bd728df393120c00d157f4f"
     }
   ]
 }
